@@ -1,0 +1,838 @@
+<!DOCTYPE html>
+<html lang="vi" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#0D9488" id="meta-theme-color">
+<meta name="description" content="Finyourtin — Quản lý thu chi, đa ví, ngân sách, sổ nợ, giao dịch định kỳ và báo cáo tài chính cá nhân. Đồng bộ đa thiết bị qua Supabase.">
+<title>Finyourtin — Quản lý tài chính cá nhân</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💰</text></svg>">
+
+<!-- Supabase credentials.
+     Preferred: scripts/generate-env.js writes public/js/env.js from the
+     SUPABASE_URL / SUPABASE_ANON_KEY environment variables at build time.
+     These meta tags are a fallback for hand-hosting without a build step. -->
+<meta name="supabase-url" content="">
+<meta name="supabase-anon-key" content="">
+
+<link rel="stylesheet" href="css/styles.css">
+<link rel="stylesheet" href="css/shell.css">
+</head>
+<body>
+<div id="toast-wrap"></div>
+
+<!-- ============ PIN LOCK ============ -->
+<div id="lock-screen" class="lock-screen hidden">
+  <div style="font-size:2.6rem;">🔐</div>
+  <h2 style="margin-top:8px;font-size:1.2rem;" id="lock-title">Nhập mã PIN</h2>
+  <p class="text-xs muted mt4" id="lock-sub">Mở khóa Finyourtin</p>
+  <div class="pin-dots" id="pin-dots"></div>
+  <div class="text-xs c-expense" id="pin-error" style="height:16px;"></div>
+  <div class="keypad" id="keypad"></div>
+  <button class="btn btn-ghost mt16" style="width:auto;" id="lock-alt-btn" onclick="lockAltAction()">Quên mã PIN?</button>
+</div>
+
+<div class="app">
+
+  <!-- ============ HEADER ============ -->
+  <header id="main-header" class="hidden">
+    <div>
+      <div class="greet" id="header-greet">Xin chào 👋</div>
+      <div class="uname"><span id="user-display-name">User</span><span id="sync-pill" title="Trạng thái đồng bộ"></span></div>
+    </div>
+    <div style="display:flex;gap:8px;">
+      <button class="icon-btn" onclick="toggleTheme()" id="btn-theme" title="Đổi giao diện">🌙</button>
+      <button class="icon-btn" style="position:relative;" onclick="switchTab('more')" title="Thêm">☰<span id="alert-dot" class="badge-dot hidden"></span></button>
+    </div>
+  </header>
+
+  <!-- ============ LOGIN (Supabase Auth) ============ -->
+  <div id="view-login" class="view">
+    <div class="auth-brand">
+      <div class="logo">💰</div>
+      <h1 style="font-size:1.7rem;letter-spacing:-.5px;">Finyourtin</h1>
+      <p class="muted text-sm mt4">Quản lý ví · ngân sách · sổ nợ · báo cáo</p>
+    </div>
+    <div class="card">
+      <div class="segment" id="auth-segment">
+        <div class="seg active" onclick="setAuthMode('login',this)">Đăng nhập</div>
+        <div class="seg" onclick="setAuthMode('register',this)">Tạo tài khoản</div>
+      </div>
+      <div class="form-group">
+        <label>Email</label>
+        <input type="email" id="login-email" class="input" placeholder="ban@email.com" autocomplete="email" inputmode="email">
+      </div>
+      <div class="form-group">
+        <label>Mật khẩu</label>
+        <input type="password" id="login-password" class="input" placeholder="••••••••" autocomplete="current-password">
+      </div>
+      <span class="link" id="auth-forgot" onclick="requestPasswordReset()">Quên mật khẩu?</span>
+      <button class="btn btn-primary" id="auth-submit" onclick="handleAuthSubmit()">Đăng nhập</button>
+      <div id="auth-error" role="alert"></div>
+    </div>
+    <p class="text-xs muted text-center" id="auth-note" style="margin-top:6px;line-height:1.5;">
+      Dữ liệu được đồng bộ qua Supabase và lưu bản sao trên máy này để dùng offline.
+    </p>
+  </div>
+
+  <!-- ============ CONFIG (no Supabase keys in this build) ============ -->
+  <div id="view-config" class="view hidden">
+    <div class="auth-brand">
+      <div class="logo">🔌</div>
+      <h1 style="font-size:1.4rem;letter-spacing:-.5px;">Chưa kết nối Supabase</h1>
+    </div>
+    <div id="config-reason"></div>
+    <div class="card">
+      <p class="text-sm muted mb12">Dán thông tin dự án Supabase để dùng ngay trên máy này. Khi deploy, đặt chúng làm biến môi trường thay vì nhập tay.</p>
+      <div class="form-group">
+        <label>Project URL</label>
+        <input type="url" id="cfg-url" class="input" placeholder="https://xxxxxxxx.supabase.co" spellcheck="false">
+      </div>
+      <div class="form-group">
+        <label>Anon public key</label>
+        <input type="text" id="cfg-key" class="input" placeholder="eyJhbGciOi..." spellcheck="false">
+      </div>
+      <button class="btn btn-primary" onclick="saveManualConfig()">Lưu và tải lại</button>
+    </div>
+    <div class="card flat">
+      <p class="text-xs font-bold muted mb8">Lấy ở đâu</p>
+      <ol class="cfg-steps">
+        <li>Mở <b>supabase.com/dashboard</b> → chọn dự án</li>
+        <li>Vào <b>Project Settings → API</b></li>
+        <li>Chép <code>Project URL</code> và <code>anon public</code></li>
+        <li>Chạy <code>supabase/schema.sql</code> trong SQL Editor</li>
+      </ol>
+    </div>
+  </div>
+
+  <!-- ============ ONBOARDING ============ -->
+  <div id="view-onboarding" class="view hidden">
+    <div id="ob-step-1">
+      <h2 style="margin:14px 0 4px;">Tạo ví đầu tiên</h2>
+      <p class="text-sm muted mb16">Chọn những ví bạn muốn theo dõi</p>
+      <div id="ob-wallet-options" class="chip-row"></div>
+      <div class="form-group" style="display:flex;gap:8px;">
+        <input type="text" id="ob-custom-wallet" class="input" placeholder="Tên ví khác...">
+        <button class="btn btn-secondary btn-sm" onclick="addObCustomWallet()">Thêm</button>
+      </div>
+      <button class="btn btn-primary" onclick="obGoStep(2)">Tiếp theo</button>
+    </div>
+    <div id="ob-step-2" class="hidden">
+      <h2 style="margin:14px 0 4px;">Số dư ban đầu</h2>
+      <p class="text-sm muted mb16">Nhập số dư hiện có ở mỗi ví (VNĐ)</p>
+      <div id="ob-balance-inputs"></div>
+      <button class="btn btn-primary" onclick="obGoStep(3)">Hoàn tất</button>
+      <button class="btn btn-ghost mt8" onclick="obGoStep(1)">Quay lại</button>
+    </div>
+    <div id="ob-step-3" class="hidden text-center">
+      <div style="font-size:2.6rem;margin:24px 0 8px;">🎉</div>
+      <h2>Sẵn sàng rồi!</h2>
+      <div class="card" style="margin:18px 0;">
+        <p class="text-sm muted">Tổng số dư ban đầu</p>
+        <h2 id="ob-summary-balance" class="c-income">0 đ</h2>
+      </div>
+      <button class="btn btn-primary" onclick="finishOnboarding()">Bắt đầu sử dụng</button>
+    </div>
+  </div>
+
+  <!-- ============ DASHBOARD ============ -->
+  <div id="view-dashboard" class="view hidden">
+    <div class="hero">
+      <div class="lbl">Tổng tài sản ròng <button class="eye-btn" onclick="togglePrivacy()" id="privacy-btn">Ẩn</button></div>
+      <div class="amt tabular" id="db-total-balance">0 đ</div>
+      <div class="hrow">
+        <div class="stat"><div class="stitle">↓ Thu tháng này</div><div class="sval tabular" id="db-month-income">0 đ</div></div>
+        <div class="stat"><div class="stitle">↑ Chi tháng này</div><div class="sval tabular" id="db-month-expense">0 đ</div></div>
+      </div>
+    </div>
+
+    <div id="db-alerts"></div>
+
+    <div class="section-title"><h4>Ví của bạn</h4><span class="link" onclick="switchTab('wallets')">Quản lý</span></div>
+    <div id="db-wallet-scroll" class="wallet-scroll"></div>
+
+    <div class="section-title"><h4>💡 Sắp đến hạn</h4><span class="link" onclick="switchTab('recurring')">Định kỳ</span></div>
+    <div class="chip-row" id="upcoming-filter">
+      <div class="chip active" data-val="thismonth" onclick="setUpcomingFilter('thismonth',this)">Trong tháng</div>
+      <div class="chip" data-val="nextweek" onclick="setUpcomingFilter('nextweek',this)">7 ngày tới</div>
+      <div class="chip" data-val="nextmonth" onclick="setUpcomingFilter('nextmonth',this)">Tháng tới</div>
+    </div>
+    <div class="upcoming-card">
+      <div class="uc-head"><span class="font-bold text-sm">Dự kiến phải chi</span><span class="font-bold text-sm c-expense tabular" id="upcoming-total">0 đ</span></div>
+      <div id="upcoming-list"></div>
+    </div>
+
+    <div class="section-title"><h4>Ngân sách tháng này</h4><span class="link" onclick="switchTab('budget')">Chi tiết</span></div>
+    <div class="card" id="db-budget-mini"></div>
+
+    <div class="section-title"><h4>Chi tiêu theo danh mục</h4><span class="link" onclick="switchTab('reports')">Báo cáo</span></div>
+    <div class="card" id="db-cat-mini"></div>
+
+    <div class="section-title"><h4>⚡ Truy cập nhanh</h4></div>
+    <div class="menu-grid" id="db-quick-access"></div>
+  </div>
+
+  <!-- ============ TRANSACTIONS ============ -->
+  <div id="view-transactions" class="view hidden">
+    <div class="view-title">📋 Giao dịch</div>
+    <div class="search-bar">
+      <span>🔍</span>
+      <input type="text" id="tx-search" placeholder="Tìm ghi chú, danh mục, số tiền..." oninput="renderTransactionsList()">
+      <span class="pointer" id="tx-filter-toggle" onclick="toggleTxFilters()">⚙️</span>
+    </div>
+    <div class="chip-scroll" id="tx-filter-type">
+      <div class="chip active" data-val="all" onclick="setTxFilter('type','all',this)">Tất cả</div>
+      <div class="chip" data-val="expense" onclick="setTxFilter('type','expense',this)">Chi</div>
+      <div class="chip" data-val="income" onclick="setTxFilter('type','income',this)">Thu</div>
+      <div class="chip" data-val="transfer" onclick="setTxFilter('type','transfer',this)">Chuyển ví</div>
+    </div>
+    <div id="tx-advanced-filters" class="card hidden">
+      <div class="form-group">
+        <label>Khoảng thời gian</label>
+        <div class="chip-scroll" id="tx-filter-range">
+          <div class="chip" data-val="all" onclick="setTxFilter('range','all',this)">Toàn bộ</div>
+          <div class="chip" data-val="thismonth" onclick="setTxFilter('range','thismonth',this)">Tháng này</div>
+          <div class="chip" data-val="lastmonth" onclick="setTxFilter('range','lastmonth',this)">Tháng trước</div>
+          <div class="chip" data-val="7d" onclick="setTxFilter('range','7d',this)">7 ngày</div>
+          <div class="chip" data-val="30d" onclick="setTxFilter('range','30d',this)">30 ngày</div>
+          <div class="chip" data-val="thisyear" onclick="setTxFilter('range','thisyear',this)">Năm nay</div>
+          <div class="chip" data-val="custom" onclick="setTxFilter('range','custom',this)">Tùy chọn</div>
+        </div>
+      </div>
+      <div class="form-group field-row hidden" id="tx-custom-range">
+        <div><label>Từ ngày</label><input type="date" id="tx-from" class="input" onchange="renderTransactionsList()"></div>
+        <div><label>Đến ngày</label><input type="date" id="tx-to" class="input" onchange="renderTransactionsList()"></div>
+      </div>
+      <div class="form-group field-row">
+        <div><label>Ví</label><select id="tx-filter-wallet" class="input" onchange="renderTransactionsList()"></select></div>
+        <div><label>Danh mục</label><select id="tx-filter-cat" class="input" onchange="renderTransactionsList()"></select></div>
+      </div>
+      <div class="form-group">
+        <label>Sự kiện / Chuyến đi</label>
+        <select id="tx-filter-event" class="input" onchange="renderTransactionsList()"></select>
+      </div>
+      <button class="btn btn-secondary btn-sm" style="width:100%;" onclick="resetTxFilters()">Xóa bộ lọc</button>
+    </div>
+    <div class="card tight" id="tx-summary" style="display:flex;justify-content:space-around;text-align:center;"></div>
+    <div id="tx-list-container"></div>
+  </div>
+
+  <!-- ============ ADD / EDIT TRANSACTION ============ -->
+  <div id="view-add" class="view hidden">
+    <div class="sub-view-head">
+      <button class="icon-btn" onclick="cancelAddTx()">‹</button>
+      <h3 id="add-title">Thêm giao dịch</h3>
+    </div>
+    <div class="segment">
+      <div class="seg expense active" id="tab-expense" onclick="setTxType('expense')">Chi tiêu</div>
+      <div class="seg income" id="tab-income" onclick="setTxType('income')">Thu nhập</div>
+      <div class="seg transfer" id="tab-transfer" onclick="setTxType('transfer')">Chuyển ví</div>
+    </div>
+
+    <!-- expense / income -->
+    <div id="form-normal">
+      <div class="card amount-box">
+        <div class="amount-display tabular" id="tx-amount-display">0</div>
+        <div class="amount-unit" id="tx-amount-unit">VND</div>
+        <input type="text" inputmode="decimal" id="tx-amount-raw" class="input mt12" style="text-align:center;font-size:1.1rem;font-weight:700;" placeholder="Nhập số tiền" oninput="onAmountTyped(this.value)">
+        <div class="quick-amounts">
+          <div class="chip chip-sm" onclick="addQuickAmount(10000)">+10k</div>
+          <div class="chip chip-sm" onclick="addQuickAmount(50000)">+50k</div>
+          <div class="chip chip-sm" onclick="addQuickAmount(100000)">+100k</div>
+          <div class="chip chip-sm" onclick="addQuickAmount(500000)">+500k</div>
+          <div class="chip chip-sm" onclick="addQuickAmount(1000000)">+1tr</div>
+          <div class="chip chip-sm" onclick="clearAmount()">Xóa</div>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Ghi chú</label>
+        <input type="text" id="tx-note" class="input" placeholder="VD: Ăn trưa, bán phụ tùng...">
+      </div>
+      <div class="form-group">
+        <label>Ví</label>
+        <div id="tx-wallet-chips" class="chip-scroll"></div>
+      </div>
+      <div class="form-group">
+        <label>Danh mục</label>
+        <div id="tx-cat-grid" class="cat-grid"></div>
+      </div>
+      <div class="form-group hidden" id="tx-sub-group">
+        <label>Danh mục con</label>
+        <div id="tx-sub-chips" class="chip-scroll"></div>
+      </div>
+      <div class="form-group field-row">
+        <div><label>Ngày giao dịch</label><input type="date" id="tx-date" class="input"></div>
+        <div><label>Sự kiện</label><select id="tx-event" class="input"></select></div>
+      </div>
+      <button class="btn btn-primary" onclick="saveTransaction()" id="tx-save-btn">Lưu giao dịch</button>
+    </div>
+
+    <!-- transfer -->
+    <div id="form-transfer" class="hidden">
+      <div class="card amount-box">
+        <div class="amount-display tabular" id="tf-amount-display">0</div>
+        <div class="amount-unit" id="tf-amount-unit">VND</div>
+        <input type="text" inputmode="decimal" id="tf-amount-raw" class="input mt12" style="text-align:center;font-size:1.1rem;font-weight:700;" placeholder="Nhập số tiền" oninput="onTfAmountTyped(this.value)">
+      </div>
+      <div class="form-group field-row">
+        <div><label>Từ ví</label><select id="tf-from-wallet" class="input" onchange="onTransferWalletChange()"></select></div>
+        <div><label>Sang ví</label><select id="tf-to-wallet" class="input" onchange="onTransferWalletChange()"></select></div>
+      </div>
+      <div class="form-group hidden" id="tf-fx-group">
+        <label>Số tiền nhận được (ví đích)</label>
+        <input type="number" id="tf-to-amount" class="input" placeholder="0">
+        <div class="help" id="tf-fx-help"></div>
+      </div>
+      <div class="form-group field-row">
+        <div><label>Ngày</label><input type="date" id="tf-date" class="input"></div>
+        <div><label>Phí chuyển (nếu có)</label><input type="number" id="tf-fee" class="input" placeholder="0"></div>
+      </div>
+      <div class="form-group">
+        <label>Ghi chú</label>
+        <input type="text" id="tf-note" class="input" placeholder="VD: Rút quỹ cá nhân...">
+      </div>
+      <button class="btn btn-primary" onclick="saveTransfer()">Xác nhận chuyển</button>
+    </div>
+  </div>
+
+  <!-- ============ REPORTS ============ -->
+  <div id="view-reports" class="view hidden">
+    <div class="view-title">📊 Báo cáo</div>
+    <div class="segment" id="report-period-seg">
+      <div class="seg active" onclick="setReportPeriod('month',this)">Tháng</div>
+      <div class="seg" onclick="setReportPeriod('quarter',this)">Quý</div>
+      <div class="seg" onclick="setReportPeriod('year',this)">Năm</div>
+    </div>
+    <div class="card tight" style="display:flex;align-items:center;justify-content:space-between;">
+      <button class="icon-btn" onclick="shiftReportPeriod(-1)">‹</button>
+      <span class="font-bold" id="report-period-label">Tháng 8/2026</span>
+      <button class="icon-btn" onclick="shiftReportPeriod(1)">›</button>
+    </div>
+    <div class="chip-scroll" id="report-wallet-filter"></div>
+
+    <div class="card">
+      <div style="display:flex;justify-content:space-around;text-align:center;margin-bottom:12px;">
+        <div><div class="text-xs muted">Thu</div><div class="font-bold c-income tabular" id="rep-income">0 đ</div></div>
+        <div><div class="text-xs muted">Chi</div><div class="font-bold c-expense tabular" id="rep-expense">0 đ</div></div>
+        <div><div class="text-xs muted">Chênh lệch</div><div class="font-bold tabular" id="rep-net">0 đ</div></div>
+      </div>
+      <div class="segment" style="margin-bottom:8px;">
+        <div class="seg active" id="seg-donut-expense" onclick="setDonutMode('expense',this)">Cơ cấu chi</div>
+        <div class="seg" id="seg-donut-income" onclick="setDonutMode('income',this)">Cơ cấu thu</div>
+      </div>
+      <canvas id="chart-donut" height="230"></canvas>
+      <div class="legend" id="donut-legend"></div>
+    </div>
+
+    <div class="section-title"><h4>Chi tiết theo danh mục</h4></div>
+    <div class="card" id="rep-cat-list"></div>
+
+    <div class="section-title"><h4>Thu vs Chi (6 kỳ gần nhất)</h4></div>
+    <div class="card"><canvas id="chart-bar" height="190"></canvas>
+      <div class="legend">
+        <div class="legend-item"><span class="legend-dot" style="background:#16A34A;"></span>Thu</div>
+        <div class="legend-item"><span class="legend-dot" style="background:#E11D48;"></span>Chi</div>
+      </div>
+    </div>
+
+    <div class="section-title"><h4>Xu hướng số dư ròng</h4></div>
+    <div class="card"><canvas id="chart-line" height="180"></canvas></div>
+
+    <div class="section-title"><h4>Chi tiêu theo ví</h4></div>
+    <div class="card" id="rep-wallet-list"></div>
+  </div>
+
+  <!-- ============ MORE MENU ============ -->
+  <div id="view-more" class="view hidden">
+    <div class="view-title">☰ Tính năng</div>
+    <div class="menu-grid mb16" id="more-tiles"></div>
+    <div class="card" id="more-summary"></div>
+  </div>
+
+  <!-- ============ WALLETS ============ -->
+  <div id="view-wallets" class="view hidden">
+    <div class="sub-view-head">
+      <button class="icon-btn" onclick="switchTab('more')">‹</button>
+      <h3>Ví & Tài khoản</h3>
+      <button class="btn btn-primary btn-sm" onclick="openWalletModal()">+ Tạo ví</button>
+    </div>
+    <div class="card tight mb12" id="wallets-total"></div>
+    <div id="wallets-list"></div>
+  </div>
+
+  <!-- ============ BUDGET ============ -->
+  <div id="view-budget" class="view hidden">
+    <div class="sub-view-head">
+      <button class="icon-btn" onclick="switchTab('more')">‹</button>
+      <h3>Ngân sách</h3>
+      <button class="btn btn-primary btn-sm" onclick="openBudgetModal()">+ Thêm</button>
+    </div>
+    <div class="segment" id="budget-period-seg">
+      <div class="seg" onclick="setBudgetPeriod('weekly',this)">Tuần</div>
+      <div class="seg active" onclick="setBudgetPeriod('monthly',this)">Tháng</div>
+      <div class="seg" onclick="setBudgetPeriod('yearly',this)">Năm</div>
+    </div>
+    <div class="card" id="budget-summary"></div>
+    <div class="section-title"><h4>Chi tiết hạn mức</h4></div>
+    <div id="budget-list"></div>
+  </div>
+
+  <!-- ============ DEBTS ============ -->
+  <div id="view-debts" class="view hidden">
+    <div class="sub-view-head">
+      <button class="icon-btn" onclick="switchTab('more')">‹</button>
+      <h3>Sổ nợ</h3>
+      <button class="btn btn-primary btn-sm" onclick="openDebtModal()">+ Thêm</button>
+    </div>
+    <div class="stat-grid mb12">
+      <div class="stat-box"><div class="sb-lbl">🔻 Đang đi vay</div><div class="sb-val c-expense tabular" id="debt-borrow-total">0 đ</div></div>
+      <div class="stat-box"><div class="sb-lbl">🔺 Đang cho vay</div><div class="sb-val c-income tabular" id="debt-lend-total">0 đ</div></div>
+    </div>
+    <div class="segment" id="debt-seg">
+      <div class="seg active" onclick="setDebtFilter('all',this)">Tất cả</div>
+      <div class="seg" onclick="setDebtFilter('borrow',this)">Đi vay</div>
+      <div class="seg" onclick="setDebtFilter('lend',this)">Cho vay</div>
+      <div class="seg" onclick="setDebtFilter('settled',this)">Đã tất toán</div>
+    </div>
+    <div id="debts-list"></div>
+  </div>
+
+  <!-- ============ RECURRING ============ -->
+  <div id="view-recurring" class="view hidden">
+    <div class="sub-view-head">
+      <button class="icon-btn" onclick="switchTab('more')">‹</button>
+      <h3>Giao dịch định kỳ</h3>
+      <button class="btn btn-primary btn-sm" onclick="openRecurringModal()">+ Thêm</button>
+    </div>
+    <div class="alert alert-info"><span>💡</span><span>Bật "Tự động ghi nhận" để app tự cộng/trừ tiền khi đến hạn. Nếu tắt, bạn xác nhận thủ công bằng nút ✓.</span></div>
+    <div id="recurring-list"></div>
+  </div>
+
+  <!-- ============ EVENTS ============ -->
+  <div id="view-events" class="view hidden">
+    <div class="sub-view-head">
+      <button class="icon-btn" onclick="switchTab('more')">‹</button>
+      <h3>Chuyến đi & Sự kiện</h3>
+      <button class="btn btn-primary btn-sm" onclick="openEventModal()">+ Thêm</button>
+    </div>
+    <div id="events-list"></div>
+  </div>
+
+  <!-- ============ CATEGORIES ============ -->
+  <div id="view-categories" class="view hidden">
+    <div class="sub-view-head">
+      <button class="icon-btn" onclick="switchTab('more')">‹</button>
+      <h3>Danh mục</h3>
+      <button class="btn btn-primary btn-sm" onclick="openCategoryModal()">+ Thêm</button>
+    </div>
+    <div class="segment" id="cat-type-seg">
+      <div class="seg expense active" onclick="setCatManageType('expense',this)">Khoản chi</div>
+      <div class="seg income" onclick="setCatManageType('income',this)">Khoản thu</div>
+    </div>
+    <div id="categories-list"></div>
+  </div>
+
+  <!-- ============ SETTINGS ============ -->
+  <div id="view-settings" class="view hidden">
+    <div class="sub-view-head">
+      <button class="icon-btn" onclick="switchTab('more')">‹</button>
+      <h3>Cài đặt</h3>
+    </div>
+
+    <div class="section-title"><h4>Giao diện</h4></div>
+    <div class="card">
+      <div class="segment" style="margin-bottom:0;" id="theme-seg">
+        <div class="seg" onclick="setTheme('light',this)">☀️ Sáng</div>
+        <div class="seg" onclick="setTheme('dark',this)">🌙 Tối</div>
+        <div class="seg" onclick="setTheme('auto',this)">🖥 Tự động</div>
+      </div>
+    </div>
+
+    <div class="section-title"><h4>Tiền tệ</h4></div>
+    <div class="card">
+      <div class="form-group">
+        <label>Tiền tệ chính (dùng quy đổi tổng tài sản)</label>
+        <select id="set-main-currency" class="input" onchange="changeMainCurrency(this.value)"></select>
+      </div>
+      <div class="between mb8">
+        <span class="text-sm font-bold">Tỷ giá quy đổi</span>
+        <span class="link" onclick="toggleRatesEditor()">Chỉnh sửa</span>
+      </div>
+      <div id="rates-view" class="text-xs muted" style="line-height:1.7;"></div>
+      <div id="rates-editor" class="hidden"></div>
+    </div>
+
+    <div class="section-title"><h4>Tài khoản & Đồng bộ</h4></div>
+    <div class="card" id="cloud-status"></div>
+
+    <div class="section-title"><h4>Bảo mật</h4></div>
+    <div class="card">
+      <div class="setting-row">
+        <div class="sr-ic">🔐</div>
+        <div class="sr-mid"><div class="sr-title">Khóa bằng mã PIN</div><div class="sr-sub" id="pin-status">Chưa thiết lập</div></div>
+        <label class="switch"><input type="checkbox" id="pin-toggle" onchange="onPinToggle(this.checked)"><span class="slider"></span></label>
+      </div>
+      <div class="setting-row pointer" onclick="startPinSetup(true)" id="pin-change-row">
+        <div class="sr-ic">🔑</div>
+        <div class="sr-mid"><div class="sr-title">Đổi mã PIN</div><div class="sr-sub">Cập nhật mã 4 chữ số</div></div>
+        <span class="muted">›</span>
+      </div>
+    </div>
+
+    <div class="section-title"><h4>Sao lưu & Khôi phục</h4></div>
+    <div class="card">
+      <div class="setting-row pointer" onclick="exportJSON()">
+        <div class="sr-ic">📤</div>
+        <div class="sr-mid"><div class="sr-title">Xuất dữ liệu JSON</div><div class="sr-sub">Sao lưu toàn bộ (ví, giao dịch, ngân sách...)</div></div>
+        <span class="muted">›</span>
+      </div>
+      <div class="setting-row pointer" onclick="exportCSV()">
+        <div class="sr-ic">📊</div>
+        <div class="sr-mid"><div class="sr-title">Xuất giao dịch CSV</div><div class="sr-sub">Mở được bằng Excel / Google Sheets</div></div>
+        <span class="muted">›</span>
+      </div>
+      <div class="setting-row pointer" onclick="document.getElementById('import-json-file').click()">
+        <div class="sr-ic">📥</div>
+        <div class="sr-mid"><div class="sr-title">Nhập dữ liệu JSON</div><div class="sr-sub">Khôi phục từ file sao lưu</div></div>
+        <span class="muted">›</span>
+      </div>
+      <div class="setting-row pointer" onclick="document.getElementById('import-csv-file').click()">
+        <div class="sr-ic">🧾</div>
+        <div class="sr-mid"><div class="sr-title">Nhập giao dịch CSV</div><div class="sr-sub">Thêm giao dịch từ file CSV</div></div>
+        <span class="muted">›</span>
+      </div>
+      <input type="file" id="import-json-file" accept=".json,application/json" class="hidden" onchange="importJSON(event)">
+      <input type="file" id="import-csv-file" accept=".csv,text/csv" class="hidden" onchange="importCSV(event)">
+    </div>
+
+    <div class="section-title"><h4>Vùng nguy hiểm</h4></div>
+    <div class="card">
+      <div class="setting-row pointer" onclick="loadDemoData()">
+        <div class="sr-ic">↻</div>
+        <div class="sr-mid"><div class="sr-title">Nạp dữ liệu mẫu</div><div class="sr-sub">Thay dữ liệu tài khoản bằng bộ mẫu để dùng thử</div></div>
+        <span class="muted">›</span>
+      </div>
+      <div class="setting-row pointer" onclick="wipeMyData()">
+        <div class="sr-ic">🗑</div>
+        <div class="sr-mid"><div class="sr-title c-expense">Xóa toàn bộ dữ liệu của tôi</div><div class="sr-sub">Xóa cả trên máy này lẫn trên đám mây · không thể hoàn tác</div></div>
+        <span class="muted">›</span>
+      </div>
+    </div>
+    <p class="text-xs muted text-center mt12">Finyourtin v5.0 · Supabase cloud sync</p>
+  </div>
+
+  <!-- ============ BOTTOM NAV ============ -->
+  <nav id="main-nav" class="nav-bar hidden">
+    <button class="nav-item active" data-tab="dashboard" onclick="switchTab('dashboard')"><span class="ic">🏠</span>Tổng quan</button>
+    <button class="nav-item" data-tab="transactions" onclick="switchTab('transactions')"><span class="ic">📋</span>Giao dịch</button>
+    <div class="fab-wrap"><div class="fab" onclick="switchTab('add')">+</div></div>
+    <button class="nav-item" data-tab="reports" onclick="switchTab('reports')"><span class="ic">📊</span>Báo cáo</button>
+    <button class="nav-item" data-tab="more" onclick="switchTab('more')"><span class="ic">☰</span>Thêm</button>
+  </nav>
+</div>
+<!-- ============================================================
+     MODALS
+     ============================================================ -->
+
+<!-- TX DETAIL -->
+<div id="modal-tx-detail" class="modal hidden">
+  <div class="sheet">
+    <div class="handle"></div>
+    <div id="tx-detail-content"></div>
+    <div class="btn-row mt16">
+      <button class="btn btn-secondary" onclick="closeModal('modal-tx-detail')">Đóng</button>
+      <button class="btn btn-secondary" id="tx-detail-edit-btn">✎ Sửa</button>
+      <button class="btn btn-danger" id="tx-detail-delete-btn">🗑 Xóa</button>
+    </div>
+  </div>
+</div>
+
+<!-- WALLET -->
+<div id="modal-wallet" class="modal hidden">
+  <div class="sheet">
+    <div class="handle"></div>
+    <h3 id="modal-wallet-title" class="mb12">Tạo ví mới</h3>
+    <input type="hidden" id="mw-wallet-id">
+    <div class="type-select-row">
+      <div class="type-select active" id="mw-type-cash" onclick="selectWalletType('cash')"><span class="ts-ic">👛</span>Tiền mặt</div>
+      <div class="type-select" id="mw-type-bank" onclick="selectWalletType('bank')"><span class="ts-ic">🏦</span>Ngân hàng</div>
+      <div class="type-select" id="mw-type-credit_card" onclick="selectWalletType('credit_card')"><span class="ts-ic">💳</span>Thẻ TD</div>
+      <div class="type-select" id="mw-type-savings" onclick="selectWalletType('savings')"><span class="ts-ic">🐷</span>Tiết kiệm</div>
+    </div>
+    <div class="form-group">
+      <label>Tên ví</label>
+      <input type="text" id="mw-name" class="input" placeholder="VD: Vietcombank, Tiền mặt...">
+    </div>
+    <div class="form-group">
+      <label>Biểu tượng</label>
+      <div id="mw-icon-picker" class="emoji-picker"></div>
+    </div>
+    <div class="form-group">
+      <label>Tiền tệ</label>
+      <select id="mw-currency" class="input"></select>
+    </div>
+    <div id="mw-cash-fields">
+      <div class="form-group">
+        <label>Số dư đầu kỳ</label>
+        <input type="number" id="mw-starting-balance" class="input" placeholder="0">
+      </div>
+      <div class="form-group hidden" id="mw-savings-fields">
+        <div class="field-row">
+          <div><label>Lãi suất (%/năm)</label><input type="number" id="mw-interest" class="input" placeholder="VD: 5.6" step="0.01"></div>
+          <div><label>Ngày đáo hạn</label><input type="date" id="mw-maturity" class="input"></div>
+        </div>
+      </div>
+    </div>
+    <div id="mw-card-fields" class="hidden">
+      <div class="form-group">
+        <label>Hạn mức thẻ</label>
+        <input type="number" id="mw-credit-limit" class="input" placeholder="VD: 50000000">
+      </div>
+      <div class="form-group">
+        <label>Dư nợ hiện tại</label>
+        <input type="number" id="mw-used-amount" class="input" placeholder="0">
+      </div>
+      <div class="form-group field-row">
+        <div><label>Ngày chốt sao kê</label><input type="number" id="mw-statement-date" class="input" min="1" max="31" placeholder="VD: 5"></div>
+        <div><label>Hạn thanh toán</label><input type="number" id="mw-payment-due" class="input" min="1" max="31" placeholder="VD: 25"></div>
+      </div>
+    </div>
+    <div class="setting-row" style="border:none;padding:4px 0 14px;">
+      <div class="sr-mid"><div class="sr-title">Không tính vào tổng tài sản</div><div class="sr-sub">Ví dùng riêng, không cộng vào net worth</div></div>
+      <label class="switch"><input type="checkbox" id="mw-exclude"><span class="slider"></span></label>
+    </div>
+    <button class="btn btn-primary" onclick="saveWalletModal()">Lưu ví</button>
+    <button class="btn btn-ghost mt8" onclick="closeModal('modal-wallet')">Hủy</button>
+  </div>
+</div>
+
+<!-- CREDIT CARD PAYMENT -->
+<div id="modal-card-payment" class="modal hidden">
+  <div class="sheet">
+    <div class="handle"></div>
+    <h3 class="mb4">Thanh toán thẻ tín dụng</h3>
+    <p class="text-sm muted mb12" id="mcp-card-name">-</p>
+    <div class="card flat mb12">
+      <div class="text-xs muted">Dư nợ hiện tại</div>
+      <div class="text-lg font-bold c-expense tabular" id="mcp-debt-amount">0 đ</div>
+    </div>
+    <div class="form-group">
+      <label>Hình thức thanh toán</label>
+      <div class="chip-row" id="mcp-mode-chips">
+        <div class="chip active" data-val="full" onclick="setMcpMode('full',this)">Toàn bộ dư nợ</div>
+        <div class="chip" data-val="custom" onclick="setMcpMode('custom',this)">Nhập số thực tế</div>
+      </div>
+    </div>
+    <div class="form-group"><label>Số tiền thanh toán</label><input type="number" id="mcp-amount" class="input" placeholder="0"></div>
+    <div class="form-group"><label>Ví nguồn thanh toán</label><select id="mcp-source-wallet" class="input"></select></div>
+    <div class="form-group"><label>Ngày thanh toán</label><input type="date" id="mcp-date" class="input"></div>
+    <button class="btn btn-primary" onclick="settleCardPayment()">Xác nhận thanh toán</button>
+    <button class="btn btn-ghost mt8" onclick="closeModal('modal-card-payment')">Hủy</button>
+  </div>
+</div>
+
+<!-- BUDGET -->
+<div id="modal-budget" class="modal hidden">
+  <div class="sheet">
+    <div class="handle"></div>
+    <h3 id="modal-budget-title" class="mb12">Đặt ngân sách</h3>
+    <input type="hidden" id="mb-budget-id">
+    <div class="form-group">
+      <label>Áp dụng cho</label>
+      <select id="mb-cat" class="input"></select>
+    </div>
+    <div class="form-group">
+      <label>Chu kỳ</label>
+      <div class="chip-row" id="mb-period-chips">
+        <div class="chip" data-val="weekly" onclick="setMbPeriod('weekly',this)">Hàng tuần</div>
+        <div class="chip active" data-val="monthly" onclick="setMbPeriod('monthly',this)">Hàng tháng</div>
+        <div class="chip" data-val="yearly" onclick="setMbPeriod('yearly',this)">Hàng năm</div>
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Hạn mức chi tiêu</label>
+      <input type="number" id="mb-limit" class="input" placeholder="VD: 5000000">
+      <div class="help">Cảnh báo vàng khi đạt 80%, cảnh báo đỏ khi vượt 100%.</div>
+    </div>
+    <div class="form-group">
+      <label>Chỉ áp dụng cho ví</label>
+      <select id="mb-wallet" class="input"></select>
+    </div>
+    <button class="btn btn-primary" onclick="saveBudgetModal()">Lưu ngân sách</button>
+    <button class="btn btn-danger mt8 hidden" id="mb-delete" onclick="deleteBudget()">Xóa ngân sách</button>
+    <button class="btn btn-ghost mt8" onclick="closeModal('modal-budget')">Hủy</button>
+  </div>
+</div>
+
+<!-- RECURRING -->
+<div id="modal-recurring" class="modal hidden">
+  <div class="sheet">
+    <div class="handle"></div>
+    <h3 id="modal-recurring-title" class="mb12">Thêm giao dịch định kỳ</h3>
+    <input type="hidden" id="mr-recur-id">
+    <div class="segment">
+      <div class="seg expense active" id="mr-type-expense" onclick="setRecurType('expense')">Khoản chi</div>
+      <div class="seg income" id="mr-type-income" onclick="setRecurType('income')">Khoản thu</div>
+    </div>
+    <div class="form-group"><label>Tên khoản</label><input type="text" id="mr-name" class="input" placeholder="VD: Tiền nhà, Lương tháng..."></div>
+    <div class="form-group"><label>Số tiền</label><input type="number" id="mr-amount" class="input" placeholder="0"></div>
+    <div class="form-group"><label>Ví</label><select id="mr-wallet" class="input"></select></div>
+    <div class="form-group"><label>Danh mục</label><div id="mr-cat-chips" class="chip-scroll"></div></div>
+    <div class="form-group hidden" id="mr-sub-group"><label>Danh mục con</label><div id="mr-sub-chips" class="chip-scroll"></div></div>
+    <div class="form-group">
+      <label>Tần suất</label>
+      <div class="chip-row" id="mr-freq-chips">
+        <div class="chip" data-val="daily" onclick="selectRecurFreq('daily',this)">Hàng ngày</div>
+        <div class="chip" data-val="weekly" onclick="selectRecurFreq('weekly',this)">Hàng tuần</div>
+        <div class="chip active" data-val="monthly" onclick="selectRecurFreq('monthly',this)">Hàng tháng</div>
+        <div class="chip" data-val="yearly" onclick="selectRecurFreq('yearly',this)">Hàng năm</div>
+      </div>
+    </div>
+    <div class="form-group field-row">
+      <div><label>Lặp mỗi <span id="mr-interval-unit" class="c-primary">tháng</span></label><input type="number" id="mr-interval" class="input" min="1" value="1"></div>
+      <div><label>Đến hạn kế tiếp</label><input type="date" id="mr-duedate" class="input"></div>
+    </div>
+    <div class="form-group"><label>Kết thúc vào (tùy chọn)</label><input type="date" id="mr-enddate" class="input"></div>
+    <div class="setting-row" style="border:none;padding:4px 0 14px;">
+      <div class="sr-mid"><div class="sr-title">Tự động ghi nhận khi đến hạn</div><div class="sr-sub">App tự tạo giao dịch, không cần xác nhận</div></div>
+      <label class="switch"><input type="checkbox" id="mr-auto"><span class="slider"></span></label>
+    </div>
+    <button class="btn btn-primary" onclick="saveRecurringModal()">Lưu</button>
+    <button class="btn btn-ghost mt8" onclick="closeModal('modal-recurring')">Hủy</button>
+  </div>
+</div>
+
+<!-- CATEGORY -->
+<div id="modal-category" class="modal hidden">
+  <div class="sheet">
+    <div class="handle"></div>
+    <h3 id="modal-category-title" class="mb12">Thêm danh mục</h3>
+    <input type="hidden" id="mc-cat-id">
+    <div class="segment" id="mc-type-seg">
+      <div class="seg expense active" onclick="setMcType('expense',this)">Khoản chi</div>
+      <div class="seg income" onclick="setMcType('income',this)">Khoản thu</div>
+    </div>
+    <div class="form-group"><label>Tên danh mục</label><input type="text" id="mc-name" class="input" placeholder="VD: Từ thiện"></div>
+    <div class="form-group"><label>Biểu tượng</label><div id="mc-icon-picker" class="emoji-picker"></div></div>
+    <div class="form-group"><label>Màu sắc</label><div id="mc-color-picker" class="color-swatches"></div></div>
+    <div class="form-group">
+      <label>Danh mục con</label>
+      <div id="mc-subs-list" class="mb8"></div>
+      <div style="display:flex;gap:8px;">
+        <input type="text" id="mc-sub-name" class="input" placeholder="Tên danh mục con...">
+        <button class="btn btn-secondary btn-sm" onclick="addMcSub()">Thêm</button>
+      </div>
+    </div>
+    <button class="btn btn-primary" onclick="saveCategoryModal()">Lưu danh mục</button>
+    <button class="btn btn-ghost mt8" onclick="closeModal('modal-category')">Hủy</button>
+  </div>
+</div>
+
+<!-- DEBT -->
+<div id="modal-debt" class="modal hidden">
+  <div class="sheet">
+    <div class="handle"></div>
+    <h3 id="modal-debt-title" class="mb12">Thêm khoản nợ</h3>
+    <input type="hidden" id="md-debt-id">
+    <div class="segment">
+      <div class="seg expense active" id="md-kind-borrow" onclick="setDebtKind('borrow')">🔻 Tôi đi vay</div>
+      <div class="seg income" id="md-kind-lend" onclick="setDebtKind('lend')">🔺 Tôi cho vay</div>
+    </div>
+    <div class="form-group"><label id="md-party-label">Vay của ai?</label><input type="text" id="md-party" class="input" placeholder="VD: Anh Nam, Ngân hàng ACB..."></div>
+    <div class="form-group"><label>Số tiền</label><input type="number" id="md-amount" class="input" placeholder="0"></div>
+    <div class="form-group"><label id="md-wallet-label">Nhận vào ví</label><select id="md-wallet" class="input"></select></div>
+    <div class="form-group field-row">
+      <div><label>Ngày phát sinh</label><input type="date" id="md-date" class="input"></div>
+      <div><label>Ngày đến hạn</label><input type="date" id="md-duedate" class="input"></div>
+    </div>
+    <div class="form-group"><label>Ghi chú</label><input type="text" id="md-note" class="input" placeholder="Lý do, thỏa thuận lãi..."></div>
+    <div class="setting-row" style="border:none;padding:4px 0 14px;">
+      <div class="sr-mid"><div class="sr-title">Ghi nhận vào ví ngay</div><div class="sr-sub" id="md-affect-sub">Tạo giao dịch cộng/trừ tiền trong ví</div></div>
+      <label class="switch"><input type="checkbox" id="md-affect" checked><span class="slider"></span></label>
+    </div>
+    <button class="btn btn-primary" onclick="saveDebtModal()">Lưu khoản nợ</button>
+    <button class="btn btn-ghost mt8" onclick="closeModal('modal-debt')">Hủy</button>
+  </div>
+</div>
+
+<!-- DEBT PAYMENT -->
+<div id="modal-debt-pay" class="modal hidden">
+  <div class="sheet">
+    <div class="handle"></div>
+    <h3 id="mdp-title" class="mb4">Trả nợ</h3>
+    <p class="text-sm muted mb12" id="mdp-sub">-</p>
+    <div class="card flat mb12">
+      <div class="text-xs muted">Còn lại</div>
+      <div class="text-lg font-bold tabular" id="mdp-remaining">0 đ</div>
+    </div>
+    <div class="form-group">
+      <div class="chip-row">
+        <div class="chip active" id="mdp-mode-full" onclick="setMdpMode('full')">Tất toán hết</div>
+        <div class="chip" id="mdp-mode-part" onclick="setMdpMode('part')">Trả một phần</div>
+      </div>
+    </div>
+    <div class="form-group"><label>Số tiền</label><input type="number" id="mdp-amount" class="input" placeholder="0"></div>
+    <div class="form-group"><label>Ví</label><select id="mdp-wallet" class="input"></select></div>
+    <div class="form-group"><label>Ngày</label><input type="date" id="mdp-date" class="input"></div>
+    <button class="btn btn-primary" onclick="saveDebtPayment()">Xác nhận</button>
+    <button class="btn btn-ghost mt8" onclick="closeModal('modal-debt-pay')">Hủy</button>
+  </div>
+</div>
+
+<!-- EVENT -->
+<div id="modal-event" class="modal hidden">
+  <div class="sheet">
+    <div class="handle"></div>
+    <h3 id="modal-event-title" class="mb12">Tạo sự kiện</h3>
+    <input type="hidden" id="me-event-id">
+    <div class="form-group"><label>Tên sự kiện / chuyến đi</label><input type="text" id="me-name" class="input" placeholder="VD: Du lịch Đà Lạt 2026"></div>
+    <div class="form-group"><label>Biểu tượng</label><div id="me-icon-picker" class="emoji-picker"></div></div>
+    <div class="form-group field-row">
+      <div><label>Bắt đầu</label><input type="date" id="me-start" class="input"></div>
+      <div><label>Kết thúc</label><input type="date" id="me-end" class="input"></div>
+    </div>
+    <div class="form-group"><label>Ngân sách dự kiến (tùy chọn)</label><input type="number" id="me-budget" class="input" placeholder="0"></div>
+    <button class="btn btn-primary" onclick="saveEventModal()">Lưu sự kiện</button>
+    <button class="btn btn-ghost mt8" onclick="closeModal('modal-event')">Hủy</button>
+  </div>
+</div>
+
+<!-- EVENT DETAIL -->
+<div id="modal-event-detail" class="modal hidden">
+  <div class="sheet">
+    <div class="handle"></div>
+    <div id="event-detail-content"></div>
+    <button class="btn btn-ghost mt12" onclick="closeModal('modal-event-detail')">Đóng</button>
+  </div>
+</div>
+
+<!-- GENERIC SHEET — filled by uiSheet() -->
+<div id="modal-sheet" class="modal hidden">
+  <div class="sheet">
+    <div class="handle"></div>
+    <h3 id="sheet-title" class="mb12">·</h3>
+    <div id="sheet-body"></div>
+  </div>
+</div>
+
+<!-- CONFIRM -->
+<div id="modal-confirm" class="modal hidden">
+  <div class="sheet" style="border-radius:22px;margin:0 16px 16px;max-width:400px;">
+    <div class="handle"></div>
+    <h3 id="confirm-title" class="mb8">Xác nhận</h3>
+    <p class="text-sm muted mb16" id="confirm-msg" style="line-height:1.5;"></p>
+    <div class="btn-row">
+      <button class="btn btn-secondary" id="confirm-no">Hủy</button>
+      <button class="btn btn-danger" id="confirm-yes">Đồng ý</button>
+    </div>
+  </div>
+</div>
+
+<!-- Supabase SDK (UMD build — exposes window.supabase) -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<!-- Generated at build time by scripts/generate-env.js; absent in a fresh clone -->
+<script src="js/env.js" onerror="console.info('js/env.js không có — sẽ dùng meta tag hoặc màn hình cấu hình.')"></script>
+<script src="js/sync.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,27 @@
+# ---- secrets & environment ----
+.env
+.env.*
+!.env.example
+
+# Generated at build time from the environment — never commit
+public/js/env.js
+
+# ---- tooling ----
+node_modules/
+npm-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.vercel/
+.supabase/
+
+# ---- editors & OS ----
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ---- scratch ----
+.tmp_*
+*.local

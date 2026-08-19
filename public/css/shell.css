@@ -1,0 +1,119 @@
+/* ============================================================
+   FINYOURTIN — Mobile shell
+
+   Loaded after styles.css. Everything here is layout chrome: it pins the app
+   to a 480px phone-width column, frames that column on desktop, and styles the
+   handful of screens added by the cloud edition (config, auth errors, sync
+   pill, generic sheet). It deliberately owns no colours of its own — all of it
+   runs off the design tokens declared in styles.css.
+   ============================================================ */
+
+:root{
+  --shell-w: 480px;             /* phone column width */
+  --shell-frame: 22px;          /* desktop corner radius */
+}
+
+/* ---------- the phone column ---------- */
+.app{ max-width: var(--shell-w); }
+.nav-bar{ max-width: var(--shell-w); }
+.sheet{ max-width: var(--shell-w); }
+#toast-wrap{ max-width: var(--shell-w); }
+
+/* Modals and the lock screen are position:fixed, so on a wide screen they
+   would spill across the whole desktop. Constrain them to the column. */
+.modal{ padding: 0; }
+.lock-screen{
+  left: 50%; right: auto; transform: translateX(-50%);
+  width: 100%; max-width: var(--shell-w);
+}
+
+/* ---------- desktop framing ----------
+   Above the phone width, sit the column on a neutral backdrop and give it the
+   rounded, softly-shadowed card treatment the rest of the UI already uses. */
+@media (min-width: 720px){
+  body{
+    align-items: center;
+    padding: 24px 0;
+    background:
+      radial-gradient(1100px 520px at 50% -10%, rgba(13,148,136,.16), transparent 60%),
+      var(--card-2, var(--bg));
+  }
+  .app{
+    min-height: min(880px, calc(100vh - 48px));
+    height: min(880px, calc(100vh - 48px));
+    border-radius: var(--shell-frame);
+    overflow: hidden;
+    box-shadow: 0 24px 70px rgba(15,23,42,.20), 0 2px 8px rgba(15,23,42,.08);
+    border: 1px solid var(--border);
+  }
+  /* The column scrolls, not the page. */
+  .app > .view{ overflow-y: auto; overflow-x: hidden; }
+  .nav-bar{
+    position: absolute;
+    border-bottom-left-radius: var(--shell-frame);
+    border-bottom-right-radius: var(--shell-frame);
+  }
+  /* Fixed overlays are relative to the viewport, so re-center them on the column. */
+  .modal{ align-items: center; }
+  .sheet{ border-radius: 20px; max-height: 82vh; }
+  .lock-screen{
+    top: 50%; transform: translate(-50%, -50%);
+    height: min(880px, calc(100vh - 48px));
+    border-radius: var(--shell-frame);
+  }
+  #toast-wrap{ bottom: 96px; }
+}
+
+[data-theme="dark"] .app{ box-shadow: 0 24px 70px rgba(0,0,0,.55); }
+
+/* ---------- header sync pill ---------- */
+#sync-pill{
+  font-size: .62rem; line-height: 1;
+  display: inline-flex; align-items: center;
+  margin-left: 2px; cursor: default; user-select: none;
+}
+
+/* ---------- auth screen ---------- */
+#auth-error{
+  color: var(--expense, #DC2626);
+  font-size: .74rem; line-height: 1.45;
+  min-height: 16px; margin-top: 8px;
+}
+#auth-error:empty{ min-height: 0; }
+#auth-forgot{
+  display: block; text-align: right;
+  font-size: .74rem; margin: -4px 0 12px;
+}
+.auth-brand{ text-align: center; margin-bottom: 18px; }
+.auth-brand .logo{
+  width: 62px; height: 62px; margin: 0 auto 10px;
+  display: grid; place-items: center;
+  font-size: 2rem; border-radius: 20px;
+  background: var(--card); border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+}
+
+/* ---------- config screen ---------- */
+#view-config code{
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: .74rem;
+  background: var(--card-2); border: 1px solid var(--border);
+  border-radius: 8px; padding: 1px 6px;
+}
+.cfg-steps{ font-size: .78rem; line-height: 1.75; color: var(--muted); }
+.cfg-steps li{ margin-left: 16px; }
+#config-reason{
+  font-size: .74rem; color: var(--expense, #DC2626);
+  min-height: 14px; margin-bottom: 10px;
+}
+
+/* The sign-in and config screens are full-height panels. Expressed here rather
+   than inline so the desktop frame (which caps .app height) can override it. */
+#view-login, #view-config{
+  display: flex; flex-direction: column; justify-content: center;
+  min-height: 100vh; padding-bottom: 24px;
+}
+#view-login.hidden, #view-config.hidden{ display: none !important; }
+@media (min-width: 720px){
+  #view-login, #view-config{ min-height: 0; }
+}
