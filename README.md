@@ -12,6 +12,9 @@
 Finyourtin/
 ├── public/                     ← thư mục được deploy
 │   ├── index.html              giao diện (800 dòng)
+│   ├── manifest.json           PWA manifest
+│   ├── sw.js                   service worker (cache-first, bỏ qua Supabase)
+│   ├── icons/                  icon 192/512 + maskable + apple-touch
 │   ├── css/
 │   │   ├── styles.css          design tokens + component (316 dòng)
 │   │   └── shell.css           khung mobile 480px + màn hình mới
@@ -23,9 +26,10 @@ Finyourtin/
 │   ├── config.js               hợp đồng cấu hình (Node, dùng khi build)
 │   └── schema.sql              bảng + RLS + realtime — chạy 1 lần
 ├── scripts/
-│   ├── generate-env.js         build: env → public/js/env.js
-│   ├── check.js                kiểm tra wiring HTML ↔ JS
-│   └── smoke.js                chạy thật app bằng jsdom (99 assertion)
+│   ├── generate-env.js         build: env → public/js/env.js (kèm BUILD stamp)
+│   ├── generate-icons.js       vẽ bộ icon PWA bằng zlib, không cần thư viện ảnh
+│   ├── check.js                kiểm tra wiring HTML ↔ JS + manifest/sw
+│   └── smoke.js                chạy thật app bằng jsdom (245 assertion)
 ├── legacy/
 │   └── index.offline-v4.html   bản single-file cũ, vẫn chạy độc lập
 ├── .env.example
@@ -115,9 +119,14 @@ Last-write-wins theo `data.updatedAt` (đồng hồ client, đóng dấu bởi `
 | **Định kỳ** | Ngày/Tuần/Tháng/Năm, lặp mỗi N kỳ, tự ghi nhận và bù các kỳ đã lỡ khi mở lại app. Bấm ✓ để ghi tay: sheet xác nhận cho **chọn lại ngày và ví** trước khi tạo giao dịch; lịch vẫn neo theo ngày đến hạn nên trả muộn không làm trôi cả chu kỳ. |
 | **Báo cáo** | Tháng/Quý/Năm, lọc theo ví, biểu đồ tròn thu–chi, cột 6 kỳ gần nhất, đường xu hướng số dư ròng. Vẽ bằng Canvas thuần, xử lý `devicePixelRatio`, tự đổi màu theo theme. |
 | **Đa tiền tệ** | 10 loại tiền, mỗi ví một tiền tệ, quy đổi về tiền tệ chính. Tỷ giá chỉnh tay trong Cài đặt. |
+| **Nhập số tiền** | Mọi ô tiền tự chèn dấu phân cách nghìn ngay lúc gõ (`1.250.000`), giữ nguyên vị trí con trỏ. Nút **`000`** trong ô nhân giá trị lên nghìn: `50` → `50.000` → `50.000.000`. Xuống `state`/localStorage luôn là `number` sạch. Chung một cặp `formatMoneyText()` / `readMoney()` cho tất cả form. |
+| **Giao dịch dự kiến** | Chọn ngày trong tương lai → giao dịch vào trạng thái `pending`: **chưa trừ ví, chưa vào tổng tài sản, chưa vào báo cáo/ngân sách**. Nó hiện ở "Dự kiến phải chi" theo đúng tab Trong tháng / 7 ngày tới / Tháng tới, và trong sổ Giao dịch với nhãn *Dự kiến*. Tới ngày thì tự chốt; bấm ✓ để chốt sớm. Báo cáo có chip **🔮 Gồm dự kiến** để xem trước. |
 | **Sự kiện** | Gom chi tiêu theo chuyến đi/sự kiện, có ngân sách riêng và phân tích riêng. |
-| **Điều hướng** | Chạm một ví ở Tổng quan → nhảy thẳng sang Giao dịch đã lọc sẵn ví đó; chạm một danh mục → lọc theo danh mục. Bộ lọc **Ví** nằm ngay trên màn hình Giao dịch, không phải mở panel nâng cao. |
-| **Giao diện** | Mobile-first 480px, căn giữa và đóng khung trên desktop. Dark/Light/Tự động. Bottom nav + lưới truy cập nhanh có badge. Toast và modal tự dựng, không dùng `alert()`. |
+| **Điều hướng** | Thanh nav đúng 4 mục — Tổng quan · Giao dịch · Báo cáo · Cài đặt — cộng nút **+**. Các màn hình phụ (ví, ngân sách, sổ nợ, định kỳ, sự kiện, danh mục) vào từ lưới **Truy cập nhanh** ở Tổng quan. Chạm một ví → nhảy sang Giao dịch đã lọc sẵn ví đó; chạm một danh mục → lọc theo danh mục. Bộ lọc **Ví** nằm ngay trên màn hình Giao dịch, không phải mở panel nâng cao. |
+| **PWA** | Cài lên máy được, chạy standalone, mở offline 100% nhờ service worker cache-first. Cài đặt → *Thông tin ứng dụng* có nút cài (và hướng dẫn riêng cho iOS Safari), báo trạng thái offline và nút tải bản cập nhật. |
+| **Bảo mật** | Khóa PIN 4 chữ số (SHA-256, WebCrypto). Một form đổi **mã PIN** hoặc **mật khẩu đăng nhập**: nhập mã/mật khẩu hiện tại → mới → xác nhận. PIN đối chiếu hash trong `state`; mật khẩu thì xác thực lại với Supabase vì `updateUser()` không tự hỏi mật khẩu cũ. |
+| **Giao diện** | Ngôn ngữ thiết kế **VietinBank iPay**: app bar gradient xanh `#003B70 → #0073E6`, thẻ tổng tài sản trắng bo 16px đè lên app bar, thẻ ví gradient xanh, nền `#F4F7FA`. Lưới **Tiện ích 4×2** với icon trong khung gradient nhạt có inner shadow. Bottom nav kính mờ (`backdrop-filter`), tab active xanh kèm vạch đỏ `#ED1C24`; nút **+** là FAB gradient xanh–đỏ có glow thở nhẹ. Ripple + rung nhẹ khi chạm. Mobile-first 480px, Dark/Light/Tự động. |
+| **Hệ thống icon** | Icon *của app* (nav, nút, hàng cài đặt, empty state, cảnh báo) là SVG stroke 24×24 inline, khai báo trong `ICON_PATHS` và dựng bằng `icon(name)` — thừa kế `currentColor` và cỡ chữ nên một rule CSS chỉnh được tất cả. Emoji **do người dùng chọn** (ví, danh mục, sự kiện) là dữ liệu trong `state`, giữ nguyên. |
 
 ---
 
@@ -145,7 +154,7 @@ Nội dung `data`:
   wallets:      [{ id, userId, name, icon, type, currency, startingBalance,
                    creditLimit, statementDate, paymentDueDate,
                    interestRate, maturityDate, excludeFromTotal }],
-  transactions: [{ id, userId, type, amount, walletId, categoryId, subcategoryId,
+  transactions: [{ id, userId, type, status, amount, walletId, categoryId, subcategoryId,
                    note, date, eventId, transferId, recurringId, debtId, createdAt }],
   budgets:      [{ id, userId, categoryId, period, periodKey, limit, walletId, repeat }],
   recurring:    [{ id, userId, name, type, amount, walletId, categoryId, subcategoryId,
@@ -159,6 +168,8 @@ Nội dung `data`:
 ```
 
 `type` của giao dịch: `expense` · `income` · `transfer_out` · `transfer_in`. Mỗi lần chuyển ví tạo **một cặp** `transfer_out` + `transfer_in` chung `transferId`.
+
+`status`: `completed` · `pending`. Bất biến của hệ thống: **`completed` ⟺ `date <= hôm nay`**. Lưu giao dịch thì `status` được suy ra từ ngày chứ không nhập tay; xác nhận sớm thì kéo `date` về hôm nay; `autoSettlePending()` lật phần còn lại khi tới ngày. Nhờ vậy `completed` luôn có nghĩa "tiền đã thực sự chuyển", và không có trạng thái nào mâu thuẫn với ngày.
 
 ### Chuyển từ bản offline cũ
 
@@ -187,7 +198,7 @@ Khi nhập CSV: ví/danh mục/danh mục con/sự kiện chưa tồn tại sẽ
 
 ```bash
 npm run check                                          # tĩnh, không cần dependency
-npm install jsdom --no-save && node scripts/smoke.js   # động, 99 assertion
+npm install jsdom --no-save && node scripts/smoke.js   # động, 245 assertion
 ```
 
 `npm run check` bắt được thứ mà mắt người hay bỏ sót ở dự án không bundler: inline handler gọi hàm không tồn tại, `getElementById` trỏ vào id đã đổi tên, JWT lỡ commit vào HTML.
@@ -232,6 +243,7 @@ npm install jsdom --no-save && node scripts/smoke.js   # động, 99 assertion
 |---|---|
 | `txFilters` sống qua lần đăng xuất | Đăng nhập tài khoản khác trên cùng máy thì bộ lọc vẫn giữ `walletId` của người trước → mọi danh sách trống trơn không rõ lý do. Nay `resetSessionFilters()` chạy ở cả `enterSession()` lẫn nhánh `SIGNED_OUT`. |
 | Bộ lọc trỏ vào ví/danh mục/sự kiện đã xóa | Danh sách im lặng trống rỗng vì lọc theo một id không còn tồn tại. Nay `renderTransactionsList()` tự đưa về `all`. |
+| "Đổi mã PIN" không hỏi mã cũ | Hàng này gọi `startPinSetup(true)` — mà hàm đó bỏ qua tham số và nhảy thẳng vào màn đặt PIN mới. Ai cầm được máy đang mở khóa đều đổi được PIN. Nay bắt buộc nhập mã hiện tại và đối chiếu hash. |
 | `jumpToCategory()` đặt `txFilters` nhưng không đồng bộ chip | Chip "Chi/Thu" và khoảng thời gian vẫn sáng theo lựa chọn cũ trong khi bộ lọc thật đã là `all` — UI nói một đằng, danh sách một nẻo. Nay đi chung `jumpToTransactions()`. |
 
 ---
