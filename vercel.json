@@ -5,9 +5,6 @@
   "framework": null,
   "cleanUrls": true,
   "trailingSlash": false,
-  "rewrites": [
-    { "source": "/((?!css/|js/|favicon).*)", "destination": "/index.html" }
-  ],
   "headers": [
     {
       "source": "/(.*)",
