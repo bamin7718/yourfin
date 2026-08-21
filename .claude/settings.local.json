@@ -5,7 +5,9 @@
       "Bash(echo \"exit:$?\")",
       "Bash(python -)",
       "Bash(node *)",
-      "Bash(timeout 180 npm install jsdom --no-save --silent)"
+      "Bash(timeout 180 npm install jsdom --no-save --silent)",
+      "Bash(npm run *)",
+      "Bash(npm test *)"
     ]
   }
 }

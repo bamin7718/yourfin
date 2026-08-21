@@ -1,5 +1,5 @@
 /* ============================================================
-   FINYOURTIN — Supabase client, auth and state sync
+   SoFin — Supabase client, auth and state sync
 
    The whole app is one `state` object (see app.js). Rather than shredding it
    into a dozen tables, we store it as a single JSONB snapshot per user and let
@@ -141,7 +141,9 @@
     if(p === 'synced') lastSyncAt = Date.now();
     const el = document.getElementById('sync-pill');
     if(el){
-      el.textContent = {synced:'🟢', pending:'🟡', offline:'⚪️', error:'🔴'}[p] || '';
+      /* a CSS dot rather than a coloured-circle emoji: it inherits the theme
+         palette and renders identically on every platform */
+      el.className = 'dot dot-' + (['synced','pending','offline','error'].indexOf(p) >= 0 ? p : 'offline');
       el.title = msg || p;
     }
     bridge.onStatus(phase, message);

@@ -15,7 +15,8 @@ npm run dev            # build + serve public/ tại http://localhost:5173
 
 npm run check          # kiểm tra tĩnh wiring HTML ↔ JS (không cần dependency)
 npm run smoke          # chạy thật app trong jsdom — cần: npm install jsdom --no-save
-npm test               # check + smoke
+npm run sync-test      # hợp đồng đồng bộ: giữ request treo để soi UI giữa chừng
+npm test               # cả ba
 ```
 
 `scripts/smoke.js` là **một file assertion tuần tự**, không phải test runner — không có cách chạy lẻ một case. Muốn cô lập một luồng thì comment bớt các bước phía sau trong file, đừng thêm framework.
@@ -58,6 +59,7 @@ Không có `storageNamespace` (tức chưa đăng nhập) thì `saveStorage()` r
 Một bảng duy nhất: `public.user_state(user_id pk, data jsonb, device_id, updated_at, created_at)` — xem `supabase/schema.sql`, idempotent, chạy một lần trong SQL Editor.
 
 - **Xung đột**: last-write-wins trên `data.updatedAt` (đồng hồ **client**), so sánh cả khi `pull()` lẫn khi nhận realtime. Không phải CRDT, không merge theo bản ghi.
+- **Không có queue thao tác.** `pendingSnapshot` chỉ là bộ đệm debounce trong RAM — **hàng đợi thật chính là snapshot trong localStorage**. Đóng tab lúc offline không mất gì: lần boot sau `pull()` thấy `data.updatedAt` local mới hơn và tự đẩy lên. `scripts/sync-test.js` khoá đúng hành vi này; nếu ai đó định thêm queue thao tác riêng thì phải đọc test đó trước.
 - **Echo của chính mình**: mỗi trình duyệt có `deviceId` ổn định trong localStorage; handler realtime bỏ qua row có `device_id` trùng.
 - **`updated_at` cột SQL** bị trigger `touch_user_state` ghi đè bằng `now()` phía server — nó *không* dùng để giải xung đột, chỉ để quan sát. Logic xung đột đọc `data.updatedAt` bên trong JSONB.
 - **`flushBeacon()`** gọi REST thô bằng `fetch(keepalive)` chứ không `sendBeacon`, vì cần header `Authorization`; token được cache vào `client.auth.__fyt_token`.
@@ -72,6 +74,10 @@ Anon key **cố ý** đi vào trình duyệt — RLS (`auth.uid() = user_id` tr�
 ### Bố cục `app.js` (~3.200 dòng)
 
 Chia bằng banner `/* ===== TÊN SECTION ===== */`, theo thứ tự: STATE · STORAGE · SEED DATA · HELPERS (dates / money / data access) · UI PRIMITIVES · THEME · PIN LOCK · AUTH · ONBOARDING · NAVIGATION · DASHBOARD · TRANSACTIONS · WALLETS · BUDGETS · DEBTS · RECURRING · EVENTS · CATEGORY MANAGEMENT · REPORTS · MORE · SETTINGS · IMPORT/EXPORT · BOOTSTRAP. Thêm code vào đúng section, giữ banner.
+
+## Tên thương hiệu vs khoá lưu trữ
+
+App tên **SoFin**, nhưng bốn khoá `localStorage` (`FINYOURTIN_STATE_V4`, `FINYOURTIN_THEME`, `FINYOURTIN_SUPABASE_CFG`, `FINYOURTIN_DEVICE_ID`) và **muối băm PIN** (`'finyourtin::'+pin`) **cố tình giữ tên cũ**. Đổi chúng sẽ: bỏ rơi mọi snapshot đã cache, quên theme và cấu hình Supabase nhập tay, cấp `device_id` mới (máy bắt đầu phản ứng với chính tiếng vọng của mình) — và riêng muối PIN thì **vô hiệu hoá mọi mã PIN đang dùng**, khoá người dùng ra ngoài. Đổi tên hiển thị thì thoải mái; đụng vào bốn khoá này thì phải kèm migration.
 
 ## Quy ước bắt buộc
 
@@ -99,11 +105,21 @@ Tập id hợp lệ gồm cả `id="..."` xuất hiện trong JS (do `uiSheet` v
 
 Icon *hệ thống* dùng `icon('name')` (bảng `ICON_PATHS` ở đầu `app.js`) — SVG 24×24 stroke, thừa kế `currentColor` và cỡ chữ; cần cỡ khác thì thêm rule cho `.ic-svg` trong ngữ cảnh đó, đừng gán `width` inline. **Emoji do người dùng chọn** (`wallet.icon`, `category.icon`, `event.icon`, `EMOJI_POOL`) là **dữ liệu trong `state`** — không đụng vào, đổi sẽ hỏng bộ chọn emoji và dữ liệu cũ. Trong `<option>` cũng phải giữ emoji vì SVG không nhúng được vào đó.
 
-Ngôn ngữ thiết kế bám theo **VietinBank iPay**: xanh `#00529C` / `#003B70`, đỏ nhấn `#ED1C24` (`--brand-red`), nền `#F4F7FA`. Ba gradient riêng biệt, đừng dùng lẫn: `--gradient` (app bar), `--gradient-card` (thẻ ví/tài sản), `--gradient-fab` (nút +). `header` là app bar full-bleed có phần thừa 58px phía dưới; các view kéo lên `-44px` qua selector `#main-header:not(.hidden) ~ .view` — **giữ nguyên phần `:not(.hidden)`**, bỏ đi thì màn đăng nhập/onboarding (vốn ẩn header) sẽ bị cắt mất đỉnh.
+Ngôn ngữ thiết kế bám theo **VietinBank iPay**: xanh `#00529C` / `#003B70`, đỏ nhấn `#ED1C24` (`--brand-red`), nền `#F4F7FA`. Ba gradient riêng biệt, đừng dùng lẫn: `--gradient` (app bar), `--gradient-card` (thẻ ví/tài sản), `--gradient-fab` (nút +). `header` là app bar full-bleed giữ một vành 26px phía dưới để **riêng thẻ số dư của Dashboard** đè lên (`margin-top:-20px`). Mọi màn khác mở đầu bằng `.view-title` / `.sub-view-head` — không có nền riêng — nên sẽ bị màu xanh nuốt mất chữ. Vì vậy `switchTab()` gắn cờ `.hd-flat` lên header khi **không** ở Dashboard: vành thu lại còn 12px và view được `padding-top:20px`. **Đừng áp `margin-top` âm cho `.view` nói chung** — đó chính là lỗi đã từng che mất tiêu đề "Cài đặt". Cũng **giữ nguyên `:not(.hidden)`**: bỏ đi thì màn đăng nhập/onboarding (vốn ẩn header) sẽ bị cắt mất đỉnh.
 
 Lưới Tiện ích cố định **4×2 = 8 ô**. Thêm tính năng mới thì cho vào `MORE_FEATURES` (sheet "Tất cả tiện ích"), đừng nhồi thêm ô — 9 ô sẽ vỡ lưới và bỏ rơi một màn hình.
 
 Màu brand nằm trong `--primary*` / `--gradient*` / `--primary-glow` ở `styles.css`. Đổi màu thì phải đổi cả 4 chỗ khác ngoài CSS: `applyTheme()` (meta theme-color), `manifest.json`, `scripts/generate-icons.js` rồi chạy `npm run icons`, và fallback màu trong `drawDonut`/`budgetIcon`. Chữ trên nền primary dùng `--on-primary`, đừng hard-code `#fff`.
+
+## Biểu đồ
+
+Vẽ bằng **Canvas thuần**, không thư viện — thêm Chart.js/Recharts sẽ kéo theo một CDN thứ hai và phá vỡ ràng buộc không-bundler cùng câu chuyện offline-first.
+
+Tooltip hoạt động theo cặp: hàm `draw*` ghi hình học vào `chartHit.donut` / `chartHit.bars`, còn `bindDonutTip()` / `bindBarTip()` hit-test trên đó. **Không vẽ lại canvas khi con trỏ di chuyển** — chỉ đổi text/vị trí của node DOM `.chart-tip`, riêng donut vá lại đúng vòng tâm bằng `paintDonutCentre()`. Giữ nguyên tính chất này, không thì cuộn trên điện thoại sẽ giật.
+
+`bindChartTip()` gắn cờ `__tipBound` lên canvas vì `renderReportsView()` chạy lại mỗi lần đổi bộ lọc — thiếu cờ đó thì listener chồng chất.
+
+`shortMoney()` (nhãn trục) tôn trọng `state.app.privacy` — bật con mắt thì trục cũng phải che, không thì số vẫn đọc được qua vai.
 
 ## PWA
 

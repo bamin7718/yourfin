@@ -1,5 +1,5 @@
 /* ============================================================
-   FINYOURTIN — Supabase configuration contract
+   SoFin — Supabase configuration contract
 
    Single source of truth for how the app finds its Supabase project.
    Runs under Node (used by scripts/generate-env.js) and is safe to require

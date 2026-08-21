@@ -1,5 +1,5 @@
 /* ============================================================
-   FINYOURTIN — Mobile shell
+   SoFin — Mobile shell
 
    Loaded after styles.css. Everything here is layout chrome: it pins the app
    to a 480px phone-width column, frames that column on desktop, and styles the
@@ -35,7 +35,7 @@
     align-items: center;
     padding: 24px 0;
     background:
-      radial-gradient(1100px 520px at 50% -10%, rgba(13,148,136,.16), transparent 60%),
+      radial-gradient(1100px 520px at 50% -10%, rgba(0,82,156,.16), transparent 60%),
       var(--card-2, var(--bg));
   }
   .app{

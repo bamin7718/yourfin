@@ -1,5 +1,5 @@
 -- ============================================================
--- FINYOURTIN — Supabase schema
+-- SoFin — Supabase schema
 --
 -- Run once in the SQL Editor of your project (or `supabase db push`).
 -- Safe to re-run: everything is idempotent.
@@ -18,7 +18,7 @@ create table if not exists public.user_state (
   created_at  timestamptz  not null default now()
 );
 
-comment on table  public.user_state is 'Finyourtin: one whole-app state snapshot per user.';
+comment on table  public.user_state is 'SoFin: one whole-app state snapshot per user.';
 comment on column public.user_state.device_id is 'Writer device, so a client can ignore the realtime echo of its own write.';
 
 -- ---------- row level security ----------

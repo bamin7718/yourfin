@@ -1,5 +1,5 @@
 {
-  "name": "finyourtin",
+  "name": "sofin",
   "version": "5.0.0",
   "private": true,
   "description": "Ứng dụng quản lý tài chính cá nhân mobile-first, đồng bộ đa thiết bị qua Supabase.",
@@ -9,7 +9,9 @@
     "dev": "node scripts/generate-env.js && npx --yes serve public -l 5173",
     "check": "node scripts/check.js",
     "smoke": "node scripts/smoke.js",
-    "test": "node scripts/check.js && node scripts/smoke.js"
+    "test": "node scripts/check.js && node scripts/smoke.js && node scripts/sync-test.js",
+    "icons": "node scripts/generate-icons.js",
+    "sync-test": "node scripts/sync-test.js"
   },
   "engines": {
     "node": ">=18"

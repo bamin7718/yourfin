@@ -98,6 +98,63 @@ for (const m of html.matchAll(/(?:href|src)="(?!https?:|data:)([^"]+)"/g)) {
   }
 }
 
+/* ---------- 7. PWA: manifest + service worker point at files that exist ---------- */
+const MANIFEST = path.join(ROOT, 'public', 'manifest.json');
+if (!fs.existsSync(MANIFEST)) {
+  errors.push('Thiếu public/manifest.json — app sẽ không cài được.');
+} else {
+  let mf = null;
+  try { mf = JSON.parse(read(MANIFEST)); }
+  catch (e) { errors.push('manifest.json không phải JSON hợp lệ: ' + e.message); }
+  if (mf) {
+    for (const ic of mf.icons || []) {
+      if (!fs.existsSync(path.join(ROOT, 'public', ic.src))) {
+        errors.push(`manifest.json trỏ tới icon "${ic.src}" nhưng file không tồn tại (chạy npm run icons).`);
+      }
+    }
+    const big = (mf.icons || []).some(i => /512/.test(i.sizes || ''));
+    const maskable = (mf.icons || []).some(i => /maskable/.test(i.purpose || ''));
+    if (!big) errors.push('manifest.json cần một icon 512x512 thì Chrome mới cho cài.');
+    if (!maskable) warnings.push('manifest.json chưa có icon purpose="maskable" — Android sẽ tự cắt viền.');
+  }
+}
+const SW = path.join(ROOT, 'public', 'sw.js');
+if (!fs.existsSync(SW)) {
+  errors.push('Thiếu public/sw.js — sẽ không chạy được offline.');
+} else {
+  const sw = read(SW);
+  try {
+    execFileSync(process.execPath, ['--check', SW], { stdio: 'pipe' });
+  } catch (e) {
+    errors.push(`Lỗi cú pháp trong public/sw.js:\n${e.stderr.toString().trim()}`);
+  }
+  // every same-origin entry of the precache list must be a real file
+  const block = (sw.match(/const PRECACHE = \[([\s\S]*?)\];/) || [])[1] || '';
+  for (const m of block.matchAll(/'(\/[^']*)'/g)) {
+    const rel = m[1] === '/' ? '/index.html' : m[1];
+    if (!fs.existsSync(path.join(ROOT, 'public', rel))) {
+      errors.push(`sw.js precache "${m[1]}" nhưng file không tồn tại.`);
+    }
+  }
+  if (!/isSupabase/.test(sw)) {
+    errors.push('sw.js phải bỏ qua request tới Supabase — cache lại auth/REST sẽ hỏng đăng nhập.');
+  }
+
+  /* Anything index.html loads must be precached, or the app boots broken with
+     the radio off — and nothing else would tell us. js/env.js is the one
+     deliberate exception: it goes network-first so a rotated anon key can
+     never get pinned in a cache. */
+  const OFFLINE_EXEMPT = ['/js/env.js'];
+  const precached = [...block.matchAll(/'([^']+)'/g)].map(m => m[1]);
+  const referenced = [...new Set(
+    [...html.matchAll(/(?:href|src)="(?!https?:|data:)([^"]+)"/g)]
+      .map(m => '/' + m[1].replace(/^\//, '').split('?')[0]))];
+  for (const ref of referenced) {
+    if (OFFLINE_EXEMPT.includes(ref) || precached.includes(ref)) continue;
+    errors.push(`index.html nạp "${ref}" nhưng sw.js không precache — app sẽ vỡ khi offline.`);
+  }
+}
+
 /* ---------- report ---------- */
 for (const w of warnings) console.warn('⚠ ' + w);
 if (errors.length) {
