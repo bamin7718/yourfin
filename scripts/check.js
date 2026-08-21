@@ -34,7 +34,12 @@ for (const f of SCRIPTS) {
 }
 
 /* ---------- 2. ids referenced by JS must exist in HTML ---------- */
-const htmlIds = new Set([...html.matchAll(/\bid="([^"]+)"/g)].map(m => m[1]));
+// Static markup plus ids the app injects itself (uiSheet, renderCloudSection,
+// the rates editor...). Those are just as real once rendered.
+const htmlIds = new Set([
+  ...[...html.matchAll(/\bid="([^"]+)"/g)].map(m => m[1]),
+  ...[...js.matchAll(/\bid="([^"$\\]+)"/g)].map(m => m[1])
+]);
 const jsIds = new Set([...js.matchAll(/getElementById\(\s*['"]([^'"]+)['"]\s*\)/g)].map(m => m[1]));
 for (const id of [...jsIds].sort()) {
   if (!htmlIds.has(id)) errors.push(`JS gọi getElementById('${id}') nhưng HTML không có id đó.`);

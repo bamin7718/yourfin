@@ -25,7 +25,7 @@ Finyourtin/
 ├── scripts/
 │   ├── generate-env.js         build: env → public/js/env.js
 │   ├── check.js                kiểm tra wiring HTML ↔ JS
-│   └── smoke.js                chạy thật app bằng jsdom (53 assertion)
+│   └── smoke.js                chạy thật app bằng jsdom (99 assertion)
 ├── legacy/
 │   └── index.offline-v4.html   bản single-file cũ, vẫn chạy độc lập
 ├── .env.example
@@ -112,10 +112,11 @@ Last-write-wins theo `data.updatedAt` (đồng hồ client, đóng dấu bởi `
 | **Danh mục** | CRUD đầy đủ, danh mục con, đổi emoji/màu. Xóa danh mục đang dùng → tự dời giao dịch sang *Khác*. Danh mục hệ thống được bảo vệ. |
 | **Ngân sách** | Tuần/Tháng/Năm, theo danh mục hoặc tổng chi, giới hạn theo ví. Progress bar vàng ở 80%, đỏ khi vượt. Cảnh báo ngay lúc lưu giao dịch. |
 | **Sổ nợ** | Đi vay và cho vay riêng, trả/thu từng phần hoặc tất toán, tự sinh giao dịch, nhắc hạn và đánh dấu quá hạn. |
-| **Định kỳ** | Ngày/Tuần/Tháng/Năm, lặp mỗi N kỳ, tự ghi nhận và bù các kỳ đã lỡ khi mở lại app. |
+| **Định kỳ** | Ngày/Tuần/Tháng/Năm, lặp mỗi N kỳ, tự ghi nhận và bù các kỳ đã lỡ khi mở lại app. Bấm ✓ để ghi tay: sheet xác nhận cho **chọn lại ngày và ví** trước khi tạo giao dịch; lịch vẫn neo theo ngày đến hạn nên trả muộn không làm trôi cả chu kỳ. |
 | **Báo cáo** | Tháng/Quý/Năm, lọc theo ví, biểu đồ tròn thu–chi, cột 6 kỳ gần nhất, đường xu hướng số dư ròng. Vẽ bằng Canvas thuần, xử lý `devicePixelRatio`, tự đổi màu theo theme. |
 | **Đa tiền tệ** | 10 loại tiền, mỗi ví một tiền tệ, quy đổi về tiền tệ chính. Tỷ giá chỉnh tay trong Cài đặt. |
 | **Sự kiện** | Gom chi tiêu theo chuyến đi/sự kiện, có ngân sách riêng và phân tích riêng. |
+| **Điều hướng** | Chạm một ví ở Tổng quan → nhảy thẳng sang Giao dịch đã lọc sẵn ví đó; chạm một danh mục → lọc theo danh mục. Bộ lọc **Ví** nằm ngay trên màn hình Giao dịch, không phải mở panel nâng cao. |
 | **Giao diện** | Mobile-first 480px, căn giữa và đóng khung trên desktop. Dark/Light/Tự động. Bottom nav + lưới truy cập nhanh có badge. Toast và modal tự dựng, không dùng `alert()`. |
 
 ---
@@ -182,11 +183,11 @@ Khi nhập CSV: ví/danh mục/danh mục con/sự kiện chưa tồn tại sẽ
 
 ## 🧪 Kiểm thử
 
-`scripts/smoke.js` dựng app thật trong jsdom với một Supabase client giả, rồi bấm qua toàn bộ luồng: đăng ký sai/đúng, onboarding, thêm giao dịch, 12 màn hình, đổi theme, đẩy/kéo snapshot, nhận realtime từ thiết bị khác, bỏ qua echo của chính mình, xuất JSON/CSV (kiểm tra cả BOM), nạp dữ liệu mẫu, đăng xuất, và trường hợp build thiếu khoá.
+`scripts/smoke.js` dựng app thật trong jsdom với một Supabase client giả, rồi bấm qua toàn bộ luồng: đăng ký sai/đúng, onboarding, thêm giao dịch, 12 màn hình, đổi theme, đẩy/kéo snapshot, nhận realtime từ thiết bị khác, bỏ qua echo của chính mình, tick ✓ ở "Dự kiến phải chi" (định kỳ / trả nợ / ví đã bị xóa), đặt lại mật khẩu (ngắn / trùng cũ / hợp lệ / liên kết hết hạn), xuất JSON/CSV (kiểm tra cả BOM), nạp dữ liệu mẫu, đăng xuất, và trường hợp build thiếu khoá.
 
 ```bash
 npm run check                                          # tĩnh, không cần dependency
-npm install jsdom --no-save && node scripts/smoke.js   # động, 53 assertion
+npm install jsdom --no-save && node scripts/smoke.js   # động, 99 assertion
 ```
 
 `npm run check` bắt được thứ mà mắt người hay bỏ sót ở dự án không bundler: inline handler gọi hàm không tồn tại, `getElementById` trỏ vào id đã đổi tên, JWT lỡ commit vào HTML.
@@ -213,6 +214,25 @@ npm install jsdom --no-save && node scripts/smoke.js   # động, 53 assertion
 | `sync.js` đọc `window.state` | `let` ở top-level của classic script nằm trong global **lexical** scope, không phải property của `window` — đồng bộ sẽ không bao giờ chạy. Thay bằng bridge accessor tường minh. |
 | Hai tài khoản dùng chung một key `localStorage` | Đăng nhập tài khoản khác trên cùng máy sẽ đè lên cache của người trước. Nay key có namespace theo `uid`. |
 | `location.reload()` ngay sau khi xóa dữ liệu | Reload xảy ra trước khi hết debounce 800ms → mất lệnh ghi. Nay flush trước rồi mới điều hướng. |
+| Quên mật khẩu chỉ gửi được email | Bấm liên kết trong email thì đăng nhập được nhưng **không có chỗ đặt mật khẩu mới** — luồng đi vào ngõ cụt. Nay bắt sự kiện `PASSWORD_RECOVERY` và mở sheet đặt lại. |
+| Liên kết đặt lại hết hạn không báo gì | Supabase trả về `#error=otp_expired` và người dùng rơi vào màn đăng nhập im lặng. Nay đọc lỗi từ URL **trước khi** `supabase-js` dọn nó, rồi hiển thị. |
+| Một `#modal-sheet` cho cả app | Sheet đặt mật khẩu và sheet "nhập dữ liệu cũ" tranh nhau cùng một thẻ, cái sau xoá cái trước. Nay recovery được ưu tiên và trả sheet lại khi xong. |
+
+### "Dự kiến phải chi" — tick ✓
+| Lỗi | Ảnh hưởng |
+|---|---|
+| `saveDebtPayment()` gọi cứng `renderDebtsView()` | Tick ✓ từ Dashboard **có** tạo giao dịch nhưng thẻ dự kiến không vẽ lại — khoản vừa trả vẫn nằm đó, trông như không có gì xảy ra. Nay dùng `renderAll()` để vẽ đúng tab đang mở. |
+| ✓ trên khoản định kỳ mất ví → toast lỗi rồi dừng | Ngõ cụt: không ghi nhận được, cũng không sửa được từ đó. Nay sheet xác nhận cho chọn ví khác, ghi nhận xong **sửa luôn `walletId` của lịch**. |
+| `autoProcessRecurring()` ghi vào ví đã xóa | Giao dịch tồn tại nhưng `walletId` không khớp ví nào → tiền biến mất khỏi mọi số dư. Nay bỏ qua và cảnh báo, để người dùng tự chọn ví. |
+| `openDebtPayModal` không kiểm tra danh sách ví | Không còn ví thường nào → lưu với `walletId` rỗng, mất tiền y hệt trên. Nay chặn từ đầu. |
+| Khoản định kỳ mất ví bị quy đổi tỷ giá bằng 1 | `rateOf(undefined)` trả về 1, tổng "dự kiến phải chi" sai khi tiền tệ chính không phải VND. Nay coi như đã ở tiền tệ chính. |
+
+### Bộ lọc giữa các tab
+| Lỗi | Ảnh hưởng |
+|---|---|
+| `txFilters` sống qua lần đăng xuất | Đăng nhập tài khoản khác trên cùng máy thì bộ lọc vẫn giữ `walletId` của người trước → mọi danh sách trống trơn không rõ lý do. Nay `resetSessionFilters()` chạy ở cả `enterSession()` lẫn nhánh `SIGNED_OUT`. |
+| Bộ lọc trỏ vào ví/danh mục/sự kiện đã xóa | Danh sách im lặng trống rỗng vì lọc theo một id không còn tồn tại. Nay `renderTransactionsList()` tự đưa về `all`. |
+| `jumpToCategory()` đặt `txFilters` nhưng không đồng bộ chip | Chip "Chi/Thu" và khoảng thời gian vẫn sáng theo lựa chọn cũ trong khi bộ lọc thật đã là `all` — UI nói một đằng, danh sách một nẻo. Nay đi chung `jumpToTransactions()`. |
 
 ---
 

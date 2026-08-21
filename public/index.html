@@ -186,6 +186,10 @@
       <div class="chip" data-val="income" onclick="setTxFilter('type','income',this)">Thu</div>
       <div class="chip" data-val="transfer" onclick="setTxFilter('type','transfer',this)">Chuyển ví</div>
     </div>
+    <div class="quick-filter" id="tx-wallet-bar">
+      <label for="tx-filter-wallet">Ví</label>
+      <select id="tx-filter-wallet" class="input" onchange="renderTransactionsList()"></select>
+    </div>
     <div id="tx-advanced-filters" class="card hidden">
       <div class="form-group">
         <label>Khoảng thời gian</label>
@@ -203,9 +207,9 @@
         <div><label>Từ ngày</label><input type="date" id="tx-from" class="input" onchange="renderTransactionsList()"></div>
         <div><label>Đến ngày</label><input type="date" id="tx-to" class="input" onchange="renderTransactionsList()"></div>
       </div>
-      <div class="form-group field-row">
-        <div><label>Ví</label><select id="tx-filter-wallet" class="input" onchange="renderTransactionsList()"></select></div>
-        <div><label>Danh mục</label><select id="tx-filter-cat" class="input" onchange="renderTransactionsList()"></select></div>
+      <div class="form-group">
+        <label>Danh mục</label>
+        <select id="tx-filter-cat" class="input" onchange="renderTransactionsList()"></select>
       </div>
       <div class="form-group">
         <label>Sự kiện / Chuyến đi</label>

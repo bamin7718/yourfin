@@ -122,6 +122,11 @@
   async function resetPassword(email){
     return client.auth.resetPasswordForEmail(email, {redirectTo: location.origin + location.pathname});
   }
+  /* Used after a PASSWORD_RECOVERY event, when the link from the email has
+     already put a short-lived recovery session in place. */
+  async function updatePassword(password){
+    return client.auth.updateUser({password});
+  }
   async function getSession(){
     const {data} = await client.auth.getSession();
     return data && data.session;
@@ -293,7 +298,7 @@
 
   global.Sync = {
     bind, init, saveLocalConfig,
-    signIn, signUp, signOut, resetPassword, getSession, onAuthChange,
+    signIn, signUp, signOut, resetPassword, updatePassword, getSession, onAuthChange,
     start, stop, pull, pullIfStale, queuePush, flush, flushBeacon, status,
     get client(){ return client; },
     get deviceId(){ return deviceId; }

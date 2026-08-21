@@ -828,6 +828,11 @@ function translateAuthError(err){
   if(m.includes('invalid login credentials')) return 'Email hoặc mật khẩu không đúng.';
   if(m.includes('email not confirmed'))       return 'Email chưa được xác nhận. Kiểm tra hộp thư của bạn.';
   if(m.includes('already registered') || m.includes('already been registered')) return 'Email này đã có tài khoản. Chuyển sang tab Đăng nhập.';
+  /* Must come before the length check — Supabase phrases this as
+     "New password should be different from the old password." */
+  if(m.includes('should be different') || m.includes('same_password')) return 'Mật khẩu mới phải khác mật khẩu cũ.';
+  if(m.includes('session missing') || m.includes('session_not_found') || m.includes('invalid or has expired'))
+    return 'Phiên đặt lại đã hết hạn. Bấm "Quên mật khẩu" để nhận liên kết mới.';
   if(m.includes('password should be'))        return 'Mật khẩu quá ngắn (tối thiểu 6 ký tự).';
   if(m.includes('rate limit') || m.includes('too many')) return 'Thử lại quá nhiều lần. Đợi một lát rồi thử lại.';
   if(m.includes('failed to fetch'))           return 'Không kết nối được Supabase. Kiểm tra mạng hoặc cấu hình URL.';
@@ -840,6 +845,84 @@ async function requestPasswordReset(){
   const {error} = await Sync.resetPassword(email);
   if(error) return authError(translateAuthError(error));
   toast('Đã gửi email đặt lại mật khẩu','ok');
+}
+
+/* A dead or already-used link comes back as #error=... (implicit flow) or
+   ?error=... (PKCE) with no session at all. Read it before supabase-js tidies
+   the URL, otherwise the user lands on a silent login screen and gives up. */
+function readAuthLinkError(){
+  const raw = location.hash.indexOf('error') > -1 ? location.hash : location.search;
+  if(raw.indexOf('error') === -1) return '';
+  const p = new URLSearchParams(raw.replace(/^[#?]/, ''));
+  const code = p.get('error_code') || p.get('error');
+  if(!code) return '';
+  if(/expired/.test(code)) return 'Liên kết đã hết hạn. Nhập email rồi bấm "Quên mật khẩu" để nhận liên kết mới.';
+  return p.get('error_description') || 'Liên kết không hợp lệ hoặc đã được dùng.';
+}
+
+/* Supabase drops the user back here with a short-lived recovery session after
+   they click the link in the reset email. Without this the flow dead-ends:
+   signed in, but still no way to set a new password. */
+let pendingPasswordRecovery = false;
+let pwBusy = false;
+
+/* One sheet element serves the whole app, so the recovery prompt must not race
+   the onboarding archive picker, and must not open behind the PIN lock where
+   it cannot be touched. Every caller funnels through here. */
+function maybePromptNewPassword(){
+  if(!pendingPasswordRecovery) return false;
+  if(!document.getElementById('lock-screen').classList.contains('hidden')) return false;
+  promptNewPassword();
+  return true;
+}
+
+function promptNewPassword(){
+  pwBusy = false;
+  uiSheet('Đặt mật khẩu mới',
+    `<p class="text-sm muted mb12">Nhập mật khẩu mới cho tài khoản của bạn (tối thiểu 6 ký tự).</p>
+     <div class="form-group">
+       <input type="password" id="pw-new" class="input" placeholder="Mật khẩu mới" autocomplete="new-password">
+     </div>
+     <div id="pw-error" class="text-xs c-expense mb8" style="min-height:14px;"></div>
+     <button class="btn btn-primary" id="pw-submit" onclick="submitNewPassword()">Lưu mật khẩu</button>
+     <button class="btn btn-ghost mt8" onclick="dismissNewPassword()">Để sau</button>`);
+  const el = document.getElementById('pw-new');
+  if(el) el.addEventListener('keydown', e=>{ if(e.key==='Enter') submitNewPassword(); });
+  setTimeout(()=>{ const i = document.getElementById('pw-new'); if(i) i.focus(); }, 60);
+}
+
+async function submitNewPassword(){
+  if(pwBusy) return;
+  const pw = document.getElementById('pw-new').value;
+  const err = document.getElementById('pw-error');
+  if(pw.length < 6){ err.textContent = 'Mật khẩu tối thiểu 6 ký tự.'; return; }
+  pwBusy = true;
+  const btn = document.getElementById('pw-submit');
+  if(btn){ btn.disabled = true; btn.textContent = 'Đang lưu…'; }
+  let error = null;
+  try{ ({error} = await Sync.updatePassword(pw)); }
+  catch(e){ error = e; }
+  if(error){
+    pwBusy = false;
+    if(btn){ btn.disabled = false; btn.textContent = 'Lưu mật khẩu'; }
+    err.textContent = translateAuthError(error);
+    return;
+  }
+  endPasswordRecovery();
+  toast('Đã đổi mật khẩu','ok');
+}
+
+function dismissNewPassword(){
+  endPasswordRecovery();
+  toast('Bạn vẫn đang đăng nhập. Đổi mật khẩu sau ở Cài đặt → Tài khoản.');
+}
+
+/* Close the prompt and hand the sheet back to whatever we pre-empted. */
+function endPasswordRecovery(){
+  pendingPasswordRecovery = false;
+  pwBusy = false;
+  closeSheet();
+  if(state.currentUser && !state.onboardingStatus[state.currentUser]) offerLocalArchiveImport();
 }
 
 function logout(){
@@ -863,6 +946,7 @@ function showLogin(){
    the app is usable immediately, then lets Sync reconcile with the cloud. */
 function enterSession(user){
   sessionEmail = user.email || '';
+  resetSessionFilters();          /* never inherit the previous account's filters */
   setStorageNamespace(user.id);
   loadStorage();
   state.currentUser = user.id;
@@ -895,7 +979,8 @@ function initUserSession(){
        instead of making the user re-enter everything. */
     document.getElementById('main-nav').classList.add('hidden');
     startOnboarding();
-    offerLocalArchiveImport();
+    /* The recovery prompt wants the same sheet; endPasswordRecovery() re-offers. */
+    if(!pendingPasswordRecovery) offerLocalArchiveImport();
   }
   else { document.getElementById('main-nav').classList.remove('hidden'); switchTab('dashboard'); }
 }
@@ -1011,14 +1096,14 @@ function renderDashboard(){
   /* wallets carousel */
   document.getElementById('db-wallet-scroll').innerHTML = getUserWallets().map(w=>{
     if(isCreditCard(w)){
-      return `<div class="wallet-card cc-mini" onclick="openWalletReport('${w.id}')">
+      return `<div class="wallet-card cc-mini" onclick="jumpToWallet('${w.id}')">
         <div class="wicon" style="background:rgba(255,255,255,.15);">${w.icon}</div>
         <div class="wname">${esc(w.name)}</div>
         <div class="wbal tabular">${fmtW(getCardUsedAmount(w), w)}</div>
         <div class="wsub">Còn: ${fmtW(getCardAvailableLimit(w), w)}</div>
       </div>`;
     }
-    return `<div class="wallet-card" onclick="openWalletReport('${w.id}')">
+    return `<div class="wallet-card" onclick="jumpToWallet('${w.id}')">
       <div class="wicon">${w.icon}</div>
       <div class="wname">${esc(w.name)}</div>
       <div class="wbal tabular">${fmtW(getWalletBalance(w.id), w)}</div>
@@ -1144,11 +1229,26 @@ function setTxFilter(key, val, el){
 }
 function resetTxFilters(){
   txFilters = {type:'all', walletId:'all', catId:'all', eventId:'all', range:'all'};
-  document.getElementById('tx-search').value = '';
-  document.querySelectorAll('#tx-filter-type .chip').forEach(c=>c.classList.toggle('active', c.dataset.val==='all'));
-  document.querySelectorAll('#tx-filter-range .chip').forEach(c=>c.classList.toggle('active', c.dataset.val==='all'));
-  document.getElementById('tx-custom-range').classList.add('hidden');
+  syncTxFilterChips();
   renderTransactionsList(true);
+}
+/* Filters live in module-level `let`s, never inside `state` — so they are not
+   written to localStorage and never ride along in a Supabase snapshot. The
+   flip side is that they survive a sign-out: a wallet id from the previous
+   account would leave every list on the next account mysteriously empty.
+   Wipe them, and put the static chips/segments back in step. */
+function resetSessionFilters(){
+  txFilters = {type:'all', walletId:'all', catId:'all', eventId:'all', range:'all'};
+  reportWalletId = 'all'; reportPeriodType = 'month'; reportOffset = 0; donutMode = 'expense';
+  upcomingFilter = 'thismonth';
+  debtFilter = 'all';
+  syncTxFilterChips();
+  document.getElementById('tx-advanced-filters').classList.add('hidden');
+  document.querySelectorAll('#upcoming-filter .chip').forEach(c=>c.classList.toggle('active', c.dataset.val==='thismonth'));
+  ['report-period-seg','debt-seg'].forEach(id=>
+    document.querySelectorAll('#'+id+' .seg').forEach((s,i)=>s.classList.toggle('active', i===0)));
+  document.getElementById('seg-donut-expense').classList.add('active');
+  document.getElementById('seg-donut-income').classList.remove('active');
 }
 function rangeBounds(){
   const today = todayISO();
@@ -1185,6 +1285,14 @@ function filteredTransactions(){
   return txs.sort(sortTxDesc);
 }
 function renderTransactionsList(rebuild){
+  /* A wallet, category or event can be deleted (here or on another device via
+     realtime) while it is the active filter. Left dangling, the list goes
+     silently empty against an id nothing can ever match. */
+  if(txFilters.walletId!=='all' && !getWallet(txFilters.walletId)) txFilters.walletId = 'all';
+  if(txFilters.catId!=='all' && state.currentUser && !findAnyCategory(txFilters.catId)) txFilters.catId = 'all';
+  if(txFilters.eventId!=='all' && txFilters.eventId!=='none'
+     && !getUserEvents().some(e=>e.id===txFilters.eventId)) txFilters.eventId = 'all';
+
   if(rebuild){
     const wSel = document.getElementById('tx-filter-wallet');
     wSel.innerHTML = `<option value="all">Tất cả ví</option>` + getUserWallets().map(w=>`<option value="${w.id}">${w.icon} ${esc(w.name)}</option>`).join('');
@@ -1203,6 +1311,9 @@ function renderTransactionsList(rebuild){
     txFilters.catId    = document.getElementById('tx-filter-cat').value || 'all';
     txFilters.eventId  = document.getElementById('tx-filter-event').value || 'all';
   }
+
+  /* highlight the promoted wallet filter while it is narrowing the list */
+  document.getElementById('tx-wallet-bar').classList.toggle('on', txFilters.walletId!=='all');
 
   const txs = filteredTransactions();
   let inc=0, exp=0;
@@ -1528,6 +1639,7 @@ function renderWalletItem(w){
       ${w.currency!==mainCurrency()?`<div class="text-xs muted">≈ ${fmt(toMain(bal,w.currency))}</div>`:''}
     </div>
     <div style="display:flex;flex-direction:column;gap:6px;">
+      <button class="btn btn-secondary btn-xs" onclick="openWalletReport('${w.id}')">Báo cáo</button>
       <button class="btn btn-secondary btn-xs" onclick="openWalletModal('${w.id}')">Sửa</button>
       <button class="btn btn-danger btn-xs" onclick="deleteWallet('${w.id}')">Xóa</button>
     </div>
@@ -1549,6 +1661,7 @@ function renderCreditCard(w){
     <div class="cc-due">📅 Chốt sao kê ngày ${w.statementDate||'-'} · Hạn thanh toán ngày ${w.paymentDueDate||'-'} hàng tháng</div>
     <div class="cc-actions">
       <button class="btn-cc-pay" onclick="openCardPaymentModal('${w.id}')">Thanh toán thẻ</button>
+      <button class="btn-cc-edit" onclick="openWalletReport('${w.id}')">Báo cáo</button>
       <button class="btn-cc-edit" onclick="openWalletModal('${w.id}')">Sửa</button>
       <button class="btn-cc-edit" onclick="deleteWallet('${w.id}')">Xóa</button>
     </div>
@@ -1994,6 +2107,9 @@ function deleteDebt(id){
 function openDebtPayModal(debtId){
   const d = state.debts.find(x=>x.id===debtId);
   if(!d) return;
+  /* Without a wallet the payment would be written against walletId:'' and the
+     money would vanish from every balance. */
+  if(!getUserWallets().some(w=>!isCreditCard(w))) return toast('Cần ít nhất 1 ví thường để ghi nhận','err');
   mdpDebtId = debtId; mdpMode = 'full';
   const remain = debtRemaining(d);
   document.getElementById('mdp-title').textContent = d.kind==='borrow' ? 'Trả nợ' : 'Thu hồi nợ';
@@ -2021,6 +2137,7 @@ function saveDebtPayment(){
   const walletId = document.getElementById('mdp-wallet').value;
   const date = document.getElementById('mdp-date').value || todayISO();
   if(amount<=0) return toast('Nhập số tiền hợp lệ','err');
+  if(!getWallet(walletId)) return toast('Chọn ví hợp lệ','err');
   if(amount > debtRemaining(d) + 0.01) return toast('Số tiền lớn hơn phần còn lại','err');
   const txId = uid('t');
   state.transactions.push({
@@ -2036,7 +2153,9 @@ function saveDebtPayment(){
   saveStorage();
   closeModal('modal-debt-pay');
   toast(debtRemaining(d)<=0 ? 'Đã tất toán khoản nợ 🎉' : 'Đã ghi nhận thanh toán','ok');
-  renderDebtsView();
+  /* Reachable from the dashboard's "Dự kiến phải chi" as well as the debts
+     view — repaint whatever tab is actually on screen. */
+  renderAll();
 }
 
 /* ============================================================
@@ -2049,19 +2168,25 @@ function nextDueDate(dateStr, freq, interval){
   if(freq==='yearly') return addYearsISO(dateStr, n);
   return addMonthsISO(dateStr, n);
 }
-function createRecurringTx(r, dateStr){
+function createRecurringTx(r, dateStr, walletId){
   state.transactions.push({
-    id:uid('t'), userId:r.userId, type:r.type||'expense', amount:r.amount, walletId:r.walletId,
+    id:uid('t'), userId:r.userId, type:r.type||'expense', amount:r.amount,
+    walletId: walletId || r.walletId,
     categoryId:r.categoryId, subcategoryId:r.subcategoryId, note:r.name, date:dateStr,
     recurringId:r.id, createdAt:new Date().toISOString()
   });
 }
 function autoProcessRecurring(){
   const today = todayISO();
-  let changed = false;
+  let changed = false, orphaned = 0;
   state.recurring.forEach(r=>{
+    if(!r.autoProcess || r.dueDate > today) return;
+    /* A deleted wallet would swallow the money: the transaction lands on a
+       walletId no balance ever reads. Leave the occurrence due instead and let
+       the ✓ prompt redirect it to a real wallet. */
+    if(!getWallet(r.walletId)){ orphaned++; return; }
     let guard = 0;
-    while(r.autoProcess && r.dueDate <= today && guard < 60){
+    while(r.dueDate <= today && guard < 60){
       if(r.endDate && r.dueDate > r.endDate) break;
       createRecurringTx(r, r.dueDate);
       r.dueDate = nextDueDate(r.dueDate, r.frequency, r.interval);
@@ -2069,22 +2194,57 @@ function autoProcessRecurring(){
     }
   });
   if(changed) saveStorage();
+  if(orphaned) toast(orphaned+' khoản định kỳ trỏ vào ví đã xóa — bấm ✓ để chọn ví khác','err');
 }
 /* A schedule is finished once its next occurrence would fall past the end date. */
 function recurEnded(r){ return !!r.endDate && r.dueDate > r.endDate; }
+/* Tapping ✓ must always end in a real transaction on a real wallet. The wallet
+   a schedule points at can have been deleted, so show which wallet will be
+   charged and let it be redirected, instead of dead-ending on an error toast. */
 function payRecurring(id){
   const r = state.recurring.find(x=>x.id===id);
   if(!r) return;
   if(recurEnded(r)) return toast('Khoản này đã kết thúc vào '+fmtDate(r.endDate),'err');
-  if(!getWallet(r.walletId)) return toast('Ví của khoản này không còn tồn tại — hãy sửa lại','err');
-  uiConfirm('Xác nhận giao dịch', `Ghi nhận "${r.name}" — ${fmtW(r.amount, getWallet(r.walletId))} vào ngày ${fmtDate(r.dueDate)}?`, 'Ghi nhận').then(ok=>{
-    if(!ok) return;
-    createRecurringTx(r, r.dueDate);
-    r.dueDate = nextDueDate(r.dueDate, r.frequency, r.interval);
-    saveStorage();
-    toast('Đã ghi nhận giao dịch','ok');
-    renderAll();
-  });
+  const wallets = getUserWallets();
+  if(!wallets.length) return toast('Bạn cần tạo ít nhất 1 ví trước','err');
+  const target = getWallet(r.walletId) || wallets[0];
+  const income = r.type==='income';
+  uiSheet('Xác nhận giao dịch',
+    `<div class="text-sm mb4">${esc(r.name)}</div>
+     <div class="text-lg font-bold ${income?'c-income':'c-expense'} tabular">${income?'+':'-'}${fmtW(r.amount, target)}</div>
+     <div class="text-xs muted mb12">Đến hạn ${fmtDate(r.dueDate)}</div>
+     ${getWallet(r.walletId) ? '' : '<div class="text-xs c-expense mb8">⚠ Ví cũ của khoản này đã bị xóa. Chọn ví khác để ghi nhận.</div>'}
+     <div class="form-group field-row">
+       <div><label>Ngày ghi nhận</label>
+         <input type="date" id="pr-date" class="input" value="${r.dueDate}"></div>
+       <div><label>Ghi vào ví</label>
+         <select id="pr-wallet" class="input">${wallets.map(w=>
+           `<option value="${w.id}" ${w.id===target.id?'selected':''}>${w.icon} ${esc(w.name)}</option>`).join('')}</select></div>
+     </div>
+     <button class="btn btn-primary" onclick="confirmPayRecurring('${r.id}')">Ghi nhận</button>
+     <button class="btn btn-ghost mt8" onclick="closeSheet()">Hủy</button>`);
+}
+function confirmPayRecurring(id){
+  const r = state.recurring.find(x=>x.id===id);
+  if(!r) return closeSheet();
+  const sel = document.getElementById('pr-wallet');
+  const dateEl = document.getElementById('pr-date');
+  const walletId = sel ? sel.value : r.walletId;
+  const date = (dateEl && dateEl.value) || r.dueDate;
+  const w = getWallet(walletId);
+  if(!w) return toast('Chọn ví hợp lệ','err');
+  if(!date) return toast('Chọn ngày ghi nhận','err');
+  createRecurringTx(r, date, walletId);
+  /* Redirecting the payment repairs the schedule too — otherwise the next
+     occurrence lands on the same dead wallet. */
+  r.walletId = walletId;
+  /* The cadence stays anchored to the due date, not to when it was actually
+     paid: trả muộn 4 ngày không được đẩy cả lịch đi 4 ngày. */
+  r.dueDate = nextDueDate(r.dueDate, r.frequency, r.interval);
+  saveStorage();
+  closeSheet();
+  toast('Đã ghi nhận '+fmtDate(date)+' vào ví '+w.name,'ok');
+  renderAll();
 }
 function toggleRecurAuto(id, checked){
   const r = state.recurring.find(x=>x.id===id);
@@ -2120,7 +2280,7 @@ function renderRecurringView(){
       <div class="lr-actions" style="flex-direction:column;">
         <label class="switch" title="Tự động"><input type="checkbox" ${r.autoProcess?'checked':''} ${ended||broken?'disabled':''} onchange="toggleRecurAuto('${r.id}',this.checked)"><span class="slider"></span></label>
         <div class="row gap6">
-          ${ended||broken?'':`<button class="btn-pay" title="Ghi nhận ngay" onclick="payRecurring('${r.id}')">✓</button>`}
+          ${ended?'':`<button class="btn-pay" title="${broken?'Ghi nhận và chọn ví khác':'Ghi nhận ngay'}" onclick="payRecurring('${r.id}')">✓</button>`}
           <button class="icon-btn" style="width:30px;height:30px;font-size:.8rem;" onclick="openRecurringModal('${r.id}')">✎</button>
           <button class="icon-btn" style="width:30px;height:30px;font-size:.8rem;" onclick="deleteRecurring('${r.id}')">🗑</button>
         </div>
@@ -2251,7 +2411,10 @@ function getUpcomingRange(){
 function getUpcomingItems(rangeEnd){
   const recurItems = getUserRecurring()
     .filter(r=> r.type!=='income' && r.dueDate <= rangeEnd && (!r.endDate || r.dueDate <= r.endDate))
-    .map(r=>({kind:'recurring', id:r.id, name:r.name, amount:toMain(r.amount,(getWallet(r.walletId)||{}).currency), dueDate:r.dueDate, walletId:r.walletId}));
+    /* No wallet means no known currency — read the amount as already being in
+       the main currency rather than letting rateOf() fall back to 1. */
+    .map(r=>({kind:'recurring', id:r.id, name:r.name, dueDate:r.dueDate, walletId:r.walletId,
+              amount:toMain(r.amount, (getWallet(r.walletId)||{}).currency || mainCurrency())}));
   const cardItems = getUserWallets()
     .filter(w=> isCreditCard(w) && getCardUsedAmount(w) > 0)
     .map(w=>({kind:'card', id:w.id, name:w.name+' (Thẻ tín dụng)', amount:toMain(getCardUsedAmount(w), w.currency), dueDate:getCardNextDueDate(w), walletId:w.id}))
@@ -2279,7 +2442,7 @@ function renderUpcomingCard(){
       <div class="up-ic ${it.kind==='card'?'up-ic-card':''}">${icons[it.kind]}</div>
       <div class="up-mid">
         <div class="up-title">${esc(it.name)}</div>
-        <div class="up-sub ${overdue?'up-overdue':''}">${(it.kind==='recurring'&&wallet)?esc(wallet.name)+' · ':''}${relDueLabel(it.dueDate).text}</div>
+        <div class="up-sub ${overdue?'up-overdue':''}">${it.kind==='recurring'?(wallet?esc(wallet.name):'⚠ Ví đã xóa')+' · ':''}${relDueLabel(it.dueDate).text}</div>
       </div>
       <div class="up-amt tabular">${fmt(it.amount)}</div>
       <button class="btn-pay" title="Đã thanh toán" onclick="${actions[it.kind]}">✓</button>
@@ -2666,12 +2829,30 @@ function renderReportsView(){
     </div>`;
   }).join('') : `<p class="text-sm muted text-center">Không có chi tiêu trong kỳ này</p>`;
 }
-function jumpToCategory(catId){
-  txFilters = {type:'all', walletId:'all', catId, eventId:'all', range:'all'};
+/* Land on the Giao dịch tab with exactly one filter applied. Everything else —
+   chips, search box, the other selects — is reset, so the list can never
+   disagree with what the filter UI says it is showing. switchTab() renders in
+   rebuild mode, which repaints the selects *from* txFilters; calling
+   renderTransactionsList() without rebuild here would read the stale selects
+   back over the filter we just set. */
+function jumpToTransactions(patch){
+  txFilters = Object.assign({type:'all', walletId:'all', catId:'all', eventId:'all', range:'all'}, patch||{});
+  syncTxFilterChips();
   switchTab('transactions');
+}
+function syncTxFilterChips(){
+  const s = document.getElementById('tx-search');
+  if(s) s.value = '';
+  document.querySelectorAll('#tx-filter-type .chip').forEach(c=>c.classList.toggle('active', c.dataset.val===txFilters.type));
+  document.querySelectorAll('#tx-filter-range .chip').forEach(c=>c.classList.toggle('active', c.dataset.val===txFilters.range));
+  document.getElementById('tx-custom-range').classList.add('hidden');
+}
+function jumpToWallet(walletId){ jumpToTransactions({walletId}); }
+function jumpToCategory(catId){
+  jumpToTransactions({catId});
+  /* the category select still lives in the collapsed panel — open it so the
+     active filter is visible */
   document.getElementById('tx-advanced-filters').classList.remove('hidden');
-  document.getElementById('tx-filter-cat').value = catId;
-  renderTransactionsList();
 }
 
 /* ---------- CANVAS CHART HELPERS ---------- */
@@ -3116,6 +3297,7 @@ function importCSV(ev){
 function bootAfterUnlock(){
   if(state.currentUser) initUserSession();
   else showLogin();
+  maybePromptNewPassword();          /* deferred while the PIN screen was up */
 }
 
 /* Shown instead of the sign-in form when the build has no Supabase keys. */
@@ -3153,12 +3335,22 @@ async function boot(){
     notify:   msg=>toast(msg)
   });
 
+  /* Read before Sync.init(): supabase-js rewrites the URL as it boots. */
+  const linkError = readAuthLinkError();
+
   const ready = Sync.init();
   if(!ready.ok){ showConfigScreen(ready.reason); return; }
 
   Sync.onAuthChange((event, session)=>{
-    if(event === 'SIGNED_OUT'){ Sync.stop(); setStorageNamespace(null); state = emptyState(); showLogin(); return; }
+    if(event === 'SIGNED_OUT'){
+      pendingPasswordRecovery = false;
+      Sync.stop(); setStorageNamespace(null); state = emptyState();
+      resetSessionFilters(); showLogin(); return;
+    }
+    /* Flag first: enterSession() below checks it before claiming the sheet. */
+    if(event === 'PASSWORD_RECOVERY') pendingPasswordRecovery = true;
     if(session && session.user && session.user.id !== state.currentUser) enterSession(session.user);
+    maybePromptNewPassword();
   });
 
   let session = null;
@@ -3166,7 +3358,7 @@ async function boot(){
   catch(e){ console.error('Session lookup failed', e); }
 
   if(session && session.user) enterSession(session.user);
-  else showLogin();
+  else { showLogin(); if(linkError) authError(linkError); }
 }
 let resizeTimer = null;
 window.addEventListener('resize', ()=>{

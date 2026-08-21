@@ -55,7 +55,18 @@ function makeFakeSupabase(store) {
     async signOut() { session = null; listeners.forEach(fn => fn('SIGNED_OUT', null)); return { error: null }; },
     async getSession() { return { data: { session } }; },
     async resetPasswordForEmail() { return { error: null }; },
-    onAuthStateChange(fn) { listeners.push(fn); return { data: { subscription: { unsubscribe() {} } } }; }
+    async updateUser({ password }) {
+      if (!session) return { data: {}, error: { message: 'Auth session missing!' } };
+      if (password.length < 6) return { data: {}, error: { message: 'Password should be at least 6 characters' } };
+      const rec = users.get(session.user.email);
+      if (rec && rec.password === password) {
+        return { data: {}, error: { message: 'New password should be different from the old password.' } };
+      }
+      if (rec) rec.password = password;
+      return { data: { user: session.user }, error: null };
+    },
+    onAuthStateChange(fn) { listeners.push(fn); return { data: { subscription: { unsubscribe() {} } } }; },
+    __emit(event) { listeners.forEach(fn => fn(event, session)); }
   };
 
   const client = {
@@ -98,7 +109,7 @@ async function boot(opts) {
   vc.on('error', (...a) => consoleErrors.push('console.error: ' + a.join(' ')));
 
   const dom = new JSDOM(fs.readFileSync(path.join(PUBLIC, 'index.html'), 'utf8'), {
-    url: 'https://finyourtin.test/',
+    url: opts.url || 'https://finyourtin.test/',
     runScripts: 'dangerously',
     pretendToBeVisual: true,
     virtualConsole: vc,
@@ -210,6 +221,132 @@ async function boot(opts) {
   window.switchTab('transactions'); await sleep(20);
   check('giao dịch hiện trong danh sách', d.body.innerHTML.includes('Cà phê'));
 
+  console.log('\n· dự kiến phải chi — tick ✓');
+  {
+    const uid0 = S().currentUser, today = window.todayISO();
+    S().recurring.push({ id: 'r_ok', userId: uid0, name: 'Tiền nhà', type: 'expense', amount: 4000000,
+      walletId: wid, categoryId: 'c_bill', subcategoryId: 's_rent', frequency: 'monthly',
+      interval: 1, dueDate: today, endDate: '', autoProcess: false });
+    S().debts.push({ id: 'd_ok', userId: uid0, kind: 'borrow', party: 'Anh Hùng', amount: 2000000,
+      walletId: wid, date: today, dueDate: today, note: '', payments: [] });
+    window.saveStorage();
+    window.switchTab('dashboard'); await sleep(20);
+    const upRows = () => d.querySelectorAll('#upcoming-list .upcoming-row').length;
+    check('cả 2 khoản đến hạn đều hiện ra', upRows() === 2, 'rows=' + upRows());
+
+    // định kỳ: ✓ tạo giao dịch vào ví hiển thị trên sheet
+    let bal0 = window.getWalletBalance(wid), tx0 = S().transactions.length;
+    window.payRecurring('r_ok'); await sleep(20);
+    check('✓ định kỳ mở sheet xác nhận', visible('modal-sheet') && !!$('pr-wallet') && !!$('pr-date'));
+    check('ví mặc định là ví của khoản định kỳ', $('pr-wallet').value === wid);
+    check('ngày mặc định là ngày đến hạn', $('pr-date').value === today);
+    // đổi cả ngày lẫn ví: ghi vào ví thứ 2, lùi 3 ngày (trả muộn/trả sớm)
+    const wid2 = S().wallets[1].id, backdate = window.addDaysISO(today, -3);
+    const bal2 = window.getWalletBalance(wid2);
+    $('pr-date').value = backdate;
+    $('pr-wallet').value = wid2;
+    window.confirmPayRecurring('r_ok'); await sleep(30);
+    const rtx = S().transactions.slice(-1)[0];
+    check('tạo đúng 1 giao dịch', S().transactions.length === tx0 + 1);
+    check('giao dịch mang ngày đã chọn', rtx.date === backdate, rtx.date);
+    check('giao dịch vào ví đã chọn', rtx.walletId === wid2);
+    check('trừ đúng ví đã chọn', window.getWalletBalance(wid2) === bal2 - 4000000);
+    check('ví gốc không bị đụng vào', window.getWalletBalance(wid) === bal0);
+    check('giao dịch gắn với lịch định kỳ', rtx.recurringId === 'r_ok');
+    check('lịch nhớ ví mới', S().recurring.find(r => r.id === 'r_ok').walletId === wid2);
+    check('kỳ kế tiếp neo theo ngày đến hạn, không theo ngày trả',
+      S().recurring.find(r => r.id === 'r_ok').dueDate === window.addMonthsISO(today, 1),
+      S().recurring.find(r => r.id === 'r_ok').dueDate);
+    check('dashboard cập nhật ngay', upRows() === 1, 'rows=' + upRows());
+
+    // nợ: ✓ mở modal, lưu xong dashboard phải tự cập nhật (không cần đổi tab)
+    bal0 = window.getWalletBalance(wid); tx0 = S().transactions.length;
+    window.openDebtPayModal('d_ok'); await sleep(20);
+    window.saveDebtPayment(); await sleep(30);
+    check('trả nợ tạo giao dịch chi', S().transactions.length === tx0 + 1
+      && S().transactions.slice(-1)[0].type === 'expense');
+    check('trả nợ trừ đúng ví', window.getWalletBalance(wid) === bal0 - 2000000);
+    check('dashboard cập nhật ngay sau khi trả nợ', upRows() === 0, 'rows=' + upRows());
+
+    // ví đã bị xoá: ✓ vẫn phải ghi nhận được, và sửa luôn lịch
+    S().recurring.push({ id: 'r_orphan', userId: uid0, name: 'Netflix', type: 'expense', amount: 260000,
+      walletId: 'w_da_bi_xoa', categoryId: 'c_fun', subcategoryId: 's_movie', frequency: 'monthly',
+      interval: 1, dueDate: today, endDate: '', autoProcess: true });
+    window.saveStorage(); window.switchTab('dashboard'); await sleep(20);
+    check('khoản mất ví vẫn hiện, có cảnh báo', d.getElementById('upcoming-list').innerHTML.includes('Ví đã xóa'));
+    bal0 = window.getWalletBalance(wid);
+    window.payRecurring('r_orphan'); await sleep(20);
+    check('sheet báo ví cũ đã bị xóa', $('sheet-body').innerHTML.includes('đã bị xóa'));
+    check('chọn sẵn một ví có thật', !!window.getWallet($('pr-wallet').value));
+    $('pr-wallet').value = wid;
+    window.confirmPayRecurring('r_orphan'); await sleep(30);
+    check('ghi nhận được vào ví đã chọn', window.getWalletBalance(wid) === bal0 - 260000);
+    check('lịch được sửa về ví hợp lệ', S().recurring.find(r => r.id === 'r_orphan').walletId === wid);
+
+    // autoProcess không được ghi vào ví không tồn tại
+    S().recurring.push({ id: 'r_auto_orphan', userId: uid0, name: 'Spotify', type: 'expense', amount: 59000,
+      walletId: 'w_cung_da_xoa', categoryId: 'c_fun', subcategoryId: 's_movie', frequency: 'monthly',
+      interval: 1, dueDate: today, endDate: '', autoProcess: true });
+    tx0 = S().transactions.length;
+    window.autoProcessRecurring(); await sleep(20);
+    check('autoProcess bỏ qua ví đã xoá', S().transactions.length === tx0);
+    check('không có giao dịch nào trỏ vào ví không tồn tại',
+      S().transactions.filter(t => t.walletId && !window.getWallet(t.walletId)).length === 0);
+    S().recurring = S().recurring.filter(r => r.id !== 'r_auto_orphan');
+    window.saveStorage();
+  }
+
+  console.log('\n· điều hướng ví → tab giao dịch');
+  {
+    const w0 = S().wallets[0], w1 = S().wallets[1];
+    S().transactions.push({ id: 'tx_w1', userId: S().currentUser, type: 'expense', amount: 90000,
+      walletId: w1.id, categoryId: 'c_food', note: 'Bún bò', date: window.todayISO() });
+    window.saveStorage();
+
+    window.switchTab('dashboard'); await sleep(20);
+    const cards = d.querySelectorAll('#db-wallet-scroll .wallet-card:not(.add)');
+    check('thẻ ví trên tổng quan trỏ sang giao dịch',
+      (cards[0].getAttribute('onclick') || '').startsWith('jumpToWallet('),
+      cards[0].getAttribute('onclick'));
+
+    // bẩn hoá bộ lọc trước, để chắc chắn cú nhảy dọn sạch phần còn lại
+    window.setTxFilter('type', 'income', d.querySelector('#tx-filter-type .chip[data-val="income"]'));
+    $('tx-search').value = 'không-khớp-gì-cả';
+    window.jumpToWallet(w1.id); await sleep(30);
+    check('nhảy sang tab giao dịch', window.eval('currentTab') === 'transactions' && visible('view-transactions'));
+    check('select ví hiện đúng ví vừa chọn', $('tx-filter-wallet').value === w1.id);
+    check('select ví nằm ngoài panel lọc ẩn', !$('tx-filter-wallet').closest('#tx-advanced-filters'));
+    check('thanh lọc ví được đánh dấu đang bật', $('tx-wallet-bar').classList.contains('on'));
+    check('các bộ lọc khác được dọn', window.eval('JSON.stringify(txFilters)')
+      === JSON.stringify({ type: 'all', walletId: w1.id, catId: 'all', eventId: 'all', range: 'all' }),
+      window.eval('JSON.stringify(txFilters)'));
+    check('ô tìm kiếm được xoá', $('tx-search').value === '');
+    check('chip "Tất cả" sáng lại', d.querySelector('#tx-filter-type .chip[data-val="all"]').classList.contains('active'));
+    // 'Cà phê' cũng là tên danh mục con nên phải soi đúng khung danh sách
+    const listHtml = () => $('tx-list-container').innerHTML;
+    check('danh sách chỉ còn giao dịch của ví đó',
+      listHtml().includes('Bún bò') && !listHtml().includes('Cà phê'));
+
+    // đổi ví bằng chính select ngoài giao diện
+    $('tx-filter-wallet').value = w0.id;
+    window.renderTransactionsList(); await sleep(20);
+    check('đổi ví bằng select cập nhật danh sách',
+      listHtml().includes('Cà phê') && !listHtml().includes('Bún bò'));
+    check('txFilters theo kịp select', window.eval('txFilters.walletId') === w0.id);
+
+    // ví đang lọc bị xoá → không được để danh sách trống câm lặng
+    const ghost = { id: 'w_ghost', userId: S().currentUser, name: 'Ví tạm', icon: '👛',
+      type: 'cash', currency: 'VND', startingBalance: 0 };
+    S().wallets.push(ghost); window.saveStorage();
+    window.jumpToWallet('w_ghost'); await sleep(20);
+    S().wallets = S().wallets.filter(w => w.id !== 'w_ghost');
+    window.renderTransactionsList(true); await sleep(20);
+    check('ví đã xoá thì bộ lọc tự về "tất cả"', window.eval('txFilters.walletId') === 'all');
+    check('danh sách hiện lại đầy đủ', listHtml().includes('Cà phê') && listHtml().includes('Bún bò'));
+
+    window.resetTxFilters(); await sleep(20);
+  }
+
   console.log('\n· views render');
   for (const tab of ['dashboard', 'transactions', 'add', 'reports', 'more', 'wallets', 'budget', 'debts', 'recurring', 'events', 'categories', 'settings']) {
     const errBefore = consoleErrors.length;
@@ -225,6 +362,24 @@ async function boot(opts) {
   await sleep(10);
   check('đổi sang dark theme', d.documentElement.getAttribute('data-theme') === 'dark');
   check('theme được mirror ra ngoài state', window.localStorage.getItem('FINYOURTIN_THEME') === 'dark');
+
+  console.log('\n· đặt lại mật khẩu');
+  fake.auth.__emit('PASSWORD_RECOVERY');
+  await sleep(40);
+  check('sheet đặt mật khẩu mới hiện ra', visible('modal-sheet') && !!$('pw-new'));
+  $('pw-new').value = '123';
+  await window.submitNewPassword(); await sleep(20);
+  check('mật khẩu mới quá ngắn bị chặn', /tối thiểu 6/i.test(txt('pw-error')), txt('pw-error'));
+  $('pw-new').value = 'secret123';
+  await window.submitNewPassword(); await sleep(20);
+  check('mật khẩu trùng mật khẩu cũ bị chặn', /khác mật khẩu cũ/i.test(txt('pw-error')), txt('pw-error'));
+  check('nút lưu bật lại sau lỗi', !$('pw-submit').disabled);
+  $('pw-new').value = 'brandnew456';
+  await window.submitNewPassword(); await sleep(30);
+  check('đổi xong thì đóng sheet', !visible('modal-sheet'));
+  check('mật khẩu mới có hiệu lực',
+    (await fake.auth.signInWithPassword({ email: 'demo@finyourtin.test', password: 'brandnew456' })).error == null);
+  await sleep(20);
 
   console.log('\n· realtime từ thiết bị khác');
   const remote = JSON.parse(JSON.stringify(S()));
@@ -278,10 +433,13 @@ async function boot(opts) {
   check('localStorage tách theo tài khoản', !!window.localStorage.getItem('FINYOURTIN_STATE_V4::' + uid));
 
   await window.Sync.flush();
+  window.jumpToWallet(S().wallets[0].id); await sleep(20);   // để lại một bộ lọc "bẩn"
   await fake.auth.signOut();
   await sleep(40);
   check('đăng xuất quay về màn đăng nhập', visible('view-login'));
   check('state bị dọn khi đăng xuất', S().currentUser === null);
+  check('bộ lọc không rò sang tài khoản sau', window.eval('txFilters.walletId') === 'all'
+    && window.eval('reportWalletId') === 'all', window.eval('txFilters.walletId'));
 
   /* ---- second scenario: build with no Supabase keys ---- */
   console.log('\n· build thiếu SUPABASE_URL / ANON_KEY');
@@ -303,6 +461,19 @@ async function boot(opts) {
     try { w2.saveManualConfig(); } catch (e) { /* location.reload is a no-op in jsdom */ }
     const saved = JSON.parse(w2.localStorage.getItem('FINYOURTIN_SUPABASE_CFG') || '{}');
     check('cấu hình hợp lệ được lưu lại', saved.url === 'https://abcdefghijkl.supabase.co');
+  }
+
+  /* ---- third scenario: a dead reset link ---- */
+  console.log('\n· liên kết đặt lại hết hạn');
+  {
+    const { window: w3 } = await boot({
+      url: 'https://finyourtin.test/#error=access_denied&error_code=otp_expired'
+           + '&error_description=Email+link+is+invalid+or+has+expired'
+    });
+    const $3 = id => w3.document.getElementById(id);
+    check('vẫn về màn đăng nhập, không trắng trang', !$3('view-login').classList.contains('hidden'));
+    check('nói rõ liên kết đã hết hạn', /hết hạn/i.test($3('auth-error').textContent), $3('auth-error').textContent);
+    check('không hiện sheet đặt mật khẩu', $3('modal-sheet').classList.contains('hidden'));
   }
 
   /* ---- report ---- */
