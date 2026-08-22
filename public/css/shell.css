@@ -46,7 +46,8 @@
     box-shadow: 0 24px 70px rgba(15,23,42,.20), 0 2px 8px rgba(15,23,42,.08);
     border: 1px solid var(--border);
   }
-  /* The column scrolls, not the page. */
+  /* On desktop the column scrolls, not the page — so the bar sits outside the
+     scrollport and is permanently visible without needing to stick. */
   .app > .view{ overflow-y: auto; overflow-x: hidden; }
   .nav-bar{
     position: absolute;

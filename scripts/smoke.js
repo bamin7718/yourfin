@@ -623,15 +623,22 @@ async function boot(opts) {
     check('card có shadow nổi 0 8px 24px rgba(0,82,156,.12)',
       /--shadow-lift:0 8px 24px rgba\(0,82,156,\.12\)/.test(css));
     check('header là app bar gradient', /header\{[^}]*background:var\(--gradient\)/.test(css));
-    // Thứ tự xếp lớp: thẻ số dư kéo lên đè vào vành header, nên nó PHẢI vẽ
-    // sau header. Header từng để z-index:25 (di sản thời còn sticky) và nuốt
-    // mất nửa dòng "Tổng tài sản ròng".
-    const zHeader = (/header\{[^}]*z-index:(\d+)/.exec(css) || [])[1];
-    const zView = (/#main-header:not\(\.hidden\) ~ \.view\{[^}]*z-index:(\d+)/.exec(css) || [])[1];
-    check('thẻ số dư vẽ ĐÈ LÊN header, không bị header nuốt',
-      Number(zView) > Number(zHeader), `header z=${zHeader} vs view z=${zView}`);
-    check('thanh nav vẫn nằm trên cùng so với nội dung',
-      Number((/\.nav-bar\{[^}]*z-index:(\d+)/.exec(css) || [])[1]) > Number(zView));
+    // App bar ghim ở đỉnh khi cuộn.
+    const zHeader = Number((/header\{[^}]*z-index:(\d+)/.exec(css) || [])[1]);
+    const zView = Number((/#main-header:not\(\.hidden\) ~ \.view\{[^}]*z-index:(\d+)/.exec(css) || [])[1]);
+    const zNav = Number((/\.nav-bar\{[^}]*z-index:(\d+)/.exec(css) || [])[1]);
+    check('header ghim ở đỉnh màn hình', /header\{position:sticky;top:0/.test(css));
+    check('header vẽ trên nội dung đang cuộn qua', zHeader > zView, `header z=${zHeader} vs view z=${zView}`);
+    check('thanh nav vẫn nằm trên header', zNav > zHeader, `nav z=${zNav}`);
+    /* Cái bẫy: overflow-x:hidden khiến trình duyệt tính overflow-y thành auto,
+       .app thành scroll container — và sticky bên trong một scrollport không
+       bao giờ cuộn thì không bao giờ dính. Phải là `clip`. */
+    check('.app dùng overflow-x:clip, không phải hidden (nếu không sticky chết lặng)',
+      /\.app\{[^}]*overflow-x:clip/.test(css) && !/\.app\{[^}]*overflow-x:hidden/.test(css));
+    check('không tổ tiên nào của header đặt overflow ẩn', (() => {
+      const body = /^body\{[^}]*\}/m.exec(css);
+      return !body || !/overflow/.test(body[0]);
+    })());
     check('thẻ số dư không còn margin âm, nằm dưới header như mọi trang',
       /\.hero\{[^}]*padding:16px;margin-top:0/.test(css)
       && !/margin-top:-\d+px\}/.test(css.match(/#main-header[^\n]*/g).join('\n')));

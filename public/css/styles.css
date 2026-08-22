@@ -50,7 +50,12 @@ body{
   transition:background .25s ease,color .25s ease;overscroll-behavior-y:none;
 }
 input,select,textarea,button{font-family:inherit;}
-.app{width:100%;max-width:520px;background:var(--bg);min-height:100vh;display:flex;flex-direction:column;position:relative;box-shadow:0 0 40px rgba(15,23,42,.08);overflow-x:hidden;}
+/* overflow-x:CLIP, not hidden. `hidden` on one axis computes the other to
+   `auto`, which makes .app a scroll container — and a sticky header inside a
+   scroll container that never actually scrolls (this one grows instead, it
+   has min-height and no height) simply never sticks. `clip` trims the same
+   overflow without creating a scrollport. */
+.app{width:100%;max-width:520px;background:var(--bg);min-height:100vh;display:flex;flex-direction:column;position:relative;box-shadow:0 0 40px rgba(15,23,42,.08);overflow-x:clip;}
 .hidden{display:none!important;}
 .tabular{font-variant-numeric:tabular-nums;}
 .text-center{text-align:center;} .text-right{text-align:right;}
@@ -71,12 +76,10 @@ input,select,textarea,button{font-family:inherit;}
    card below can sit on top of the gradient instead of below it. */
 /* Compact app bar: one row of ~34px plus a 26px lip for the balance card to
    sit on. ~70px of blue in total instead of the old ~100px. */
-/* z-index:1, not 25. The 25 was left over from when this bar was
-   position:sticky and had to float above scrolling content; it is relative
-   now, and the dashboard's balance card is pulled up on purpose to overlap
-   its lip. With the bar on top, that overlap buried the first 20px of the
-   white card — which is exactly where "Tổng tài sản ròng" sits. */
-header{position:relative;z-index:1;display:flex;justify-content:space-between;align-items:center;
+/* Sticky at the top of the page. z-index only has to clear the views (2) and
+   stay under the nav bar (30) and the overlays above that. Nothing overlaps
+   the bar any more, so there is no card left for it to bury. */
+header{position:sticky;top:0;z-index:20;display:flex;justify-content:space-between;align-items:center;
   gap:10px;padding:calc(9px + env(safe-area-inset-top,0px)) 14px 26px;background:var(--gradient);
   color:#fff;border-bottom-left-radius:20px;border-bottom-right-radius:20px;
   transition:padding-bottom .2s ease;}
