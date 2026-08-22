@@ -1059,6 +1059,13 @@ async function boot(opts) {
       return chk > 0 && chk < rel;
     })());
     check('CI bỏ qua commit chỉ sửa tài liệu', /paths-ignore/.test(wf));
+    /* `git push origin main v5.0.2` đẩy cả nhánh lẫn tag một lượt → hai run
+       cùng lúc. Nhóm concurrency chung thì cái chạy sau giết cái chạy trước, và
+       đã có lần cái bị giết là run của tag: tag lên nhưng không có release nào
+       được tạo, không một dòng báo lỗi. Nhóm phải kèm ref. */
+    check('nhóm concurrency tách theo ref — push nhánh không được giết build của tag',
+      /concurrency:\s*\n\s*group:\s*apk-\$\{\{\s*github\.ref\s*\}\}/.test(wf),
+      (/group:.*/.exec(wf) || [])[0]);
 
     // nút tải trong Cài đặt
     window.switchTab('settings'); await sleep(20);

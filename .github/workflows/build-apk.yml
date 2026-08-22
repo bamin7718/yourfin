@@ -17,8 +17,13 @@ on:
 permissions:
   contents: write        # cần để tạo/cập nhật Release
 
+# Nhóm theo REF, không phải một nhóm "apk" duy nhất. `git push origin main v5.0.2`
+# đẩy cả nhánh lẫn tag một lượt → hai run cùng lúc; với một nhóm chung thì cái
+# chạy sau giết cái chạy trước, và đã có lần cái bị giết chính là run của tag —
+# tag lên nhưng KHÔNG có release nào được tạo, im lặng hoàn toàn.
+# Theo ref thì mỗi ref chỉ huỷ run cũ của chính nó.
 concurrency:
-  group: apk
+  group: apk-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
