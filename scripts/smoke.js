@@ -632,12 +632,14 @@ async function boot(opts) {
       Number(zView) > Number(zHeader), `header z=${zHeader} vs view z=${zView}`);
     check('thanh nav vẫn nằm trên cùng so với nội dung',
       Number((/\.nav-bar\{[^}]*z-index:(\d+)/.exec(css) || [])[1]) > Number(zView));
-    check('thẻ số dư có padding-top thoáng hơn hai bên',
-      /\.hero\{[^}]*padding:18px 16px 14px/.test(css));
+    check('thẻ số dư không còn margin âm, nằm dưới header như mọi trang',
+      /\.hero\{[^}]*padding:16px;margin-top:0/.test(css)
+      && !/margin-top:-\d+px\}/.test(css.match(/#main-header[^\n]*/g).join('\n')));
 
-    check('chỉ Dashboard mới đè lên header',
-      /#main-header:not\(\.hidden\):not\(\.hd-flat\) ~ \.view\{margin-top:-20px/.test(css)
-      && /#main-header\.hd-flat ~ \.view\{padding-top:20px/.test(css));
+    check('không còn quy tắc kéo view lên đè header',
+      !/:not\(\.hd-flat\) ~ \.view\{margin-top:-/.test(css));
+    check('mọi trang đều chừa khoảng dưới header',
+      /#main-header\.hd-flat ~ \.view\{padding-top:20px/.test(css));
     check('header thu gọn còn một hàng ~70px',
       /header\{[^}]*padding:calc\(9px \+ env\(safe-area-inset-top,0px\)\) 14px 26px/.test(css)
       && /header \.hd-who\{display:flex/.test(css));
@@ -986,13 +988,10 @@ async function boot(opts) {
       return window.eval('currentTab') === 'dashboard';
     })());
 
-    // tiêu đề trang phụ không được chui xuống dưới header xanh
-    window.switchTab('dashboard'); await sleep(20);
-    check('ở Dashboard: header giữ vành để thẻ số dư đè lên',
-      !$('main-header').classList.contains('hd-flat'));
-    for (const tab of ['settings', 'reports', 'transactions', 'wallets']) {
+    // một kiểu header duy nhất: phẳng ở mọi trang, không trang nào bị nuốt tiêu đề
+    for (const tab of ['dashboard', 'settings', 'reports', 'transactions', 'wallets']) {
       window.switchTab(tab); await sleep(15);
-      check('trang ' + tab + ': header phẳng, không nuốt tiêu đề',
+      check('trang ' + tab + ': header phẳng',
         $('main-header').classList.contains('hd-flat'));
     }
 

@@ -4,13 +4,11 @@
 
    One <header id="main-header"> serves every screen, so the thing that can
    drift is not its markup but its STATE — hidden or not, and .hd-flat or not.
-   .hd-flat decides whether the next element gets pulled up under the bar's
-   lip, which only the dashboard's balance card is built to survive.
-
-   The gap this was written for: onboarding shows the bar without going
-   through switchTab(), so it inherited whatever the flag happened to be and
-   dragged "Tạo ví đầu tiên" into the blue. The bar now defaults to flat and
-   only the dashboard opts out.
+   There is one layout now — flat, on every screen — after the dashboard's
+   overlapping lip was retired. That lip needed .hd-flat to be right on every
+   path into every screen, and it was wrong twice: once on Cài đặt, once on
+   onboarding, which shows the bar without going through switchTab(). These
+   assertions keep the single layout single.
 
    Requires jsdom:  npm install jsdom --no-save
    Run:             npm run header-test
@@ -93,7 +91,7 @@ const check=(l,ok,d)=>{console.log((ok?'  ✓ ':'  ✗ ')+l+(ok||!d?'':' — '+d
   window.obGoStep(3); await sleep(20);
   window.finishOnboarding(); await sleep(60);
   check('vào dashboard', visibleView()==='view-dashboard', visibleView());
-  check('dashboard: header KHÔNG phẳng (thẻ số dư đè lên)', !state().flat);
+  check('dashboard: header phẳng như mọi trang khác', state().flat);
 
   console.log('\n--- mọi tab điều hướng ---');
   for(const t of ['transactions','reports','settings','add','wallets','budget','debts','recurring','events','categories']){
@@ -101,7 +99,7 @@ const check=(l,ok,d)=>{console.log((ok?'  ✓ ':'  ✗ ')+l+(ok||!d?'':' — '+d
     check(`${t}: header phẳng`, state().flat && !state().hidden, JSON.stringify(state()));
   }
   window.switchTab('dashboard'); await sleep(15);
-  check('quay lại dashboard: bỏ phẳng', !state().flat);
+  check('dashboard: vẫn phẳng, không có ngoại lệ nào', state().flat);
 
   console.log('\n--- khoá PIN ---');
   window.showLockScreen('set1'); await sleep(20);
@@ -116,7 +114,7 @@ const check=(l,ok,d)=>{console.log((ok?'  ✓ ':'  ✗ ')+l+(ok||!d?'':' — '+d
   window.setAuthMode('login',$('auth-segment').children[0]);
   await window.handleAuthSubmit(); await sleep(150);
   check('đăng nhập lại vào dashboard', visibleView()==='view-dashboard', visibleView());
-  check('header không giữ trạng thái phẳng cũ', !state().flat);
+  check('header vẫn phẳng sau khi đăng nhập lại', state().flat);
 
   console.log('\n--- build thiếu key ---');
   const {window:w2}=await boot({noKeys:true});

@@ -1429,9 +1429,12 @@ function switchTab(tab){
   const SUB_SCREENS = ['wallets','budget','debts','recurring','events','categories'];
   const navTab = SUB_SCREENS.includes(tab) ? 'dashboard' : tab;
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.toggle('active', n.dataset.tab===navTab));
-  /* Only the dashboard has a card built to sit on the app bar's lip. */
+  /* One app bar for every screen: flat everywhere, nothing overlaps it. The
+     dashboard used to keep a lip for its balance card to ride on, which meant
+     two header layouts and a class that had to be right on every path into a
+     screen — it was wrong twice (Cài đặt, then onboarding). */
   const hd = document.getElementById('main-header');
-  if(hd) hd.classList.toggle('hd-flat', tab !== 'dashboard');
+  if(hd) hd.classList.add('hd-flat');
   const fn = VIEW_RENDERERS[tab];
   if(fn) fn();
   window.scrollTo({top:0});
