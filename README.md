@@ -39,7 +39,7 @@ SoFin/
 │   └── index.offline-v4.html   bản single-file cũ, vẫn chạy độc lập
 ├── capacitor.config.json       cấu hình bản Android/iOS (webDir = public/)
 ├── .github/workflows/
-│   └── build-apk.yml           CI: test → sinh env → dựng android/ → APK → release `latest`
+│   └── build-apk.yml           CI: test → sinh env → dựng android/ → APK → release khi có tag `v*`
 ├── DEPLOY.md                   checklist đưa lên PROD
 ├── .env.example
 ├── .gitignore
@@ -134,6 +134,7 @@ Last-write-wins theo `data.updatedAt` (đồng hồ client, đóng dấu bởi `
 | **Sự kiện** | Gom chi tiêu theo chuyến đi/sự kiện, có ngân sách riêng và phân tích riêng. |
 | **Điều hướng** | Thanh nav đúng 4 mục — Tổng quan · Giao dịch · Báo cáo · Cài đặt — cộng nút **+**. Các màn hình phụ (ví, ngân sách, sổ nợ, định kỳ, sự kiện, danh mục) vào từ lưới **Truy cập nhanh** ở Tổng quan. Chạm một ví → nhảy sang Giao dịch đã lọc sẵn ví đó; chạm một danh mục → lọc theo danh mục. Bộ lọc **Ví** nằm ngay trên màn hình Giao dịch, không phải mở panel nâng cao. |
 | **PWA** | Cài lên máy được, chạy standalone, mở offline 100% nhờ service worker cache-first. Cài đặt → *Thông tin ứng dụng* có nút cài (và hướng dẫn riêng cho iOS Safari), báo trạng thái offline và nút tải bản cập nhật. |
+| **Bản Android** | Cùng `public/` đóng gói bằng Capacitor, APK dựng tự động trong CI. Cài đặt → nút **Tải app Android** (tự ẩn khi đang chạy trong chính APK). Bản native tự **kiểm tra cập nhật** 3 giây sau khi mở: hỏi release mới nhất trên GitHub, so số phiên bản với `APP_VERSION`, mới hơn thì mở sheet kèm nút tải `.apk`. Im lặng khi mất mạng; bấm *Để sau* thì thôi hỏi **phiên bản đó**, bản kế tiếp vẫn báo. |
 | **Bảo mật** | Khóa PIN 4 chữ số (SHA-256, WebCrypto). Một form đổi **mã PIN** hoặc **mật khẩu đăng nhập**: nhập mã/mật khẩu hiện tại → mới → xác nhận. PIN đối chiếu hash trong `state`; mật khẩu thì xác thực lại với Supabase vì `updateUser()` không tự hỏi mật khẩu cũ. |
 | **Giao diện** | Ngôn ngữ thiết kế **VietinBank iPay**: app bar gradient xanh gọn một hàng (~70px), thẻ tổng tài sản trắng bo 16px đè lên app bar với nút con mắt ngay cạnh con số, ví xếp **lưới 2 cột** (6 ví = 3 hàng, không phải vuốt), nền `#F4F7FA`. Lưới **Tiện ích 5 ô** nằm cuối trang, icon trong khung gradient nhạt có inner shadow. Bottom nav kính mờ (`backdrop-filter`), tab active xanh kèm vạch đỏ `#ED1C24`; nút **+** là FAB gradient xanh–đỏ có glow thở nhẹ. Ripple + rung nhẹ khi chạm. Mobile-first 480px, Dark/Light/Tự động. |
 | **Hệ thống icon** | Icon *của app* (nav, nút, hàng cài đặt, empty state, cảnh báo) là SVG stroke 24×24 inline, khai báo trong `ICON_PATHS` và dựng bằng `icon(name)` — thừa kế `currentColor` và cỡ chữ nên một rule CSS chỉnh được tất cả. Emoji **do người dùng chọn** (ví, danh mục, sự kiện) là dữ liệu trong `state`, giữ nguyên. |

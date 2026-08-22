@@ -142,7 +142,8 @@ async function boot(opts) {
   window.supabase = { createClient: () => fake };
   window.__ENV__ = opts.noConfig
     ? { SUPABASE_URL: '', SUPABASE_ANON_KEY: '' }
-    : { SUPABASE_URL: 'https://test.supabase.co', SUPABASE_ANON_KEY: 'x'.repeat(60) };
+    : { SUPABASE_URL: 'https://test.supabase.co', SUPABASE_ANON_KEY: 'x'.repeat(60),
+        VERSION: require('../package.json').version };
 
   // Run the app's own scripts, in order, as real <script> elements. Injecting
   // them matters: top-level `let` in a classic script goes to the global
@@ -768,27 +769,32 @@ async function boot(opts) {
       && /assembleDebug/.test(wf));
     check('CI dùng JDK 21 — Capacitor 8 đặt sourceCompatibility 21, JDK 17 sẽ fail',
       /java-version: 21/.test(wf));
-    check('CI phát hành vào release tag `latest`',
-      /tag_name: latest/.test(wf) && /softprops\/action-gh-release/.test(wf));
+    check('CI chỉ phát hành khi có tag v*, không phải mỗi lần push',
+      /softprops\/action-gh-release/.test(wf)
+      && /if: startsWith\(github\.ref, 'refs\/tags\/v'\)/.test(wf)
+      && !/tag_name: latest/.test(wf));
+    check('CI đối chiếu tag với version TRƯỚC khi build', (() => {
+      const chk = wf.indexOf('Đối chiếu tag với package.json');
+      const rel = wf.indexOf('softprops/action-gh-release');
+      return chk > 0 && chk < rel;
+    })());
     check('CI bỏ qua commit chỉ sửa tài liệu', /paths-ignore/.test(wf));
 
     // nút tải trong Cài đặt
     window.switchTab('settings'); await sleep(20);
     const apk = $('btn-download-latest-apk');
     check('Cài đặt có nút tải APK', !!apk, $('app-info').textContent.slice(0, 60));
-    check('nút trỏ vào release `latest`, tên file cố định',
+    check('nút dùng bí danh /releases/latest/download nên không đổi theo phiên bản',
       !!apk && apk.getAttribute('href') ===
-        'https://github.com/bamin7718/yourfin/releases/download/latest/sofin.apk',
+        'https://github.com/bamin7718/yourfin/releases/latest/download/sofin.apk',
       apk && apk.getAttribute('href'));
     /* Cặp này lệch nhau là nút 404 mà không có gì báo — nên khoá lại. */
     check('tên file trong CI và trong nút tải khớp nhau', (() => {
       const inWf = /files: (\S+\.apk)/.exec(wf);
       return !!apk && !!inWf && apk.getAttribute('href').endsWith('/' + inWf[1]);
     })(), (/files: (\S+\.apk)/.exec(wf) || [])[1]);
-    check('tag trong CI và trong link khớp nhau', (() => {
-      const tag = (/tag_name: (\S+)/.exec(wf) || [])[1];
-      return !!apk && !!tag && apk.getAttribute('href').includes('/releases/download/' + tag + '/');
-    })());
+    check('không còn tag cố định `latest` để lệch với số phiên bản',
+      !/tag_name:/.test(wf));
 
     // trong chính app native thì không mời tải lại
     const realCap = window.Capacitor;
@@ -801,6 +807,73 @@ async function boot(opts) {
     window.Capacitor = realCap;
     window.renderAppInfo();
     check('quay lại web thì nút tải hiện lại', !!$('btn-download-latest-apk'));
+  }
+
+  console.log('\n· kiểm tra bản cập nhật');
+  {
+    const PKG = require('../package.json').version;
+    check('APP_VERSION lấy từ __ENV__ do build sinh ra',
+      window.eval('APP_VERSION') === PKG, window.eval('APP_VERSION'));
+    /* Mở thẳng thư mục không qua build thì rơi về hằng số này — để nó cũ đi
+       là app tự thấy mình lỗi thời và đòi cập nhật vô cớ. */
+    check('hằng số dự phòng trong app.js chưa lạc hậu',
+      fs.readFileSync(path.join(PUBLIC, 'js', 'app.js'), 'utf8')
+        .includes("__ENV__.VERSION) || '" + PKG + "'"));
+    check('generate-env.js có phát VERSION từ package.json',
+      /VERSION:\s*require\('\.\.\/package\.json'\)\.version/
+        .test(fs.readFileSync(path.join(ROOT, 'scripts', 'generate-env.js'), 'utf8')));
+
+    const cmp = (a, b) => window.compareVersions(a, b);
+    check('so sánh phiên bản: mới hơn', cmp('5.0.1', '5.0.0') === 1 && cmp('5.1.0', '5.0.9') === 1);
+    check('so sánh phiên bản: cũ hơn', cmp('5.0.0', '5.0.1') === -1);
+    check('so sánh phiên bản: bằng nhau', cmp('5.0.0', '5.0.0') === 0);
+    check('bỏ qua tiền tố v', cmp('v5.0.1', '5.0.0') === 1 && cmp('v5.0.0', 'v5.0.0') === 0);
+    check('so theo số chứ không so chuỗi', cmp('5.0.10', '5.0.9') === 1, '5.0.10 vs 5.0.9');
+
+    /* giả lập GitHub API */
+    const realFetch = window.fetch;
+    let calls = 0;
+    const reply = body => { window.fetch = async () => { calls++; return { ok:true, json: async () => body }; }; };
+    try { window.localStorage.removeItem('FINYOURTIN_UPDATE_DISMISSED'); } catch (e) {}
+
+    reply({ tag_name: 'v9.9.9', assets: [
+      { name: 'sofin.apk', size: 4400000, browser_download_url: 'https://x/sofin.apk' }] });
+    let tag = await window.checkAppUpdate(); await sleep(20);
+    check('phát hiện bản mới hơn', tag === 'v9.9.9', String(tag));
+    check('hiện sheet thông báo', visible('modal-sheet')
+      && $('sheet-body').innerHTML.includes('9.9.9'), txt('sheet-title'));
+    check('sheet có nút tải .apk trỏ đúng asset', (() => {
+      const a = $('sheet-body').querySelector('a[href="https://x/sofin.apk"]');
+      return !!a && /Tải bản cập nhật/.test(a.textContent);
+    })(), $('sheet-body').innerHTML.slice(0, 80));
+    check('có hiển thị dung lượng', $('sheet-body').innerHTML.includes('4.2 MB'));
+
+    window.dismissUpdate('9.9.9'); window.closeSheet();
+    tag = await window.checkAppUpdate(); await sleep(20);
+    check('đã bấm "để sau" thì không hỏi lại cùng phiên bản', tag === null && !visible('modal-sheet'));
+
+    reply({ tag_name: 'v10.0.0', assets: [] });
+    tag = await window.checkAppUpdate(); await sleep(20);
+    check('nhưng phiên bản mới hơn nữa thì vẫn báo', tag === 'v10.0.0');
+    check('không có asset thì lùi về link mặc định',
+      !!$('sheet-body').querySelector('a[href*="releases/latest/download/sofin.apk"]'));
+    window.closeSheet();
+    try { window.localStorage.removeItem('FINYOURTIN_UPDATE_DISMISSED'); } catch (e) {}
+
+    reply({ tag_name: 'v1.0.0', assets: [] });
+    tag = await window.checkAppUpdate(); await sleep(20);
+    check('bản cũ hơn thì im lặng', tag === null && !visible('modal-sheet'));
+
+    window.fetch = async () => { throw new Error('mất mạng'); };
+    let threw = null;
+    try { tag = await window.checkAppUpdate(); } catch (e) { threw = e.message; }
+    await sleep(20);
+    check('mất mạng thì không ném lỗi, không làm phiền', !threw && tag === null, threw);
+    window.fetch = realFetch;
+
+    const src = fs.readFileSync(path.join(PUBLIC, 'js', 'app.js'), 'utf8');
+    check('chỉ tự kiểm tra trên bản native, sau 3 giây',
+      /if\(isNativeApp\(\)\) setTimeout\(\(\)=>checkAppUpdate\(\), 3000\)/.test(src));
   }
 
   console.log('\n· PWA');

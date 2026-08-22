@@ -3799,10 +3799,80 @@ function renderSettingsView(){
 /* ============================================================
    PWA — service worker + install prompt
    ============================================================ */
-/* A release tagged `latest` that the workflow overwrites on every push to
-   main, so this link never needs touching. The filename has to match the one
+const GH_REPO = 'bamin7718/yourfin';
+/* `/releases/latest/download/` is GitHub's alias for the newest release, so
+   this survives every version bump. The filename must match the one
    build-apk.yml publishes — a smoke assertion holds the two together. */
-const APK_URL = 'https://github.com/bamin7718/yourfin/releases/download/latest/sofin.apk';
+const APK_URL = `https://github.com/${GH_REPO}/releases/latest/download/sofin.apk`;
+
+/* Stamped in at build time from package.json; the literal is only what runs
+   when someone opens the folder without building. */
+const APP_VERSION = (window.__ENV__ && window.__ENV__.VERSION) || '5.0.0';
+/* Which version the user already said "để sau" to — device-local, so a
+   dismissal does not sync to their other phone. */
+const UPDATE_SEEN_KEY = 'FINYOURTIN_UPDATE_DISMISSED';
+
+/* -1 / 0 / 1, comparing dotted numbers and ignoring a leading v. */
+function compareVersions(a, b){
+  const part = v => String(v||'').replace(/^v/i,'').split(/[.\-+]/).map(n=>parseInt(n,10)||0);
+  const x = part(a), y = part(b);
+  for(let i=0; i<Math.max(x.length,y.length); i++){
+    const d = (x[i]||0) - (y[i]||0);
+    if(d) return d > 0 ? 1 : -1;
+  }
+  return 0;
+}
+
+/* Ask GitHub what the newest release is. Silent on any failure: an update
+   check that interrupts someone because their train went into a tunnel is
+   worse than one that quietly waits for the next launch. */
+async function checkAppUpdate(opts){
+  const manual = !!(opts && opts.manual);
+  let rel;
+  try{
+    const res = await fetch(`https://api.github.com/repos/${GH_REPO}/releases/latest`,
+      {headers:{'Accept':'application/vnd.github+json'}});
+    if(!res.ok) throw new Error('HTTP ' + res.status);
+    rel = await res.json();
+  }catch(e){
+    if(manual) toast('Không kiểm tra được bản cập nhật — thử lại khi có mạng','err');
+    return null;
+  }
+  const tag = rel && rel.tag_name;
+  if(!tag) return null;
+  if(compareVersions(tag, APP_VERSION) <= 0){
+    if(manual) toast('Bạn đang dùng bản mới nhất','ok');
+    return null;
+  }
+  /* Auto-checks respect an earlier "để sau"; a manual check always answers. */
+  if(!manual){
+    let seen = null;
+    try{ seen = localStorage.getItem(UPDATE_SEEN_KEY); }catch(e){}
+    if(seen && compareVersions(tag, seen) <= 0) return null;
+  }
+  showUpdateSheet(rel);
+  return tag;
+}
+
+function showUpdateSheet(rel){
+  const tag = String(rel.tag_name).replace(/^v/i,'');
+  /* Prefer the asset this release actually carries; fall back to the alias. */
+  const asset = (rel.assets||[]).find(a=>/\.apk$/i.test(a.name||''));
+  const url = (asset && asset.browser_download_url) || APK_URL;
+  const size = asset && asset.size ? ` · ${(asset.size/1048576).toFixed(1)} MB` : '';
+  uiSheet('Đã có phiên bản mới',
+    `<p class="text-sm muted mb4">Bạn đang dùng <b>v${esc(APP_VERSION)}</b></p>
+     <div class="text-lg font-bold c-primary mb12">v${esc(tag)}${size}</div>
+     <p class="text-sm muted mb12">Cập nhật ngay để trải nghiệm tính năng mới.</p>
+     <a class="btn btn-primary" href="${url}" rel="noopener" download
+        onclick="dismissUpdate('${esc(tag)}')" style="text-decoration:none;">Tải bản cập nhật (.apk)</a>
+     <button class="btn btn-ghost mt8" onclick="dismissUpdate('${esc(tag)}');closeSheet();">Để sau</button>`);
+}
+
+/* Remember the version, not a boolean: the next release must ask again. */
+function dismissUpdate(tag){
+  try{ localStorage.setItem(UPDATE_SEEN_KEY, tag); }catch(e){}
+}
 
 let deferredInstall = null;      /* the beforeinstallprompt event, if offered */
 let swUpdateReady = false;
@@ -4299,6 +4369,10 @@ document.getElementById('mc-sub-name').addEventListener('keydown', e=>{ if(e.key
    fields call attachMoneyButtons(container) themselves. */
 attachMoneyButtons();
 registerServiceWorker();
+
+/* Only the packaged app can act on this — a browser updates itself. Three
+   seconds in, so the check never competes with the first paint. */
+if(isNativeApp()) setTimeout(()=>checkAppUpdate(), 3000);
 
 /* Crawlers need an absolute og:image, and the app is served from production,
    preview and localhost — so resolve it against wherever we actually are. */

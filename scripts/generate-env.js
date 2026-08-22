@@ -40,6 +40,9 @@ const payload = {
   /* Stamped into the service worker URL (`/sw.js?v=…`). A new deploy is then a
      new script to the browser, which is what makes it install and drop the
      previous cache — otherwise users would sit on the old bundle forever. */
+  /* The running build's version, read from package.json so the number in the
+     app and the number in the git tag cannot drift apart. */
+  VERSION: require('../package.json').version,
   /* Where the browser build actually lives. The APK needs it: its own origin
      is https://localhost, which cannot receive a password-reset link. */
   SITE_URL: (process.env.SITE_URL || process.env.VERCEL_PROJECT_PRODUCTION_URL || '')

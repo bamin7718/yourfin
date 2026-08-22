@@ -158,9 +158,30 @@ service worker phục vụ shell, dữ liệu đọc/ghi vào cache và tự đ�
 
 ## 5b. Phát hành bản Android
 
-Workflow `.github/workflows/build-apk.yml` chạy **mỗi lần push lên `main`** (bỏ qua commit chỉ
-sửa `.md`) và ghi đè release tag `latest`. Nút **Tải app Android** trong Cài đặt trỏ cố định vào
-`/releases/download/latest/sofin.apk`, nên không phải sửa link bao giờ.
+Workflow `.github/workflows/build-apk.yml` chạy hai chế độ:
+
+| Kích hoạt | Kết quả |
+|---|---|
+| push lên `main` (bỏ qua commit chỉ sửa `.md`) | chỉ **artifact**, để biết bản native còn dựng được |
+| gắn **tag `v*`** | build **và phát hành release** — đây mới là thứ app kiểm tra cập nhật |
+
+Nút **Tải app Android** trong Cài đặt trỏ vào `/releases/latest/download/sofin.apk` — bí danh
+GitHub cho bản mới nhất — nên không phải sửa link bao giờ, kể cả khi lên phiên bản.
+
+**Cách phát hành một phiên bản:**
+
+```bash
+npm version patch --no-git-tag-version      # 5.0.0 → 5.0.1 trong package.json
+git commit -am "chore: 5.0.1"
+git tag v5.0.1 && git push origin main v5.0.1
+```
+
+- [ ] ⚠️ Tag **phải bằng** `package.json.version`. CI dừng ngay ở bước đầu nếu lệch — nếu không,
+      app vừa cập nhật xong đã tự thấy mình lỗi thời và đòi cập nhật lại vòng vo
+- [ ] ⚠️ Nếu còn release/tag cũ tên là `latest`, **xoá đi**: nó không mang số phiên bản nên
+      `checkAppUpdate()` không so được, và nó có thể chiếm chỗ bản mới nhất
+- [ ] Sau khi release xong, mở app cũ trên máy Android → sau 3 giây phải hiện
+      *"Đã có phiên bản mới"* kèm nút **Tải bản cập nhật (.apk)**
 
 - [ ] **GitHub → Settings → Secrets and variables → Actions** thêm:
   - `SUPABASE_URL`, `SUPABASE_ANON_KEY` (cùng giá trị với Vercel)
@@ -175,8 +196,9 @@ sửa `.md`) và ghi đè release tag `latest`. Nút **Tải app Android** trong
 
 ### ⚠️ Nếu link tải báo 404
 
-**1. Chưa có lần build nào chạy xong.** Release `latest` chỉ tồn tại sau khi workflow chạy
-thành công lần đầu. Xem **Actions** có job nào xanh chưa.
+**1. Chưa có release nào.** Push lên `main` **không** tạo release, chỉ tạo artifact. Phải có
+ít nhất một tag `v*` chạy xong thì `/releases/latest/download/` mới trỏ được vào đâu. Xem
+**Actions** có job nào xanh chưa, và **Releases** có bản nào chưa.
 
 **2. Repo private.** Asset của release trên repo private **bắt buộc đăng nhập mới tải được**,
 nên nút sẽ 404 với mọi người kể cả bạn mở trên điện thoại chưa có phiên GitHub. Nguyên nhân
@@ -194,8 +216,8 @@ curl -s -o /dev/null -w "%{http_code}\n" https://api.github.com/repos/bamin7718/
 Để public không lộ gì: `anon key` vốn được thiết kế để ra tới trình duyệt, `.env` và
 `public/js/env.js` đều bị `.gitignore` chặn, RLS mới là thứ bảo vệ dữ liệu.
 
-**3. Tên file hoặc tag lệch nhau** giữa workflow và `APK_URL` trong `public/js/app.js`.
-`npm test` có assertion khoá cặp này, nên chạy `npm test` là biết.
+**3. Tên file lệch nhau** giữa workflow (`files: sofin.apk`) và `APK_URL` trong
+`public/js/app.js`. `npm test` có assertion khoá cặp này, nên chạy `npm test` là biết.
 
 ---
 

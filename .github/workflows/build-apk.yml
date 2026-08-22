@@ -1,12 +1,17 @@
 name: Build and Release APK
 
-# Mỗi lần main đổi là có APK mới ở release `latest`, nên nút Tải App trong
-# Cài đặt luôn trỏ vào bản mới nhất mà không phải sửa link bao giờ.
-# Bỏ qua commit chỉ đụng tài liệu — không có gì mới để đóng gói.
+# Hai chế độ:
+#   · push lên main  → build để biết native còn dựng được, chỉ để artifact
+#   · gắn tag v*     → build và PHÁT HÀNH, đây mới là thứ app kiểm tra cập nhật
+#
+# Release phải mang số phiên bản chứ không phải tag cố định `latest`:
+# checkAppUpdate() đọc tag_name rồi so với APP_VERSION, mà "latest" thì không
+# so với "5.0.0" được.
 on:
   push:
     branches: [main]
     paths-ignore: ['**.md']
+    tags: ['v*']
   workflow_dispatch:
 
 permissions:
@@ -37,6 +42,16 @@ jobs:
           java-version: 21
 
       - uses: android-actions/setup-android@v3
+
+      # Tag phải khớp version trong package.json, nếu không app vừa cập nhật
+      # xong đã tự thấy mình lỗi thời. Chặn ngay đây, trước khi tốn build.
+      - name: Đối chiếu tag với package.json
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          PKG=$(node -p "require('./package.json').version")
+          TAG="${GITHUB_REF_NAME#v}"
+          echo "package.json=$PKG  tag=$TAG"
+          test "$PKG" = "$TAG" || { echo "::error::Tag $GITHUB_REF_NAME khong khop version $PKG trong package.json"; exit 1; }
 
       - run: npm ci
 
@@ -79,11 +94,14 @@ jobs:
           path: sofin.apk
           retention-days: 30
 
-      - name: Phát hành vào release `latest`
+      # Chỉ khi có tag. Nút Tải App trỏ vào /releases/latest/download/sofin.apk
+      # — bí danh của GitHub cho bản phát hành mới nhất — nên link không đổi
+      # dù số phiên bản đổi.
+      - name: Phát hành
+        if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: latest
-          name: SoFin — bản mới nhất
+          name: SoFin ${{ github.ref_name }}
           body: |
             Bản Android dựng tự động từ `${{ github.sha }}`.
 

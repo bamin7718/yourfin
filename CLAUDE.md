@@ -153,7 +153,21 @@ Ba chỗ bản native khác web, đã xử lý — đừng gỡ:
 - `resetPassword()` dùng `__ENV__.SITE_URL` khi chạy native: origin của app là `https://localhost`, Supabase từ chối redirect đó và không mail client nào mở được.
 - Nút tải APK trong Cài đặt tự ẩn khi đang chạy trong chính APK.
 
-Nút tải trỏ vào `/releases/download/**latest**/**sofin.apk**` — cả *tag* lẫn *tên file* phải khớp với `build-apk.yml`; lệch một trong hai là nút 404 mà không có gì báo, nên có assertion khoá cả hai. CI phải dùng **JDK 21**: Capacitor 8 đặt `sourceCompatibility = 21`, JDK 17 fail ở bước Gradle.
+Nút tải trỏ vào `/releases/**latest**/download/**sofin.apk**` — bí danh GitHub cho bản phát hành mới nhất, nên link không đổi theo phiên bản; nhưng *tên file* vẫn phải khớp `build-apk.yml`, lệch là nút 404 mà không có gì báo, nên có assertion khoá cặp đó. CI phải dùng **JDK 21**: Capacitor 8 đặt `sourceCompatibility = 21`, JDK 17 fail ở bước Gradle.
+
+### Phát hành và kiểm tra cập nhật
+
+Push lên `main` chỉ ra **artifact**; chỉ **tag `v*`** mới tạo release. Đó là vì `checkAppUpdate()` đọc `tag_name` của release mới nhất rồi so với `APP_VERSION` — một tag cố định `latest` thì không có gì để so với `5.0.0`. Tag **phải bằng** `package.json.version`; CI chặn ngay từ đầu job nếu lệch, nếu không app vừa cập nhật xong đã tự thấy mình lỗi thời.
+
+```bash
+npm version patch --no-git-tag-version   # sửa package.json
+git commit -am "..." && git tag v5.0.1 && git push origin main v5.0.1
+```
+
+- `APP_VERSION` đến từ `__ENV__.VERSION` do `generate-env.js` chép từ `package.json`; hằng số dự phòng trong `app.js` chỉ dùng khi mở thư mục không qua build — smoke bắt nó phải trùng `package.json`, để nó cũ đi là app tự đòi cập nhật vô cớ.
+- `compareVersions()` so theo **số** từng đoạn: `5.0.10 > 5.0.9`, so chuỗi thì ngược lại.
+- Tự kiểm tra **chỉ trên bản native**, 3 giây sau khi mở, và **im lặng khi lỗi mạng** — trên web nút cập nhật là chính việc tải lại trang.
+- `FINYOURTIN_UPDATE_DISMISSED` lưu *số phiên bản* đã bấm "Để sau", không phải boolean: bản kế tiếp phải hỏi lại. Local, không sync sang máy khác.
 
 ## PWA
 
