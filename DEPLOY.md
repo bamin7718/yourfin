@@ -10,7 +10,7 @@ rất dễ gây sự cố.
 
 ```bash
 npm install jsdom --no-save
-npm test          # check + smoke 344 + sync 20 + transfer 23 + chart 44 + header 22
+npm test          # check + smoke 347 + sync 20 + transfer 23 + chart 44 + header 22
 ```
 
 - [ ] `npm test` xanh cả ba suite
@@ -23,7 +23,7 @@ npm test          # check + smoke 344 + sync 20 + transfer 23 + chart 44 + heade
 | Suite | Phạm vi |
 |---|---|
 | `check.js` | wiring HTML ↔ JS, cú pháp, rò rỉ khoá, manifest/sw hợp lệ, **mọi asset `index.html` nạp đều nằm trong precache** (quên một file = offline vỡ âm thầm, đây là thứ duy nhất bắt được) |
-| `smoke.js` | 344 assertion chạy thật app trong jsdom: auth, onboarding, giao dịch, ví, ngân sách, nợ, định kỳ, báo cáo, PIN, PWA, giao diện |
+| `smoke.js` | 347 assertion chạy thật app trong jsdom: auth, onboarding, giao dịch, ví, ngân sách, nợ, định kỳ, báo cáo, PIN, PWA, giao diện |
 | `sync-test.js` | 20 assertion giữ request Supabase treo để soi UI giữa chừng: cache render trước mạng, ghi optimistic, offline→online tự đẩy, **đóng tab lúc offline không mất dữ liệu** |
 | `header-test.js` | 22 assertion đi hết mọi màn hình (đăng nhập, onboarding, 11 tab, khoá PIN, đăng xuất, thiếu key) và kiểm app bar ở đúng trạng thái ẩn/phẳng — chỉ Dashboard được giữ vành cho thẻ số dư đè lên |
 | `chart-test.js` | 44 assertion dựng canvas giả để **chạy thật** code vẽ và hit-test: chạm đúng lát donut, phần trăm ở tâm, và đổi tab Chi tiêu ↔ Thu nhập không để lát cũ sống sót |
@@ -158,7 +158,9 @@ service worker phục vụ shell, dữ liệu đọc/ghi vào cache và tự đ�
 
 ## 5b. Phát hành bản Android
 
-CI ở `.github/workflows/android.yml` lo hết; chỉ cần khai báo secret một lần.
+Workflow `.github/workflows/build-apk.yml` chạy **mỗi lần push lên `main`** (bỏ qua commit chỉ
+sửa `.md`) và ghi đè release tag `latest`. Nút **Tải app Android** trong Cài đặt trỏ cố định vào
+`/releases/download/latest/sofin.apk`, nên không phải sửa link bao giờ.
 
 - [ ] **GitHub → Settings → Secrets and variables → Actions** thêm:
   - `SUPABASE_URL`, `SUPABASE_ANON_KEY` (cùng giá trị với Vercel)
@@ -166,14 +168,34 @@ CI ở `.github/workflows/android.yml` lo hết; chỉ cần khai báo secret m�
 - [ ] ⚠️ `SITE_URL` **bắt buộc** cho bản APK: origin của app là `https://localhost`, nên link
       đặt lại mật khẩu phải trỏ về trang web thật — thiếu nó thì người dùng app không đổi
       được mật khẩu
-- [ ] Phát hành: `git tag v5.0.1 && git push --tags` → workflow chạy `npm test`, dựng
-      `android/`, build APK, tạo Release kèm **`sofin.apk`**
-- [ ] Nút "Tải app Android" trong Cài đặt trỏ vào `/releases/latest/download/sofin.apk`,
-      nên không phải sửa link mỗi lần phát hành
 - [ ] ⚠️ APK ký **debug**: cài được nhưng Android cảnh báo nguồn ngoài Play Store, và
       **không nâng cấp đè lên bản ký bằng khoá khác** được. Phát hành thật thì thêm keystore
       vào secrets rồi đổi `assembleDebug` → `assembleRelease`
-- [ ] Thử nhanh không cần tag: **Actions → Build APK → Run workflow**, tải ở mục Artifacts
+- [ ] Thử không cần push: **Actions → Build and Release APK → Run workflow**
+
+### ⚠️ Nếu link tải báo 404
+
+**1. Chưa có lần build nào chạy xong.** Release `latest` chỉ tồn tại sau khi workflow chạy
+thành công lần đầu. Xem **Actions** có job nào xanh chưa.
+
+**2. Repo private.** Asset của release trên repo private **bắt buộc đăng nhập mới tải được**,
+nên nút sẽ 404 với mọi người kể cả bạn mở trên điện thoại chưa có phiên GitHub. Nguyên nhân
+này **không tự hết sau khi có release**.
+
+Kiểm bằng lệnh không dùng credential — điểm mấu chốt, vì `git ls-remote` **vẫn chạy được trên
+repo private** nhờ credential đã lưu sẵn nên nó không nói lên điều gì:
+
+```bash
+curl -s -o /dev/null -w "%{http_code}\n" https://api.github.com/repos/bamin7718/yourfin
+#   200 → public
+#   404 → private (GitHub trả 404 thay vì 403 để không lộ sự tồn tại của repo)
+```
+
+Để public không lộ gì: `anon key` vốn được thiết kế để ra tới trình duyệt, `.env` và
+`public/js/env.js` đều bị `.gitignore` chặn, RLS mới là thứ bảo vệ dữ liệu.
+
+**3. Tên file hoặc tag lệch nhau** giữa workflow và `APK_URL` trong `public/js/app.js`.
+`npm test` có assertion khoá cặp này, nên chạy `npm test` là biết.
 
 ---
 

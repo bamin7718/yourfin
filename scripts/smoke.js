@@ -746,37 +746,48 @@ async function boot(opts) {
     check('dự án native không commit vào repo (sinh lại trong CI)',
       /^\/android\/$/m.test(ignore) && /^\/ios\/$/m.test(ignore));
 
-    const wf = fs.readFileSync(path.join(ROOT, '.github', 'workflows', 'android.yml'), 'utf8');
+    const wf = fs.readFileSync(path.join(ROOT, '.github', 'workflows', 'build-apk.yml'), 'utf8');
     check('CI chạy npm test trước khi đóng gói', /run: npm test/.test(wf));
     check('CI sinh env bằng --strict, không ra APK thiếu key',
       /generate-env\.js --strict/.test(wf));
-    check('CI tự dựng android/ rồi mới build', /npx cap add android/.test(wf) && /assembleDebug/.test(wf));
-    check('CI phát hành đúng tên file cố định mà nút tải trỏ tới',
-      /cp .* sofin\.apk/.test(wf) && /gh release create/.test(wf));
+    check('CI tự dựng android/ rồi mới build — cap sync một mình sẽ lỗi',
+      /npx cap add android/.test(wf) && wf.indexOf('cap add android') < wf.indexOf('cap sync android')
+      && /assembleDebug/.test(wf));
+    check('CI dùng JDK 21 — Capacitor 8 đặt sourceCompatibility 21, JDK 17 sẽ fail',
+      /java-version: 21/.test(wf));
+    check('CI phát hành vào release tag `latest`',
+      /tag_name: latest/.test(wf) && /softprops\/action-gh-release/.test(wf));
+    check('CI bỏ qua commit chỉ sửa tài liệu', /paths-ignore/.test(wf));
 
     // nút tải trong Cài đặt
     window.switchTab('settings'); await sleep(20);
-    const apk = $('app-info').querySelector('a[href*="releases/latest/download"]');
+    const apk = $('btn-download-latest-apk');
     check('Cài đặt có nút tải APK', !!apk, $('app-info').textContent.slice(0, 60));
-    check('nút trỏ tới bản phát hành mới nhất, tên file cố định',
-      !!apk && apk.getAttribute('href').endsWith('/releases/latest/download/sofin.apk'),
+    check('nút trỏ vào release `latest`, tên file cố định',
+      !!apk && apk.getAttribute('href') ===
+        'https://github.com/bamin7718/yourfin/releases/download/latest/sofin.apk',
       apk && apk.getAttribute('href'));
-    check('CI và nút tải dùng chung một tên file',
-      !!apk && wf.includes('sofin.apk') && apk.getAttribute('href').includes('sofin.apk'));
+    /* Cặp này lệch nhau là nút 404 mà không có gì báo — nên khoá lại. */
+    check('tên file trong CI và trong nút tải khớp nhau', (() => {
+      const inWf = /files: (\S+\.apk)/.exec(wf);
+      return !!apk && !!inWf && apk.getAttribute('href').endsWith('/' + inWf[1]);
+    })(), (/files: (\S+\.apk)/.exec(wf) || [])[1]);
+    check('tag trong CI và trong link khớp nhau', (() => {
+      const tag = (/tag_name: (\S+)/.exec(wf) || [])[1];
+      return !!apk && !!tag && apk.getAttribute('href').includes('/releases/download/' + tag + '/');
+    })());
 
     // trong chính app native thì không mời tải lại
     const realCap = window.Capacitor;
     window.Capacitor = { isNativePlatform: () => true };
     window.renderAppInfo();
-    check('chạy trong app native thì ẩn nút tải',
-      !$('app-info').querySelector('a[href*="releases/latest/download"]'));
+    check('chạy trong app native thì ẩn nút tải', !$('btn-download-latest-apk'));
     check('native được coi là đã cài, không mời cài PWA nữa',
       $('app-info').innerHTML.includes('Đã cài trên thiết bị này'));
     check('native không đăng ký service worker', window.eval('isNativeApp()') === true);
     window.Capacitor = realCap;
     window.renderAppInfo();
-    check('quay lại web thì nút tải hiện lại',
-      !!$('app-info').querySelector('a[href*="releases/latest/download"]'));
+    check('quay lại web thì nút tải hiện lại', !!$('btn-download-latest-apk'));
   }
 
   console.log('\n· PWA');

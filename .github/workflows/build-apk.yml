@@ -1,0 +1,92 @@
+name: Build and Release APK
+
+# Mỗi lần main đổi là có APK mới ở release `latest`, nên nút Tải App trong
+# Cài đặt luôn trỏ vào bản mới nhất mà không phải sửa link bao giờ.
+# Bỏ qua commit chỉ đụng tài liệu — không có gì mới để đóng gói.
+on:
+  push:
+    branches: [main]
+    paths-ignore: ['**.md']
+  workflow_dispatch:
+
+permissions:
+  contents: write        # cần để tạo/cập nhật Release
+
+concurrency:
+  group: apk
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      # Capacitor 8 dựng bằng AGP 8.13 và đặt sourceCompatibility = 21.
+      # Java 17 sẽ fail ngay ở bước Gradle.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: android-actions/setup-android@v3
+
+      - run: npm ci
+
+      # Cùng một cổng chặn với web: không đóng gói một bản mà bản web sẽ bị
+      # chặn không cho deploy.
+      - name: Kiểm thử
+        run: npm test
+
+      # Thiếu bước này thì APK ra lò không có khoá Supabase và mở lên chỉ thấy
+      # màn hình cấu hình. --strict để hỏng thì hỏng ở đây, không phải trên máy
+      # người dùng.
+      - name: Sinh cấu hình
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          SITE_URL: ${{ secrets.SITE_URL }}
+        run: node scripts/generate-env.js --strict
+
+      # android/ không nằm trong repo (xem .gitignore) — sinh mới mỗi lần build
+      # nên không có dự án native nào lệch khỏi public/. `cap sync` một mình sẽ
+      # lỗi vì chưa có thư mục để mà sync.
+      - name: Dựng dự án Android
+        run: |
+          npx cap add android
+          npx cap sync android
+
+      - name: Build APK
+        run: |
+          chmod +x android/gradlew
+          cd android && ./gradlew assembleDebug --no-daemon --stacktrace
+
+      # "app-debug.apk" trông đáng ngờ khi tải về điện thoại. Tên này phải khớp
+      # với APK_URL trong public/js/app.js — có assertion khoá lại cặp đó.
+      - name: Đặt tên file
+        run: cp android/app/build/outputs/apk/debug/app-debug.apk sofin.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sofin-apk
+          path: sofin.apk
+          retention-days: 30
+
+      - name: Phát hành vào release `latest`
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: SoFin — bản mới nhất
+          body: |
+            Bản Android dựng tự động từ `${{ github.sha }}`.
+
+            APK ký **debug**: Android sẽ hỏi xác nhận vì cài ngoài Play Store, và
+            không nâng cấp đè lên bản ký bằng khoá khác được.
+          draft: false
+          prerelease: false
+          files: sofin.apk

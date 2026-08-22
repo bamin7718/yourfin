@@ -149,7 +149,7 @@ Ba chỗ bản native khác web, đã xử lý — đừng gỡ:
 - `resetPassword()` dùng `__ENV__.SITE_URL` khi chạy native: origin của app là `https://localhost`, Supabase từ chối redirect đó và không mail client nào mở được.
 - Nút tải APK trong Cài đặt tự ẩn khi đang chạy trong chính APK.
 
-Nút tải trỏ vào `/releases/latest/download/**sofin.apk**` — tên cố định đó phải khớp với bước phát hành trong `android.yml`, có assertion khoá lại.
+Nút tải trỏ vào `/releases/download/**latest**/**sofin.apk**` — cả *tag* lẫn *tên file* phải khớp với `build-apk.yml`; lệch một trong hai là nút 404 mà không có gì báo, nên có assertion khoá cả hai. CI phải dùng **JDK 21**: Capacitor 8 đặt `sourceCompatibility = 21`, JDK 17 fail ở bước Gradle.
 
 ## PWA
 

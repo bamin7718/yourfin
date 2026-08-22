@@ -3787,9 +3787,10 @@ function renderSettingsView(){
 /* ============================================================
    PWA — service worker + install prompt
    ============================================================ */
-/* Always the newest release, so this link never needs touching: the Android
-   workflow publishes the APK under this exact fixed name on every tag. */
-const APK_URL = 'https://github.com/bamin7718/yourfin/releases/latest/download/sofin.apk';
+/* A release tagged `latest` that the workflow overwrites on every push to
+   main, so this link never needs touching. The filename has to match the one
+   build-apk.yml publishes — a smoke assertion holds the two together. */
+const APK_URL = 'https://github.com/bamin7718/yourfin/releases/download/latest/sofin.apk';
 
 let deferredInstall = null;      /* the beforeinstallprompt event, if offered */
 let swUpdateReady = false;
@@ -3902,8 +3903,8 @@ function renderAppInfo(){
   /* Bản Android build sẵn. Không hiện khi đang chạy trong chính app đó —
      mời người dùng tải lại thứ họ đang mở là vô nghĩa. */
   const apkRow = isNativeApp() ? '' : `
-    <a class="setting-row pointer" href="${APK_URL}" rel="noopener"
-       style="text-decoration:none;color:inherit;">
+    <a class="setting-row pointer" id="btn-download-latest-apk" href="${APK_URL}"
+       rel="noopener" download style="text-decoration:none;color:inherit;">
       <div class="sr-ic" style="color:var(--income);">${icon('android')}</div>
       <div class="sr-mid"><div class="sr-title">Tải app Android (.apk)</div>
         <div class="sr-sub">Bản dựng mới nhất · cài ngoài Play Store nên máy sẽ hỏi xác nhận</div></div>
