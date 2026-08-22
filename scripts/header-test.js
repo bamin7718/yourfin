@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /* ============================================================
-   App-bar consistency test.
+   App-shell consistency test — the app bar on top, the nav bar at the bottom.
 
    One <header id="main-header"> serves every screen, so the thing that can
    drift is not its markup but its STATE — hidden or not, and .hd-flat or not.
@@ -9,6 +9,10 @@
    path into every screen, and it was wrong twice: once on Cài đặt, once on
    onboarding, which shows the bar without going through switchTab(). These
    assertions keep the single layout single.
+
+   The nav bar is the same story from the other end: switchTab() is the one
+   place that reveals it, because a caller that painted a screen without it
+   left the user with no way out (see "máy mới" below).
 
    Requires jsdom:  npm install jsdom --no-save
    Run:             npm run header-test
@@ -115,6 +119,54 @@ const check=(l,ok,d)=>{console.log((ok?'  ✓ ':'  ✗ ')+l+(ok||!d?'':' — '+d
   await window.handleAuthSubmit(); await sleep(150);
   check('đăng nhập lại vào dashboard', visibleView()==='view-dashboard', visibleView());
   check('header vẫn phẳng sau khi đăng nhập lại', state().flat);
+
+  /* The bar at the other end of the screen has the same failure mode: it is one
+     element whose STATE every path has to leave correct. It went missing on a
+     first sign-in from a device with an empty cache — onboarding hides the bar,
+     then the pull that answers seconds later painted the dashboard over the top
+     and nobody handed the bar back. */
+  console.log('\n--- bottom nav ---');
+  const nav=()=>$('main-nav'), navOn=()=>nav() && !nav().classList.contains('hidden');
+  for(const t of ['transactions','reports','settings','dashboard']){
+    window.switchTab(t); await sleep(15);
+    check(`${t}: nav hiện`, navOn());
+  }
+  await window.Sync.signOut(); await sleep(60);
+  check('đăng xuất: nav ẩn', !navOn());
+
+  console.log('\n--- máy mới, tài khoản đã có dữ liệu trên cloud ---');
+  {
+    const {window:w3}=await boot();
+    const D=w3.document, $$=id=>D.getElementById(id);
+    const navOn3=()=>$$('main-nav') && !$$('main-nav').classList.contains('hidden');
+    const view3=()=>[...D.querySelectorAll('.view')].filter(v=>!v.classList.contains('hidden')).map(v=>v.id)[0];
+    $$('login-email').value='c@d.co'; $$('login-password').value='secret123';
+    w3.setAuthMode('register',$$('auth-segment').children[1]);
+    await w3.handleAuthSubmit(); await sleep(150);
+    check('cache rỗng nên vào onboarding', view3()==='view-onboarding', view3());
+    check('onboarding: nav ẩn (đúng)', !navOn3());
+
+    /* pull trả về: tài khoản này đã dựng xong ở máy khác */
+    const remote=JSON.parse(JSON.stringify(w3.eval('state')));
+    remote.onboardingStatus[w3.eval('state.currentUser')]=true;
+    remote.updatedAt=Date.now();
+    w3.adoptRemoteState(remote); await sleep(60);
+    check('pull xong thì rời onboarding vào dashboard', view3()==='view-dashboard', view3());
+    check('và nav phải có mặt — không thì kẹt cứng, không đi đâu được', navOn3());
+
+    /* ngược lại: cloud cũng chưa có gì thì đừng giật màn onboarding đi */
+    const {window:w4}=await boot();
+    const D4=w4.document;
+    D4.getElementById('login-email').value='e@f.co';
+    D4.getElementById('login-password').value='secret123';
+    w4.setAuthMode('register',D4.getElementById('auth-segment').children[1]);
+    await w4.handleAuthSubmit(); await sleep(150);
+    const r4=JSON.parse(JSON.stringify(w4.eval('state')));
+    r4.updatedAt=Date.now();
+    w4.adoptRemoteState(r4); await sleep(60);
+    const v4=[...D4.querySelectorAll('.view')].filter(v=>!v.classList.contains('hidden')).map(v=>v.id)[0];
+    check('cloud cũng trắng thì vẫn ở lại onboarding', v4==='view-onboarding', v4);
+  }
 
   console.log('\n--- build thiếu key ---');
   const {window:w2}=await boot({noKeys:true});

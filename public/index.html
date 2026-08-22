@@ -80,29 +80,38 @@
   <div id="view-login" class="view">
     <div class="auth-brand">
       <div class="logo">💰</div>
-      <h1 style="font-size:1.7rem;letter-spacing:-.5px;">SoFin</h1>
-      <p class="muted text-sm mt4">Quản lý ví · ngân sách · sổ nợ · báo cáo</p>
+      <h1 class="auth-title">SoFin Finance</h1>
+      <p class="auth-tagline">Quản lý tài chính cá nhân an toàn &amp; thông minh</p>
     </div>
-    <div class="card">
+    <div class="card auth-card">
       <div class="segment" id="auth-segment">
         <div class="seg active" onclick="setAuthMode('login',this)">Đăng nhập</div>
         <div class="seg" onclick="setAuthMode('register',this)">Tạo tài khoản</div>
       </div>
       <div class="form-group">
         <label>Email</label>
-        <input type="email" id="login-email" class="input" placeholder="ban@email.com" autocomplete="email" inputmode="email">
+        <div class="auth-input-group">
+          <span class="auth-input-icon"><svg class="ic-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="m3.5 7 8.5 6 8.5-6"/></svg></span>
+          <input type="email" id="login-email" class="input" placeholder="ban@email.com" autocomplete="email" inputmode="email">
+        </div>
       </div>
       <div class="form-group">
         <label>Mật khẩu</label>
-        <input type="password" id="login-password" class="input" placeholder="••••••••" autocomplete="current-password">
+        <div class="auth-input-group has-toggle">
+          <span class="auth-input-icon"><svg class="ic-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4.5" y="10.5" width="15" height="10" rx="2.5"/><path d="M8 10.5V7a4 4 0 0 1 8 0v3.5"/></svg></span>
+          <input type="password" id="login-password" class="input" placeholder="••••••••" autocomplete="current-password">
+          <button type="button" class="auth-pw-toggle" id="auth-pw-toggle" aria-label="Hiện mật khẩu" onclick="toggleAuthPassword()"><svg class="ic-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3"/></svg></button>
+        </div>
       </div>
       <span class="link" id="auth-forgot" onclick="requestPasswordReset()">Quên mật khẩu?</span>
       <button class="btn btn-primary" id="auth-submit" onclick="handleAuthSubmit()">Đăng nhập</button>
       <div id="auth-error" role="alert"></div>
+      <p class="help text-center" id="auth-hint">Dữ liệu được đồng bộ qua Supabase và lưu bản sao trên máy này để dùng offline.</p>
     </div>
-    <p class="text-xs muted text-center" id="auth-note" style="margin-top:6px;line-height:1.5;">
-      Dữ liệu được đồng bộ qua Supabase và lưu bản sao trên máy này để dùng offline.
-    </p>
+    <div class="auth-security-note">
+      <span class="security-icon"><svg class="ic-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 4.5 6v6c0 4.5 3.2 7.9 7.5 9 4.3-1.1 7.5-4.5 7.5-9V6z"/><path d="m9 12 2 2 4-4"/></svg></span>
+      <span>Dữ liệu được mã hoá đám mây &amp; hỗ trợ ngoại tuyến (Offline)</span>
+    </div>
   </div>
 
   <!-- ============ CONFIG (no Supabase keys in this build) ============ -->
@@ -521,19 +530,10 @@
       </div>
     </div>
 
-    <div class="section-title"><h4>Tiền tệ</h4></div>
-    <div class="card">
-      <div class="form-group">
-        <label>Tiền tệ chính (dùng quy đổi tổng tài sản)</label>
-        <select id="set-main-currency" class="input" onchange="changeMainCurrency(this.value)"></select>
-      </div>
-      <div class="between mb8">
-        <span class="text-sm font-bold">Tỷ giá quy đổi</span>
-        <span class="link" onclick="toggleRatesEditor()">Chỉnh sửa</span>
-      </div>
-      <div id="rates-view" class="text-xs muted" style="line-height:1.7;"></div>
-      <div id="rates-editor" class="hidden"></div>
-    </div>
+    <!-- Khối "Tiền tệ" (tiền tệ chính + bảng tỷ giá) đã gỡ khỏi Cài đặt.
+         Lớp quy đổi vẫn còn nguyên bên dưới: state.app.mainCurrency mặc định
+         'VND', state.app.rates lấy DEFAULT_RATES, ví vẫn chọn được tiền tệ
+         riêng ở màn hình Ví. Chỉ là không còn chỗ để sửa tay nữa. -->
 
     <div class="section-title"><h4>Tài khoản & Đồng bộ</h4></div>
     <div class="card" id="cloud-status"></div>
@@ -611,7 +611,9 @@
       </div>
     </div>
 
-    <p class="text-xs muted text-center mt12">SoFin v5.0 · Supabase cloud sync</p>
+    <!-- Nội dung do renderAppFooter() vẽ: số phiên bản và trạng thái kết nối
+         phải là thật, không phải chữ cứng trong HTML. -->
+    <div id="app-footer" class="app-footer-bank"></div>
   </div>
 
   <!-- ============ BOTTOM NAV ============ -->
@@ -653,6 +655,7 @@
     <div class="type-select-row">
       <div class="type-select active" id="mw-type-cash" onclick="selectWalletType('cash')"><span class="ts-ic">👛</span>Tiền mặt</div>
       <div class="type-select" id="mw-type-bank" onclick="selectWalletType('bank')"><span class="ts-ic">🏦</span>Ngân hàng</div>
+      <div class="type-select" id="mw-type-ewallet" onclick="selectWalletType('ewallet')"><span class="ts-ic">📱</span>Ví điện tử</div>
       <div class="type-select" id="mw-type-credit_card" onclick="selectWalletType('credit_card')"><span class="ts-ic">💳</span>Thẻ TD</div>
       <div class="type-select" id="mw-type-savings" onclick="selectWalletType('savings')"><span class="ts-ic">🐷</span>Tiết kiệm</div>
     </div>

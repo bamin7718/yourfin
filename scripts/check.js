@@ -190,6 +190,33 @@ if (fs.existsSync(WF)) {
   }
 }
 
+/* ---------- 9. every amount field is a money field ---------- */
+/* The 000 shortcut and the thousands separators are attached by class, once, at
+   boot: attachMoneyButtons() walks `input.money`. So an amount box added later
+   without that class gets neither — and nothing fails, it just silently behaves
+   differently from every other amount box in the app. This is the only thing
+   that notices. type="number" is banned on those same fields: it refuses to
+   render "1.250.000" and hands back "" the moment the value stops being a bare
+   number. */
+const MONEY_ID = /(amount|balance|limit|budget|fee|price|salary|deposit)/i;
+/* Số, nhưng không phải tiền: ngày trong tháng, lãi suất, số kỳ, tỷ giá, thứ tự. */
+const NOT_MONEY = new Set(['mw-statement-date', 'mw-payment-due', 'mw-interest', 'mw-order',
+  'mr-interval', 'mb-alert-threshold']);
+for (const m of html.matchAll(/<input\b[^>]*>/g)) {
+  const tag = m[0];
+  const id = (/\bid="([^"]+)"/.exec(tag) || [])[1] || '';
+  const cls = (/\bclass="([^"]*)"/.exec(tag) || [])[1] || '';
+  const type = (/\btype="([^"]*)"/.exec(tag) || [])[1] || 'text';
+  const isMoney = /\bmoney\b/.test(cls);
+  if (isMoney) {
+    if (type !== 'text') errors.push(`#${id} là ô tiền nhưng type="${type}" — phải là text.`);
+    if (!/inputmode="decimal"/.test(tag)) errors.push(`#${id} là ô tiền nhưng thiếu inputmode="decimal".`);
+  } else if (MONEY_ID.test(id) && !/-id$/.test(id) && type !== 'hidden' && !NOT_MONEY.has(id)) {
+    errors.push(`#${id} trông như ô nhập tiền nhưng thiếu class="money" — sẽ không có nút 000 ` +
+      `và không có dấu phân cách. Nếu thật sự không phải tiền, khai vào NOT_MONEY trong check.js.`);
+  }
+}
+
 /* ---------- report ---------- */
 for (const w of warnings) console.warn('⚠ ' + w);
 if (errors.length) {

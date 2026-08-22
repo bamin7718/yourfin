@@ -90,12 +90,53 @@
 }
 .auth-brand{ text-align: center; margin-bottom: 18px; }
 .auth-brand .logo{
-  width: 62px; height: 62px; margin: 0 auto 10px;
+  width: 64px; height: 64px; margin: 0 auto 12px;
   display: grid; place-items: center;
-  font-size: 2rem; border-radius: 20px;
+  font-size: 2rem; border-radius: 18px;
   background: var(--card); border: 1px solid var(--border);
-  box-shadow: var(--shadow);
+  box-shadow: var(--shadow-lift);
 }
+/* Màu và nền lấy từ biến theme, không phải hex cứng: màn đăng nhập là màn
+   hình đầu tiên người dùng thấy, một thẻ trắng #fff nằm giữa nền tối là lỗi
+   đập vào mắt ngay. Ở light theme các biến này cho ra đúng bộ màu đã đặt
+   (--primary #00529C, --border #E5E9F0, --card #FFFFFF). */
+.auth-title{ font-size: 1.5rem; font-weight: 800; letter-spacing: -.4px; color: var(--primary); }
+.auth-tagline{ font-size: .8rem; color: var(--muted); margin-top: 5px; line-height: 1.45; }
+
+.auth-card{
+  border-radius: 20px; padding: 24px;
+  border: 1px solid var(--border);
+  box-shadow: 0 10px 25px -5px rgba(0,82,156,.08), 0 8px 10px -6px rgba(0,82,156,.04);
+}
+/* Ô nhập có icon nằm lọt bên trái; input tự chừa chỗ. Không cần !important —
+   `.auth-input-group .input` vốn đã thắng `.input` về độ ưu tiên. */
+.auth-input-group{ position: relative; display: flex; align-items: center; margin-top: 6px; }
+.auth-input-group .input{ padding-left: 40px; }
+.auth-input-group.has-toggle .input{ padding-right: 44px; }
+.auth-input-icon{
+  position: absolute; left: 12px; display: flex; align-items: center;
+  color: var(--muted); pointer-events: none; transition: color .2s ease;
+}
+.auth-input-icon .ic-svg{ width: 17px; height: 17px; }
+/* Icon sáng lên theo viền khi đang gõ — chỉ dẫn hướng nhìn, không thêm chữ. */
+.auth-input-group:focus-within .auth-input-icon{ color: var(--primary); }
+.auth-pw-toggle{
+  position: absolute; right: 8px; display: flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px; border-radius: 8px;
+  background: none; border: 0; color: var(--muted); cursor: pointer; transition: .15s;
+}
+.auth-pw-toggle:hover{ color: var(--primary); background: var(--primary-light); }
+.auth-pw-toggle .ic-svg{ width: 18px; height: 18px; }
+
+/* Thay cho dòng ghi chú cũ ở chân màn hình: một dòng trong suốt, không khung,
+   không nền — nó là chú thích chứ không phải một thẻ nữa. */
+.auth-security-note{
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  margin-top: 20px; padding: 0; background: none; border: 0;
+  font-size: .72rem; color: var(--muted); text-align: center; line-height: 1.45;
+}
+.auth-security-note .security-icon{ display: flex; color: var(--income); }
+.auth-security-note .ic-svg{ width: 15px; height: 15px; }
 
 /* ---------- config screen ---------- */
 #view-config code{

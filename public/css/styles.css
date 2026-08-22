@@ -186,7 +186,7 @@ select.input{appearance:none;background-image:linear-gradient(45deg,transparent 
 /* ---------- WALLET CARDS ---------- */
 /* Two up, no swiping: six wallets are three rows you can take in at a glance
    instead of a carousel that hides four of them off the right edge. */
-.wallet-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;width:100%;padding:2px 0 4px;}
+.wallet-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;width:100%;padding:2px 0 4px;}
 /* Icon on the left, name over balance in a column beside it. Side-by-side
    would leave each half about 70px on a 360px screen, which is not enough for
    either a wallet name or an amount. */
@@ -215,6 +215,12 @@ select.input{appearance:none;background-image:linear-gradient(45deg,transparent 
 .wallet-card.add{flex-direction:column;justify-content:center;gap:3px;background:var(--card);
   border:1px dashed var(--border);color:var(--muted);width:100%;min-height:72px;box-shadow:none;}
 .wallet-card.add::after{display:none;}
+/* With an even number of wallets the add card starts a row of its own and sits
+   there half-width next to a hole. It is the last child, so landing on an odd
+   slot means exactly that — let it take the whole row instead, laid out as a
+   row so it does not grow tall. Odd wallet count: it fills the gap, untouched. */
+.wallet-card.add:nth-child(odd){grid-column:1 / -1;flex-direction:row;gap:8px;min-height:48px;padding:10px;}
+.wallet-card.add:nth-child(odd) .ic-svg{margin:0;}
 .wallet-card.add .ic-svg{width:22px;height:22px;}
 .wallet-card.cc-mini{background:linear-gradient(135deg,#1E293B,#334155);color:#fff;border:none;}
 .wallet-card.cc-mini .wname,.wallet-card.cc-mini .wbal{color:#fff;}
@@ -245,6 +251,14 @@ select.input{appearance:none;background-image:linear-gradient(45deg,transparent 
 .cat-tile.active{border-color:var(--primary);background:var(--primary-light);}
 .cat-circle{width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:1.1rem;flex:0 0 auto;}
 .cat-name{font-size:.6rem;text-align:center;line-height:1.1;color:var(--text);font-weight:600;max-width:62px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+/* Hàng danh mục ở Tổng quan bấm được → phải trông như bấm được. Nới rộng vùng
+   chạm bằng padding rồi kéo lại bằng margin âm, để hàng không xô lệch bố cục
+   đã có. overflow ẩn là để gợn ripple không tràn ra ngoài góc bo. */
+.category-item{cursor:pointer;border-radius:10px;padding:4px 6px;margin:0 -6px 12px;
+  position:relative;overflow:hidden;
+  transition:background-color .2s ease,transform .1s ease;}
+.category-item:active{transform:scale(.98);background:var(--primary-light);}
+@media (hover:hover){ .category-item:hover{background:var(--primary-light);} }
 
 .chip-row{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;}
 .chip-scroll{display:flex;flex-wrap:nowrap;overflow-x:auto;gap:6px;margin-bottom:8px;padding-bottom:2px;scrollbar-width:none;}
@@ -267,11 +281,15 @@ html[data-theme="dark"] .tag-pending{color:#241C00;}
 .money-field{position:relative;display:flex;align-items:center;width:100%;}
 .money-field>input.money{flex:1;min-width:0;padding-right:52px;}
 .money-field>input.money-lg{padding-left:52px;}
+/* z-index để nút nổi trên nền input; user-select để chạm hai lần không bôi đen
+   chữ "000" thay vì bấm. Màu lấy từ biến theme — số hex cứng sẽ thành ô sáng
+   chói nằm giữa form tối khi bật dark mode. */
 .btn-000{position:absolute;right:6px;top:50%;transform:translateY(-50%);height:28px;padding:0 10px;
   border:1px solid var(--border);border-radius:9px;background:var(--bg);color:var(--muted);
-  font-size:.7rem;font-weight:800;letter-spacing:.5px;cursor:pointer;transition:.12s;}
-.btn-000:hover{border-color:var(--primary);color:var(--primary);}
-.btn-000:active{transform:translateY(-50%) scale(.94);}
+  font-size:.7rem;font-weight:800;letter-spacing:.5px;cursor:pointer;transition:.12s;
+  z-index:1;user-select:none;-webkit-user-select:none;}
+@media (hover:hover){ .btn-000:hover{border-color:var(--primary);color:var(--primary);} }
+.btn-000:active{transform:translateY(-50%) scale(.94);background:var(--primary-light);border-color:var(--primary);}
 .money-field>input.money:disabled ~ .btn-000{opacity:.4;pointer-events:none;}
 
 /* A filter promoted out of the collapsed panel and onto the main view. */
@@ -290,7 +308,9 @@ html[data-theme="dark"] .tag-pending{color:#241C00;}
 .segment .seg.active.income{color:var(--income);}
 .segment .seg.active.transfer{color:var(--transfer);}
 
-.type-select-row{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px;}
+/* Three up, two rows: five chips across a 360px screen leaves ~62px each, not
+   enough for "Ví điện tử" or "Tiết kiệm" to stay on one line. */
+.type-select-row{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px;}
 .type-select{text-align:center;padding:11px 4px;border-radius:12px;border:2px solid var(--border);cursor:pointer;font-size:.68rem;font-weight:700;color:var(--muted);background:var(--card);}
 .type-select.active{border-color:var(--primary);background:var(--primary-light);color:var(--primary-dark);}
 html[data-theme="dark"] .type-select.active{color:var(--primary);}
@@ -644,3 +664,29 @@ html[data-theme="dark"] .alert-info{color:var(--primary);}
 .order-badge{display:inline-block;min-width:20px;padding:1px 5px;border-radius:6px;
   background:var(--primary-light);color:var(--primary);font-size:.66rem;font-weight:800;
   vertical-align:middle;}
+
+/* ---------- FOOTER CÀI ĐẶT ----------
+   Chân trang kiểu app ngân hàng: tên sản phẩm + phiên bản, một dòng trạng thái
+   có đèn, rồi bản quyền. Nền trong suốt và viền trên mảnh — nó là phần kết,
+   không phải thêm một cái thẻ nữa để mắt phải xử lý. */
+.app-footer-bank{margin-top:22px;padding:16px 8px calc(8px + var(--safe-b));
+  border-top:1px solid var(--border);display:flex;flex-direction:column;align-items:center;gap:7px;text-align:center;}
+.footer-brand{display:flex;align-items:center;gap:7px;}
+.footer-logo-title{font-size:.86rem;font-weight:800;letter-spacing:-.2px;
+  background:var(--gradient);-webkit-background-clip:text;background-clip:text;color:transparent;}
+.footer-version-badge{font-size:.62rem;font-weight:800;letter-spacing:.3px;padding:2px 7px;border-radius:999px;
+  background:var(--primary-light);color:var(--primary);border:1px solid var(--border);}
+.footer-status{display:flex;align-items:center;gap:6px;font-size:.68rem;font-weight:600;color:var(--muted);}
+/* Đèn trạng thái: cùng bảng màu với .dot-* ở panel Đồng bộ, nhưng chỉ nhấp
+   nháy khi ĐANG kết nối — một chấm thở đều lúc mất mạng là tín hiệu sai. */
+.status-dot-active{width:7px;height:7px;border-radius:50%;flex:0 0 auto;background:var(--muted);}
+.status-dot-active.dot-synced{background:var(--income);animation:footerPulse 2.4s ease-in-out infinite;}
+.status-dot-active.dot-pending{background:var(--warn);}
+.status-dot-active.dot-error{background:var(--expense);}
+.status-dot-active.dot-offline{background:var(--muted);}
+@keyframes footerPulse{
+  0%,100%{box-shadow:0 0 0 0 rgba(16,185,129,.45);}
+  70%{box-shadow:0 0 0 5px rgba(16,185,129,0);}
+}
+@media (prefers-reduced-motion:reduce){ .status-dot-active.dot-synced{animation:none;} }
+.footer-copyright{font-size:.62rem;color:var(--muted);opacity:.8;}

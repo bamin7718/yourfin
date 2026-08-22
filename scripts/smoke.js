@@ -174,6 +174,59 @@ async function boot(opts) {
   check('màn hình cấu hình bị ẩn', !visible('view-config'));
   check('không có lỗi console khi boot', consoleErrors.length === 0, consoleErrors[0]);
 
+  console.log('\n· giao diện màn đăng nhập');
+  {
+    check('tên thương hiệu đầy đủ', txt('view-login').includes('SoFin Finance'));
+    check('có slogan', d.querySelector('.auth-tagline').textContent.includes('an toàn'));
+    check('thẻ đăng nhập dùng lớp auth-card', !!d.querySelector('.card.auth-card'));
+    check('hai tab đăng nhập / tạo tài khoản', $('auth-segment').children.length === 2);
+
+    const groups = [...d.querySelectorAll('#view-login .auth-input-group')];
+    check('cả hai ô đều nằm trong nhóm có icon', groups.length === 2
+      && groups.every(g => !!g.querySelector('.auth-input-icon .ic-svg') && !!g.querySelector('input')));
+    check('icon là SVG thừa kế màu, không phải emoji',
+      !/[✀-➿️\u{1F300}-\u{1FAFF}]/u.test(
+        groups.map(g => g.querySelector('.auth-input-icon').textContent).join('')));
+
+    /* Con mắt: đổi cả type lẫn nhãn cho trình đọc màn hình. */
+    const pw = $('login-password'), eye = $('auth-pw-toggle');
+    check('mật khẩu mặc định bị che', pw.type === 'password');
+    check('nút con mắt là type=button, không submit form', eye.type === 'button');
+    eye.click();
+    check('bấm con mắt thì hiện mật khẩu', pw.type === 'text');
+    check('nhãn trợ năng đổi theo', eye.getAttribute('aria-label') === 'Ẩn mật khẩu',
+      eye.getAttribute('aria-label'));
+    eye.click();
+    check('bấm lại thì che lại', pw.type === 'password'
+      && eye.getAttribute('aria-label') === 'Hiện mật khẩu');
+    check('icon con mắt cũng đổi hình', !!eye.querySelector('svg'));
+
+    /* Dòng bảo mật là cố định; phần đổi theo tab phải là #auth-hint. Trước đây
+       setAuthMode() gán textContent thẳng vào khối này — làm vậy là xoá luôn
+       icon bên trong ngay lần đổi tab đầu tiên. */
+    const note = d.querySelector('.auth-security-note');
+    check('có dòng bảo mật ở chân trang', !!note && /mã hoá|mã hóa/.test(note.textContent));
+    check('dòng bảo mật có icon khiên', !!note.querySelector('.security-icon .ic-svg'));
+    window.setAuthMode('register', $('auth-segment').children[1]);
+    check('đổi tab thì đổi dòng gợi ý trong thẻ', txt('auth-hint').includes('tối thiểu 6 ký tự'));
+    check('… và KHÔNG đụng vào dòng bảo mật', !!note.querySelector('.security-icon .ic-svg'));
+    window.setAuthMode('login', $('auth-segment').children[0]);
+    check('quay lại tab đăng nhập thì gợi ý trở lại', txt('auth-hint').includes('offline'));
+    check('dòng bảo mật vẫn nguyên vẹn', !!note.querySelector('.security-icon .ic-svg'));
+
+    const shell = fs.readFileSync(path.join(PUBLIC, 'css', 'shell.css'), 'utf8');
+    check('dòng bảo mật không nền, không khung',
+      /\.auth-security-note\{[^}]*background:\s*none[^}]*border:\s*0/.test(shell));
+    check('ô nhập chừa chỗ cho icon mà không cần !important',
+      /\.auth-input-group \.input\{ padding-left: 40px; \}/.test(shell)
+      && !/auth-input-group[^}]*!important/.test(shell));
+    /* Hex cứng ở đây nghĩa là dark mode vỡ ngay màn hình đầu tiên. */
+    check('màu auth lấy từ biến theme',
+      /\.auth-title\{[^}]*color: var\(--primary\)/.test(shell)
+      && /\.auth-card\{[^}]*border: 1px solid var\(--border\)/.test(shell)
+      && /\.auth-input-icon\{[^}]*color: var\(--muted\)/.test(shell));
+  }
+
   console.log('\n· auth');
   $('login-email').value = 'not-an-email';
   $('login-password').value = 'x';
@@ -201,6 +254,48 @@ async function boot(opts) {
   check('bottom nav hiện ra', visible('main-nav'));
   check('ví đã được tạo', S().wallets.length === 4, 'wallets=' + S().wallets.length);
   check('mọi ví gắn đúng userId', S().wallets.every(w => w.userId === S().currentUser));
+
+  console.log('\n· loại ví');
+  {
+    const byName = n => S().wallets.find(w => w.name === n);
+    check('preset "Ví điện tử" được gán đúng loại, không phải cash',
+      byName('Ví điện tử') && byName('Ví điện tử').type === 'ewallet',
+      byName('Ví điện tử') && byName('Ví điện tử').type);
+    check('"Ngân hàng" vẫn là bank', byName('Ngân hàng').type === 'bank');
+    check('"Tiết kiệm" vẫn là savings', byName('Tiết kiệm').type === 'savings');
+    /* Nhãn phụ trên thẻ ví ở Tổng quan — chỗ người dùng nhìn thấy lỗi. */
+    const cards = [...$('db-wallet-scroll').querySelectorAll('.wallet-card:not(.add)')];
+    const ew = cards.find(c => c.querySelector('.wname').textContent === 'Ví điện tử');
+    check('thẻ Tổng quan ghi "Ví điện tử" chứ không phải "Tiền mặt"',
+      !!ew && ew.querySelector('.wsub').textContent.trim() === 'Ví điện tử',
+      ew && ew.querySelector('.wsub').textContent);
+    check('mọi thẻ đều có nhãn loại, không thẻ nào trống',
+      cards.every(c => c.querySelector('.wsub').textContent.trim().length > 0));
+
+    /* Màn hình Ví gom theo loại từ WALLET_TYPE_META, không từ danh sách chép tay:
+       một loại thiếu trong vòng lặp là ví biến mất khỏi chính màn quản lý nó. */
+    window.switchTab('wallets'); await sleep(20);
+    const list = $('wallets-list').textContent;
+    check('màn hình Ví có nhóm "Ví điện tử"', list.includes('Ví điện tử'));
+    check('màn hình Ví hiện đủ 4 ví',
+      $('wallets-list').querySelectorAll('.wallet-item, .cc-visual').length === 4,
+      String($('wallets-list').querySelectorAll('.wallet-item, .cc-visual').length));
+    check('modal ví có chip chọn Ví điện tử', !!$('mw-type-ewallet'));
+    window.openWalletModal(byName('Ví điện tử').id); await sleep(20);
+    check('sửa ví điện tử thì chip đó sáng', $('mw-type-ewallet').classList.contains('active'));
+    window.closeModal('modal-wallet');
+
+    /* Sửa dữ liệu cũ đúng một lần: ví tạo trước khi có loại này vẫn đang là cash. */
+    const w = byName('Ví điện tử');
+    w.type = 'cash'; delete S().app.walletTypeFixV1;
+    window.migrateState();
+    check('ví cũ tên "Ví điện tử" được sửa loại một lần', w.type === 'ewallet', w.type);
+    w.type = 'cash';
+    window.migrateState();
+    check('nhưng không đè lại lựa chọn của người dùng ở lần sau', w.type === 'cash', w.type);
+    w.type = 'ewallet';
+    window.switchTab('dashboard'); await sleep(20);
+  }
 
   console.log('\n· sync');
   await sleep(950);                                  // clear the 800ms debounce
@@ -348,6 +443,54 @@ async function boot(opts) {
     window.resetTxFilters(); await sleep(20);
   }
 
+  console.log('\n· điều hướng danh mục → tab giao dịch');
+  {
+    window.switchTab('dashboard'); await sleep(20);
+    const rows = [...$('db-cat-mini').querySelectorAll('.category-item')];
+    check('hàng danh mục ở Tổng quan bấm được', rows.length > 0, 'rows=' + rows.length);
+    check('mỗi hàng mang data-cat-id', rows.every(r => !!r.dataset.catId), rows[0] && rows[0].dataset.catId);
+    check('hàng danh mục có ripple như mọi nút khác',
+      rows.every(r => r.classList.contains('ripple-host')));
+
+    /* Con số trên hàng là chi tiêu THÁNG NÀY đã chốt. Cú nhảy phải mang theo
+       đúng phạm vi đó, không thì màn Giao dịch trả về một tổng khác hẳn. */
+    const row = rows[0];
+    const catId = row.dataset.catId;
+    const shown = row.querySelector('.tabular').textContent.trim();
+    row.dispatchEvent(new window.Event('click', { bubbles: true }));
+    await sleep(30);
+    check('nhảy sang tab giao dịch', window.eval('currentTab') === 'transactions' && visible('view-transactions'));
+    check('select danh mục hiện đúng danh mục vừa bấm', $('tx-filter-cat').value === catId,
+      $('tx-filter-cat').value);
+    check('panel lọc nâng cao mở ra để thấy bộ lọc đang bật',
+      !$('tx-advanced-filters').classList.contains('hidden'));
+    check('mang theo phạm vi tháng này, khoản chi, đã chốt',
+      window.eval('JSON.stringify(txFilters)') === JSON.stringify(
+        { type: 'expense', walletId: 'all', catId, eventId: 'all', range: 'thismonth', status: 'completed' }),
+      window.eval('JSON.stringify(txFilters)'));
+    check('chip "Tháng này" sáng',
+      d.querySelector('#tx-filter-range .chip[data-val="thismonth"]').classList.contains('active'));
+    /* Tổng Chi trên màn Giao dịch phải khớp con số vừa bấm — đây mới là điều
+       người dùng kiểm chứng được bằng mắt. */
+    check('tổng Chi khớp đúng con số trên thẻ danh mục',
+      $('tx-summary').children[1].textContent.includes(shown), shown + ' ≠ ' + $('tx-summary').children[1].textContent);
+
+    /* Danh mục đã bị xoá: renderTransactionsList() sẽ hạ bộ lọc về "all", nên
+       một hàng bấm được lúc đó là lời hứa sai — nó phải trơ. */
+    S().transactions.push({ id: 'tx_ghostcat', userId: S().currentUser, type: 'expense',
+      amount: 12000000, walletId: S().wallets[0].id, categoryId: 'c_deleted',
+      note: 'Danh mục đã xoá', date: window.todayISO() });
+    window.saveStorage();
+    window.switchTab('dashboard'); await sleep(20);
+    const ghostRow = [...$('db-cat-mini').querySelectorAll('.row-c')]
+      .find(r => r.textContent.includes('Khác'));
+    check('hàng của danh mục đã xoá vẫn hiện số', !!ghostRow);
+    check('nhưng không bấm được', !!ghostRow && !ghostRow.classList.contains('category-item'));
+    S().transactions = S().transactions.filter(t => t.id !== 'tx_ghostcat');
+    window.saveStorage();
+    window.resetTxFilters(); await sleep(20);
+  }
+
   console.log('\n· ô nhập tiền: phân cách nghìn + nút 000');
   {
     const type = (id, v) => {
@@ -367,6 +510,34 @@ async function boot(opts) {
       window.formatMoneyText('1234,56'));
     check('format bỏ số 0 thừa ở đầu', window.formatMoneyText('007') === '7');
     check('parseAmount đảo ngược được', window.parseAmount('1.234.567') === 1234567);
+
+    /* Quét toàn bộ tài liệu thay vì điểm danh từng modal: mọi modal đều nằm
+       sẵn trong index.html, nên một ô tiền thêm sau này mà quên gì đó sẽ lộ ra
+       ở đây chứ không đợi người dùng gặp. */
+    {
+      const all = [...d.querySelectorAll('input.money')];
+      check('app có đủ các ô tiền để quét', all.length >= 12, 'money inputs=' + all.length);
+      const orphan = all.filter(i => !i.parentNode.classList.contains('money-field')
+        || !i.parentNode.querySelector('.btn-000'));
+      check('KHÔNG ô tiền nào thiếu nút 000', orphan.length === 0,
+        orphan.map(i => '#' + i.id).join(', '));
+      check('mọi ô tiền là type=text (number từ chối hiện dấu phân cách)',
+        all.every(i => i.getAttribute('type') === 'text'),
+        all.filter(i => i.getAttribute('type') !== 'text').map(i => '#' + i.id).join(', '));
+      check('mọi ô tiền bật bàn phím số', all.every(i => i.getAttribute('inputmode') === 'decimal'),
+        all.filter(i => i.getAttribute('inputmode') !== 'decimal').map(i => '#' + i.id).join(', '));
+      check('mỗi ô tiền đúng một nút, không nhân đôi khi render lại',
+        [...d.querySelectorAll('.btn-000')].length === all.length,
+        d.querySelectorAll('.btn-000').length + ' nút / ' + all.length + ' ô');
+      /* gọi lại lần nữa: hàm này chạy mỗi khi có panel render động */
+      window.attachMoneyButtons();
+      check('gọi attachMoneyButtons() lần hai vẫn không nhân đôi nút',
+        [...d.querySelectorAll('.btn-000')].length === all.length,
+        String(d.querySelectorAll('.btn-000').length));
+      check('nút nằm lọt trong ô: input chừa chỗ bên phải',
+        /\.money-field>input\.money\{[^}]*padding-right:\d+px/.test(
+          fs.readFileSync(path.join(PUBLIC, 'css', 'styles.css'), 'utf8')));
+    }
 
     window.switchTab('add'); await sleep(20);
     check('ô số tiền có nút 000', !!$('tx-amount-raw').parentNode.querySelector('.btn-000'));
@@ -615,6 +786,15 @@ async function boot(opts) {
   {
     const css = fs.readFileSync(path.join(PUBLIC, 'css', 'styles.css'), 'utf8');
     check('primary là xanh VietinBank #00529C', /--primary:#00529C/.test(css));
+    check('ví xếp lưới 2 cột', /\.wallet-grid\{display:grid;grid-template-columns:repeat\(2,1fr\)/.test(css));
+    /* Ô "Thêm ví" là con cuối; rơi vào ô lẻ nghĩa là số ví chẵn và nó đứng
+       một mình nửa hàng — lúc đó cho trải hết hàng thay vì chừa lỗ hổng. */
+    check('số ví chẵn thì ô "Thêm ví" trải hết hàng',
+      /\.wallet-card\.add:nth-child\(odd\)\{grid-column:1 \/ -1/.test(css));
+    check('hàng danh mục bấm được có con trỏ tay và phản hồi khi nhấn',
+      /\.category-item\{[^}]*cursor:pointer/.test(css) && /\.category-item:active\{[^}]*transform:scale\(\.98\)/.test(css));
+    check('hàng chip chọn loại ví đủ chỗ cho 5 loại',
+      /\.type-select-row\{display:grid;grid-template-columns:repeat\(3,1fr\)/.test(css));
     check('có đỏ VietinBank #ED1C24 làm màu nhấn', /--brand-red:#ED1C24/.test(css));
     check('nền light là xám xanh #F4F7FA', /--bg:#F4F7FA/.test(css));
     check('gradient header đúng công thức',
@@ -1267,6 +1447,87 @@ async function boot(opts) {
     check('nav sáng ở Cài đặt', d.querySelector('#main-nav .nav-item[data-tab="settings"]').classList.contains('active'));
     check('Cài đặt tiếp quản đăng xuất', $('view-settings').innerHTML.includes('logout()'));
     check('Cài đặt tiếp quản tổng quan tài khoản', $('account-summary').innerHTML.includes('Ví đang quản lý'));
+
+    /* Khối "Tiền tệ" đã gỡ — nhưng chỉ gỡ phần giao diện, lớp quy đổi bên dưới
+       phải sống nguyên vẹn, nếu không ví ngoại tệ sẽ đọc sai vào tổng tài sản. */
+    check('Cài đặt không còn ô chọn tiền tệ chính', !$('set-main-currency'));
+    check('Cài đặt không còn bảng tỷ giá',
+      !$('rates-view') && !$('rates-editor')
+      && !$('view-settings').textContent.includes('Tỷ giá quy đổi'));
+    check('không còn hàm nào của khối đó sót lại',
+      ['renderRatesView', 'toggleRatesEditor', 'saveRates', 'changeMainCurrency']
+        .every(fn => typeof window[fn] === 'undefined'),
+      ['renderRatesView', 'toggleRatesEditor', 'saveRates', 'changeMainCurrency']
+        .filter(fn => typeof window[fn] !== 'undefined').join(', '));
+    check('mở lại Cài đặt vẫn không lỗi console', consoleErrors.length === 0, consoleErrors[0]);
+
+    check('tiền tệ chính mặc định vẫn là VND', window.mainCurrency() === 'VND');
+    delete S().app.mainCurrency;
+    check('mất giá trị trong state cũng không undefined', window.mainCurrency() === 'VND');
+    const keepRates = S().app.rates;
+    delete S().app.rates;
+    check('mất luôn bảng tỷ giá thì quy đổi 1:1, không ném lỗi',
+      window.rateOf('USD') === 1 && window.toMain(100, 'USD') === 100);
+    S().app.rates = keepRates;
+    S().app.mainCurrency = 'VND';
+    check('quy đổi ngoại tệ vẫn chạy bằng tỷ giá mặc định',
+      window.toMain(1, 'USD') === window.eval('DEFAULT_RATES.USD'),
+      String(window.toMain(1, 'USD')));
+    check('ví vẫn chọn được tiền tệ riêng ở màn hình Ví', !!$('mw-currency'));
+  }
+
+  console.log('\n· chân trang Cài đặt');
+  {
+    window.switchTab('settings'); await sleep(20);
+    const f = $('app-footer');
+    check('có khối footer', !!f && f.classList.contains('app-footer-bank'));
+    check('không còn dòng chữ cũ',
+      !$('view-settings').textContent.includes('Supabase cloud sync'));
+    check('đủ ba tầng: thương hiệu · trạng thái · bản quyền',
+      !!f.querySelector('.footer-brand') && !!f.querySelector('.footer-status')
+      && !!f.querySelector('.footer-copyright'));
+    check('tên sản phẩm đúng', f.querySelector('.footer-logo-title').textContent === 'SoFin Finance');
+
+    /* Số phiên bản phải là số THẬT của bản build. Một chuỗi cứng ở đây sẽ lệch
+       khỏi APP_VERSION, mà chính APP_VERSION mới là thứ checkAppUpdate() đem so
+       với release — footer nói một đằng, app tự nghĩ một nẻo. */
+    const PKG2 = require('../package.json').version;
+    check('badge phiên bản lấy từ bản build, không phải chữ cứng',
+      f.querySelector('.footer-version-badge').textContent === 'v' + PKG2,
+      f.querySelector('.footer-version-badge').textContent);
+
+    check('năm bản quyền theo đồng hồ, không đóng cứng',
+      f.querySelector('.footer-copyright').textContent.includes('© ' + window.todayISO().slice(0, 4)),
+      f.querySelector('.footer-copyright').textContent);
+
+    /* Dòng trạng thái phải nói thật. Đèn xanh "đã kết nối" trong lúc máy đang
+       offline là chi tiết làm người dùng hết tin phần còn lại của màn hình. */
+    const realStatus = window.Sync.status;
+    const setPhase = p => { window.Sync.status = () => ({ phase: p }); window.renderAppFooter(); };
+    const dot = () => f.querySelector('.status-dot-active');
+    const line = () => f.querySelector('.footer-status').textContent;
+
+    setPhase('synced');
+    check('đã đồng bộ: đèn xanh, nói đã kết nối',
+      dot().classList.contains('dot-synced') && /Đã kết nối/.test(line()), line());
+    setPhase('offline');
+    check('mất mạng: đèn xám, KHÔNG nói đã kết nối',
+      dot().classList.contains('dot-offline') && !/Đã kết nối/.test(line())
+      && /Ngoại tuyến/.test(line()), line());
+    setPhase('pending');
+    check('đang gửi: đèn vàng', dot().classList.contains('dot-pending'), line());
+    setPhase('error');
+    check('lỗi đồng bộ: đèn đỏ, nói chưa gửi được',
+      dot().classList.contains('dot-error') && /[Cc]hưa gửi được/.test(line()), line());
+    window.Sync.status = realStatus;
+    window.renderAppFooter();
+
+    const css2 = fs.readFileSync(path.join(PUBLIC, 'css', 'styles.css'), 'utf8');
+    check('chỉ chấm "đã kết nối" mới nhấp nháy',
+      /\.status-dot-active\.dot-synced\{[^}]*animation:footerPulse/.test(css2)
+      && !/\.status-dot-active\{[^}]*animation:/.test(css2));
+    check('tôn trọng prefers-reduced-motion',
+      /prefers-reduced-motion:reduce\)\{\s*\.status-dot-active\.dot-synced\{animation:none/.test(css2));
   }
 
   console.log('\n· đổi mã PIN');

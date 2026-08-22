@@ -38,6 +38,7 @@ const ICON_PATHS = {
   search:      '<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',
   sliders:     '<path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h10M18 18h2"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="16" cy="18" r="2"/>',
   lock:        '<rect x="4.5" y="10.5" width="15" height="10" rx="2.5"/><path d="M8 10.5V7a4 4 0 0 1 8 0v3.5"/>',
+  mail:        '<rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="m3.5 7 8.5 6 8.5-6"/>',
   key:         '<circle cx="8" cy="15" r="4"/><path d="m11 12 8-8 2 2-2 2 2 2-2 2-2-2-2 2"/>',
   shield:      '<path d="M12 3 4.5 6v6c0 4.5 3.2 7.9 7.5 9 4.3-1.1 7.5-4.5 7.5-9V6z"/><path d="m9 12 2 2 4-4"/>',
   upload:      '<path d="M12 16V4"/><path d="m7.5 8.5 4.5-4.5 4.5 4.5"/><path d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/>',
@@ -118,12 +119,20 @@ const DEFAULT_CATEGORIES = {
   ]
 };
 
+/* Insertion order is the order the wallets screen groups by and the order the
+   chips appear in the wallet modal — both read Object.keys() rather than
+   repeating the list, so a new type shows up everywhere or nowhere. */
 const WALLET_TYPE_META = {
   cash:{label:'Tiền mặt', icon:'👛', color:'#22C55E'},
   bank:{label:'Ngân hàng', icon:'🏦', color:'#3B82F6'},
+  ewallet:{label:'Ví điện tử', icon:'📱', color:'#8B5CF6'},
   credit_card:{label:'Thẻ tín dụng', icon:'💳', color:'#64748B'},
   savings:{label:'Sổ tiết kiệm', icon:'🐷', color:'#F59E0B'}
 };
+const WALLET_TYPES = Object.keys(WALLET_TYPE_META);
+/* Names that mean "e-wallet" — used to type the onboarding preset and to
+   repair wallets created before the type existed. */
+const EWALLET_NAMES = /^(ví điện tử|vi dien tu|e-?wallet|momo|zalopay|viettel ?money|shopeepay|vnpay|moca)$/i;
 const WALLET_PRESETS = ["Tiền mặt","Ngân hàng","Ví điện tử","Tiết kiệm"];
 const FREQ_LABEL = {daily:'ngày', weekly:'tuần', monthly:'tháng', yearly:'năm'};
 
@@ -229,6 +238,20 @@ function adoptRemoteState(remote){
   try{ localStorage.setItem(currentStorageKey(), JSON.stringify(state)); }catch(e){}
   ensureUserCategories(uid);
   applyTheme();
+  /* Only repaint the shell if the user is in it. First sign-in on a new device
+     starts onboarding from an empty local cache, and the pull that answers
+     seconds later must not yank that screen away mid-step. If the pull proves
+     the account is already set up, onboarding is moot and we go on in. */
+  const ob = document.getElementById('view-onboarding');
+  if(ob && !ob.classList.contains('hidden')){
+    if(!state.onboardingStatus[uid]) return;
+    ob.classList.add('hidden');
+    /* the archive-import offer is moot too — but never close the sheet out
+       from under a password-recovery prompt, that flow has nowhere else to go */
+    if(!pendingPasswordRecovery) closeSheet();
+    switchTab('dashboard');
+    return;
+  }
   if(currentTab) switchTab(currentTab);
 }
 
@@ -252,6 +275,15 @@ function migrateState(){
     if(!w.currency) w.currency = 'VND';
     if(typeof w.startingBalance !== 'number') w.startingBalance = Number(w.startingBalance)||0;
   });
+  /* One-shot, flag-guarded: the "Ví điện tử" preset in onboarding had no type
+     to be given, so it was filed as cash and every screen labelled it "Tiền
+     mặt". Repair it once — behind a flag, because after this the user is free
+     to call an e-wallet whatever they like and set its type by hand, and a
+     rule that ran every load would keep overruling them. */
+  if(!state.app.walletTypeFixV1){
+    state.wallets.forEach(w=>{ if(w.type==='cash' && EWALLET_NAMES.test(String(w.name||'').trim())) w.type = 'ewallet'; });
+    state.app.walletTypeFixV1 = true;
+  }
   normalizeWalletOrder();
   state.transactions.forEach(t=>{
     if(typeof t.amount !== 'number') t.amount = Number(t.amount)||0;
@@ -560,7 +592,10 @@ function relDueLabel(dueDate){
    HELPERS — money & currency
    ============================================================ */
 function mainCurrency(){ return state.app.mainCurrency || 'VND'; }
-function rateOf(cur){ return Number(state.app.rates[cur]) || 1; }
+/* Bảng tỷ giá không còn màn hình nào sửa được nữa (khối "Tiền tệ" đã gỡ khỏi
+   Cài đặt), nên nó chỉ đến từ DEFAULT_RATES qua migrateState hoặc từ snapshot
+   cũ. Thiếu bảng thì quy đổi 1:1 chứ không ném lỗi. */
+function rateOf(cur){ return Number((state.app.rates||{})[cur]) || 1; }
 function toMain(amount, cur){ return (Number(amount)||0) * rateOf(cur||'VND') / rateOf(mainCurrency()); }
 
 function fmtCur(n, cur){
@@ -794,7 +829,10 @@ function getCardNextDueDate(w){
   if(due < today) due.setMonth(due.getMonth()+1);
   return isoOf(due);
 }
-function walletMeta(w){ return WALLET_TYPE_META[w.type] || WALLET_TYPE_META.cash; }
+/* A wallet saved by a newer build, or with no type at all, still has to land
+   in a group and still has to show a label — never a blank one. */
+function walletTypeOf(w){ return w && WALLET_TYPE_META[w.type] ? w.type : 'cash'; }
+function walletMeta(w){ return WALLET_TYPE_META[walletTypeOf(w)]; }
 
 function uid(prefix){ return prefix+'_'+Date.now().toString(36)+Math.random().toString(36).slice(2,6); }
 /* A truncated amount is worse than a small one — "159.800.00…" reads as a
@@ -1134,10 +1172,23 @@ function setAuthMode(mode, el){
   el.classList.add('active');
   document.getElementById('auth-submit').textContent = mode==='login' ? 'Đăng nhập' : 'Tạo tài khoản';
   document.getElementById('auth-forgot').classList.toggle('hidden', mode!=='login');
-  document.getElementById('auth-note').textContent = mode==='login'
+  /* Ghi vào #auth-hint chứ KHÔNG phải khối bảo mật dưới thẻ: khối đó có icon
+     bên trong, gán textContent lên nó là xoá sạch cấu trúc. */
+  document.getElementById('auth-hint').textContent = mode==='login'
     ? 'Dữ liệu được đồng bộ qua Supabase và lưu bản sao trên máy này để dùng offline.'
     : 'Mật khẩu tối thiểu 6 ký tự. Tuỳ cấu hình dự án, Supabase có thể gửi email xác nhận trước khi đăng nhập được.';
   document.getElementById('auth-error').textContent = '';
+}
+
+/* Con mắt trong ô mật khẩu. Đổi cả aria-label chứ không chỉ hình: với trình
+   đọc màn hình, một nút tên "Hiện mật khẩu" mà đang hiện sẵn là nói ngược. */
+function toggleAuthPassword(){
+  const inp = document.getElementById('login-password');
+  const btn = document.getElementById('auth-pw-toggle');
+  const show = inp.type === 'password';
+  inp.type = show ? 'text' : 'password';
+  btn.innerHTML = icon(show ? 'eyeOff' : 'eye');
+  btn.setAttribute('aria-label', show ? 'Ẩn mật khẩu' : 'Hiện mật khẩu');
 }
 
 function setAuthBusy(busy, label){
@@ -1383,7 +1434,10 @@ function obGoStep(step){
 }
 function finishOnboarding(){
   const guessType = n =>{
-    const s = n.toLowerCase();
+    const s = n.toLowerCase().trim();
+    /* before the bank test: "ví điện tử" wins over nothing, but a name like
+       "Ví ngân hàng" should still read as a bank account */
+    if(EWALLET_NAMES.test(s) || s.includes('ví điện tử') || s.includes('e-wallet')) return 'ewallet';
     if(s.includes('ngân hàng')||s.includes('bank')) return 'bank';
     if(s.includes('tiết kiệm')||s.includes('saving')) return 'savings';
     if(s.includes('thẻ')||s.includes('credit')) return 'credit_card';
@@ -1436,6 +1490,14 @@ function switchTab(tab){
   document.querySelectorAll('.view').forEach(v=>v.classList.add('hidden'));
   const el = document.getElementById('view-'+tab);
   if(el) el.classList.remove('hidden');
+  /* Every screen reached through here is an in-session screen, so this is the
+     one place that has to know the nav belongs on it. Login and onboarding
+     never call switchTab — they hide the bar themselves and hand it back when
+     they are done. It used to be the callers' job and one of them forgot:
+     adoptRemoteState() paints the dashboard, so a pull landing while the user
+     was still on onboarding swapped the view underneath them and left no bar
+     to navigate with. */
+  document.getElementById('main-nav').classList.remove('hidden');
   /* Screens with no slot of their own are reached from the dashboard's
      "Truy cập nhanh" grid, so that is the nav item that stays lit. */
   const SUB_SCREENS = ['wallets','budget','debts','recurring','events','categories'];
@@ -1512,9 +1574,18 @@ function renderDashboard(){
   miniEl.innerHTML = sorted.length===0
     ? `<p class="text-sm muted text-center">Chưa có chi tiêu tháng này</p>`
     : sorted.map(([catId,val])=>{
-        const cat = findCategory('expense',catId) || {name:'Khác',icon:'📦',color:'#94A3B8'};
+        const known = findCategory('expense',catId);
+        const cat = known || {name:'Khác',icon:'📦',color:'#94A3B8'};
         const pct = exp ? Math.round(val/exp*100) : 0;
-        return `<div class="row-c gap10 mb12">
+        /* Only a category that still exists can be filtered on. A row standing
+           in for a deleted one stays inert: renderTransactionsList() drops a
+           dangling catId back to "all", so tapping it would answer with every
+           transaction ever — the opposite of what the row promised. */
+        const attrs = known
+          ? `class="row-c gap10 mb12 category-item ripple-host" data-cat-id="${esc(catId)}"
+             onclick="jumpToCategoryThisMonth('${catId}')"`
+          : `class="row-c gap10 mb12"`;
+        return `<div ${attrs}>
           <div class="cat-circle" style="width:32px;height:32px;font-size:.9rem;background:${cat.color}22;">${cat.icon}</div>
           <div class="flex1">
             <div class="between"><span class="text-sm font-sb">${esc(cat.name)}</span><span class="text-sm font-bold tabular">${fmt(val)}</span></div>
@@ -2029,8 +2100,10 @@ function renderWalletsView(){
   if(!wallets.length){ listEl.innerHTML = `<div class="empty-state"><div class="ic">${icon('wallet')}</div><div class="text-sm">Chưa có ví nào</div><div class="es-sub">Tạo ví để bắt đầu ghi chép</div></div>`; return; }
 
   let html = '';
-  ['cash','bank','credit_card','savings'].forEach(type=>{
-    const group = wallets.filter(w=>w.type===type);
+  /* Whole list, not a hard-coded four: a wallet of a type missing from this
+     loop would simply vanish from the screen it is managed on. */
+  WALLET_TYPES.forEach(type=>{
+    const group = wallets.filter(w=>walletTypeOf(w)===type);
     if(!group.length) return;
     html += `<div class="section-title"><h4>${WALLET_TYPE_META[type].icon} ${WALLET_TYPE_META[type].label}</h4><span class="text-xs muted">${group.length} ví</span></div>`;
     html += group.map(w=> isCreditCard(w) ? renderCreditCard(w) : renderWalletItem(w)).join('');
@@ -2079,8 +2152,10 @@ function renderCreditCard(w){
 }
 function selectWalletType(type){
   mwSelectedType = type;
-  ['cash','bank','credit_card','savings'].forEach(t=>
-    document.getElementById('mw-type-'+t).classList.toggle('active', t===type));
+  WALLET_TYPES.forEach(t=>{
+    const el = document.getElementById('mw-type-'+t);
+    if(el) el.classList.toggle('active', t===type);
+  });
   document.getElementById('mw-cash-fields').classList.toggle('hidden', type==='credit_card');
   document.getElementById('mw-card-fields').classList.toggle('hidden', type!=='credit_card');
   document.getElementById('mw-savings-fields').classList.toggle('hidden', type!=='savings');
@@ -3379,11 +3454,18 @@ function syncTxFilterChips(){
   document.getElementById('tx-custom-range').classList.add('hidden');
 }
 function jumpToWallet(walletId){ jumpToTransactions({walletId}); }
-function jumpToCategory(catId){
-  jumpToTransactions({catId});
+function jumpToCategory(catId, patch){
+  jumpToTransactions(Object.assign({catId}, patch||{}));
   /* the category select still lives in the collapsed panel — open it so the
      active filter is visible */
   document.getElementById('tx-advanced-filters').classList.remove('hidden');
+}
+/* The dashboard block is explicitly "chi tiêu tháng này", counted from settled
+   expenses only. Carrying that scope across means the Chi figure on the
+   transactions screen equals the number the user just tapped; filtering on the
+   category alone would answer with a different, larger total and look wrong. */
+function jumpToCategoryThisMonth(catId){
+  jumpToCategory(catId, {type:'expense', range:'thismonth', status:'completed'});
 }
 
 /* ---------- CANVAS CHART HELPERS ---------- */
@@ -3784,16 +3866,13 @@ function renderAccountSummary(){
    ============================================================ */
 function renderSettingsView(){
   applyTheme();
-  const sel = document.getElementById('set-main-currency');
-  sel.innerHTML = Object.keys(CURRENCIES).map(c=>`<option value="${c}">${c} — ${CURRENCIES[c].name}</option>`).join('');
-  sel.value = mainCurrency();
-  renderRatesView();
   document.getElementById('pin-toggle').checked = !!state.app.pinEnabled;
   document.getElementById('pin-status').textContent = state.app.pinEnabled ? 'Đang bật — yêu cầu PIN khi mở app' : 'Chưa thiết lập';
   document.getElementById('pin-change-row').classList.toggle('hidden', !state.app.pinEnabled);
   renderCloudSection();
   renderAccountSummary();
   renderAppInfo();
+  renderAppFooter();
 }
 
 /* ============================================================
@@ -4049,48 +4128,40 @@ async function forceSync(){
   await Sync.flush();
   await Sync.pull(true);
   renderCloudSection();
+  renderAppFooter();
   toast('Đã đồng bộ','ok');
+}
+
+/* ---- Chân trang Cài đặt ----
+   Ba dòng, và cả ba đều là sự thật kiểm chứng được chứ không phải chữ trang
+   trí: số phiên bản lấy từ chính bản build (APP_VERSION), trạng thái lấy từ
+   Sync.status() nên lúc mất mạng nó nói mất mạng, và năm bản quyền lấy từ đồng
+   hồ. Một dòng "Đã kết nối" sáng đèn xanh trong khi máy đang offline là loại
+   chi tiết làm người dùng hết tin những gì còn lại trên màn hình. */
+const FOOTER_STATUS = {
+  synced:  {dot:'synced',  text:'Đã kết nối · dữ liệu mã hoá khi truyền'},
+  pending: {dot:'pending', text:'Đang gửi thay đổi lên đám mây…'},
+  offline: {dot:'offline', text:'Ngoại tuyến · thay đổi được giữ trên máy'},
+  error:   {dot:'error',   text:'Chưa gửi được lên đám mây'}
+};
+function renderAppFooter(){
+  const el = document.getElementById('app-footer');
+  if(!el) return;
+  const s = (window.Sync && Sync.status && Sync.status()) || {};
+  const st = FOOTER_STATUS[s.phase] || FOOTER_STATUS.offline;
+  el.innerHTML = `
+    <div class="footer-brand">
+      <span class="footer-logo-title">SoFin Finance</span>
+      <span class="footer-version-badge">v${esc(APP_VERSION)}</span>
+    </div>
+    <div class="footer-status">
+      <span class="status-dot-active dot-${st.dot}"></span>
+      <span>${esc(st.text)}</span>
+    </div>
+    <div class="footer-copyright">© ${todayISO().slice(0,4)} SoFin. Bảo mật dữ liệu cá nhân.</div>`;
 }
 function showArchivePicker(){
   if(!offerLocalArchiveImport()) toast('Không tìm thấy dữ liệu cũ nào trên máy này');
-}
-function renderRatesView(){
-  const main = mainCurrency();
-  document.getElementById('rates-view').innerHTML = Object.keys(CURRENCIES)
-    .filter(c=>c!==main)
-    .map(c=>`1 ${c} = ${new Intl.NumberFormat('vi-VN',{maximumFractionDigits:4}).format(rateOf(c)/rateOf(main))} ${main}`)
-    .join('<br>');
-}
-function toggleRatesEditor(){
-  const ed = document.getElementById('rates-editor'), view = document.getElementById('rates-view');
-  const opening = ed.classList.contains('hidden');
-  if(opening){
-    ed.innerHTML = Object.keys(CURRENCIES).map(c=>`
-      <div class="form-group" style="margin-bottom:8px;">
-        <label>1 ${c} = ? VND</label>
-        <input type="number" class="input rate-input" data-cur="${c}" value="${rateOf(c)}" step="0.0001" ${c==='VND'?'disabled':''}>
-      </div>`).join('') +
-      `<button class="btn btn-primary btn-sm" style="width:100%;" onclick="saveRates()">Lưu tỷ giá</button>`;
-  }
-  ed.classList.toggle('hidden');
-  view.classList.toggle('hidden', opening);
-}
-function saveRates(){
-  document.querySelectorAll('.rate-input').forEach(inp=>{
-    const v = Number(inp.value);
-    if(v > 0) state.app.rates[inp.dataset.cur] = v;
-  });
-  state.app.rates.VND = 1;
-  saveStorage();
-  toggleRatesEditor();
-  renderRatesView();
-  toast('Đã cập nhật tỷ giá','ok');
-}
-function changeMainCurrency(cur){
-  state.app.mainCurrency = cur;
-  saveStorage();
-  renderRatesView();
-  toast('Tiền tệ chính: '+cur,'ok');
 }
 
 /* ============================================================
@@ -4314,7 +4385,7 @@ async function boot(){
   Sync.bind({
     getState: ()=>state,
     adopt:    adoptRemoteState,
-    onStatus: ()=>{ if(currentTab === 'settings') renderCloudSection(); },
+    onStatus: ()=>{ if(currentTab === 'settings'){ renderCloudSection(); renderAppFooter(); } },
     notify:   msg=>toast(msg)
   });
 

@@ -120,7 +120,7 @@ Last-write-wins theo `data.updatedAt` (đồng hồ client, đóng dấu bởi `
 
 | | |
 |---|---|
-| **Đa ví** | Tiền mặt · Ngân hàng · Thẻ tín dụng · Sổ tiết kiệm (lãi suất, ngày đáo hạn). Chuyển tiền có phí, khác tiền tệ. Cờ *không tính vào tổng tài sản*. |
+| **Đa ví** | Tiền mặt · Ngân hàng · Ví điện tử · Thẻ tín dụng · Sổ tiết kiệm (lãi suất, ngày đáo hạn). Chuyển tiền có phí, khác tiền tệ. Cờ *không tính vào tổng tài sản*. |
 | **Thẻ tín dụng** | Dư nợ đi chung sổ cái: `startingBalance` âm, mỗi lần quẹt trừ tiếp — hạn mức đã dùng không bao giờ lệch khỏi lịch sử. Có ngày chốt, hạn thanh toán, trả toàn bộ hoặc một phần. |
 | **Danh mục** | CRUD đầy đủ, danh mục con, đổi emoji/màu. Xóa danh mục đang dùng → tự dời giao dịch sang *Khác*. Danh mục hệ thống được bảo vệ. |
 | **Ngân sách** | Tuần/Tháng/Năm, theo danh mục hoặc tổng chi, giới hạn theo ví. Progress bar vàng ở 80%, đỏ khi vượt. Cảnh báo ngay lúc lưu giao dịch. |
@@ -128,11 +128,11 @@ Last-write-wins theo `data.updatedAt` (đồng hồ client, đóng dấu bởi `
 | **Sắp đến hạn** | 5 mốc: Trong tháng · 7 ngày tới · Tháng tới · 3 tháng · 6 tháng. Khoản định kỳ được **đếm đủ số kỳ rơi vào cửa sổ** (gộp một dòng kèm nhãn ×N), nên tổng "Dự kiến phải chi" của 6 tháng là sáu lần tiền nhà chứ không phải một. |
 | **Định kỳ** | Ngày/Tuần/Tháng/Năm, lặp mỗi N kỳ, tự ghi nhận và bù các kỳ đã lỡ khi mở lại app. Bấm ✓ để ghi tay: sheet xác nhận cho **chọn lại ngày và ví** trước khi tạo giao dịch; lịch vẫn neo theo ngày đến hạn nên trả muộn không làm trôi cả chu kỳ. |
 | **Báo cáo** | Bộ lọc mốc thời gian **Tháng này · Tháng trước · 3 tháng · Năm nay · Tùy chỉnh** (mặc định tháng hiện tại). Thứ tự thị giác: 3 **thẻ tổng quan** Thu / Chi / Dòng tiền ròng → **donut** cơ cấu danh mục (phần trăm ở tâm, đổi theo lát đang chạm) → **cột nhóm** Thu vs Chi 6 tháng → **xếp hạng chi tiêu** có progress bar. Tooltip chạm/hover trên cả donut lẫn cột. Vẽ bằng Canvas thuần, xử lý `devicePixelRatio`, tự đổi màu theo theme. |
-| **Đa tiền tệ** | 10 loại tiền, mỗi ví một tiền tệ, quy đổi về tiền tệ chính. Tỷ giá chỉnh tay trong Cài đặt. |
+| **Đa tiền tệ** | 10 loại tiền, mỗi ví một tiền tệ, quy đổi về tiền tệ chính (VND). Tỷ giá dùng bảng mặc định `DEFAULT_RATES` — **không còn màn hình chỉnh tay**, khối "Tiền tệ" đã gỡ khỏi Cài đặt. |
 | **Nhập số tiền** | Mọi ô tiền tự chèn dấu phân cách nghìn ngay lúc gõ (`1.250.000`), giữ nguyên vị trí con trỏ. Nút **`000`** trong ô nhân giá trị lên nghìn: `50` → `50.000` → `50.000.000`. Xuống `state`/localStorage luôn là `number` sạch. Chung một cặp `formatMoneyText()` / `readMoney()` cho tất cả form. |
 | **Giao dịch dự kiến** | Chọn ngày trong tương lai → giao dịch vào trạng thái `pending`: **chưa trừ ví, chưa vào tổng tài sản, chưa vào báo cáo/ngân sách**. Nó hiện ở "Dự kiến phải chi" theo đúng tab Trong tháng / 7 ngày tới / Tháng tới, và trong sổ Giao dịch với nhãn *Dự kiến*. Tới ngày thì tự chốt; bấm ✓ để chốt sớm. Báo cáo có chip **🔮 Gồm dự kiến** để xem trước. |
 | **Sự kiện** | Gom chi tiêu theo chuyến đi/sự kiện, có ngân sách riêng và phân tích riêng. |
-| **Điều hướng** | Thanh nav đúng 4 mục — Tổng quan · Giao dịch · Báo cáo · Cài đặt — cộng nút **+**. Các màn hình phụ (ví, ngân sách, sổ nợ, định kỳ, sự kiện, danh mục) vào từ lưới **Truy cập nhanh** ở Tổng quan. Chạm một ví → nhảy sang Giao dịch đã lọc sẵn ví đó; chạm một danh mục → lọc theo danh mục. Bộ lọc **Ví** nằm ngay trên màn hình Giao dịch, không phải mở panel nâng cao. |
+| **Điều hướng** | Thanh nav đúng 4 mục — Tổng quan · Giao dịch · Báo cáo · Cài đặt — cộng nút **+**. Các màn hình phụ (ví, ngân sách, sổ nợ, định kỳ, sự kiện, danh mục) vào từ lưới **Truy cập nhanh** ở Tổng quan. Chạm một ví → nhảy sang Giao dịch đã lọc sẵn ví đó. Chạm một hàng trong **Chi tiêu theo danh mục** → Giao dịch lọc theo đúng danh mục ấy **và mang theo phạm vi của khối đó** (khoản chi, tháng này, đã chốt), nên tổng Chi hiện ra bằng đúng con số vừa bấm; hàng của danh mục đã bị xoá thì để trơ, không hứa suông. Bộ lọc **Ví** nằm ngay trên màn hình Giao dịch, không phải mở panel nâng cao. |
 | **PWA** | Cài lên máy được, chạy standalone, mở offline 100% nhờ service worker cache-first. Cài đặt → *Thông tin ứng dụng* có nút cài (và hướng dẫn riêng cho iOS Safari), báo trạng thái offline và nút tải bản cập nhật. |
 | **Bản Android** | Cùng `public/` đóng gói bằng Capacitor, APK dựng tự động trong CI. Cài đặt → nút **Tải app Android** (tự ẩn khi đang chạy trong chính APK). Bản native tự **kiểm tra cập nhật** 3 giây sau khi mở: hỏi release mới nhất trên GitHub, so số phiên bản với `APP_VERSION`, mới hơn thì mở sheet kèm nút tải `.apk`. Im lặng khi mất mạng; bấm *Để sau* thì thôi hỏi **phiên bản đó**, bản kế tiếp vẫn báo. |
 | **Bảo mật** | Khóa PIN 4 chữ số (SHA-256, WebCrypto). Một form đổi **mã PIN** hoặc **mật khẩu đăng nhập**: nhập mã/mật khẩu hiện tại → mới → xác nhận. PIN đối chiếu hash trong `state`; mật khẩu thì xác thực lại với Supabase vì `updateUser()` không tự hỏi mật khẩu cũ. |
@@ -265,7 +265,7 @@ npm install jsdom --no-save && npm test   # smoke 296 + sync 20 + transfer 23 + 
 - **Không có Supabase thì không dùng được app.** Đây là lựa chọn có chủ đích khi bỏ đăng nhập cục bộ. Bản offline cũ vẫn nằm ở `legacy/index.offline-v4.html` nếu bạn cần.
 - Xung đột giải theo **last-write-wins trên cả snapshot**, không merge theo từng bản ghi.
 - Toàn bộ state đi trong một dòng JSONB. Postgres chịu được vài MB thoải mái, nhưng mỗi lần ghi là gửi lại cả snapshot — với hàng chục nghìn giao dịch nên cân nhắc tách bảng `transactions`.
-- Tỷ giá **nhập tay**, không tự cập nhật.
+- Tỷ giá **cố định** ở `DEFAULT_RATES`: không tự cập nhật, và từ khi gỡ khối "Tiền tệ" khỏi Cài đặt thì cũng không sửa được trong app. Ví ngoại tệ vẫn quy đổi bình thường, chỉ là bằng con số đóng sẵn. Ai đã đặt tiền tệ chính khác VND trước đây thì giá trị đó vẫn được tôn trọng nhưng không đổi lại được — muốn mở lại thì khôi phục khối này (xem lịch sử git).
 - `localStorage` giới hạn ~5 MB cho bản cache offline.
 
 ---
