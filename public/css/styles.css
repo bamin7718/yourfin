@@ -543,7 +543,10 @@ html[data-theme="dark"] .menu-tile .mt-ic{
 /* Width is driven by setupCanvas() as a percentage so it can never go stale;
    height comes from the element's own attribute. */
 canvas{display:block;width:100%;max-width:100%;}
-.legend{display:flex;flex-wrap:wrap;gap:8px 12px;margin-top:12px;}
+/* Reserve two rows. The legend has 8 entries for expenses and often 1-2 for
+   income, so without a floor the card resized on every tab switch and threw
+   everything below it up the page. */
+.legend{display:flex;flex-wrap:wrap;align-content:flex-start;gap:8px 12px;margin-top:12px;min-height:34px;}
 .legend-item{display:flex;align-items:center;gap:6px;font-size:.7rem;color:var(--muted);font-weight:600;}
 .legend-dot{width:9px;height:9px;border-radius:3px;flex:0 0 auto;}
 

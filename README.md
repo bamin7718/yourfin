@@ -31,7 +31,8 @@ SoFin/
 │   ├── check.js                kiểm tra wiring HTML ↔ JS + manifest/sw
 │   ├── smoke.js                chạy thật app bằng jsdom (296 assertion)
 │   ├── sync-test.js            hợp đồng đồng bộ: giữ mạng treo để soi UI (20 assertion)
-│   └── transfer-test.js        hợp đồng chuyển ví: hai ví luôn khớp nhau (23 assertion)
+│   ├── transfer-test.js        hợp đồng chuyển ví: hai ví luôn khớp nhau (23 assertion)
+│   └── chart-test.js           canvas giả để chạy thật hit-test biểu đồ (25 assertion)
 ├── legacy/
 │   └── index.offline-v4.html   bản single-file cũ, vẫn chạy độc lập
 ├── DEPLOY.md                   checklist đưa lên PROD
@@ -68,7 +69,7 @@ Không muốn tạo `.env`? Cứ mở app — nó sẽ hiện **màn hình cấu
 
 ```bash
 npm run check                             # wiring HTML ↔ JS, syntax, rò rỉ khoá, phủ offline
-npm install jsdom --no-save && npm test   # smoke 296 + sync 20 + transfer 23
+npm install jsdom --no-save && npm test   # smoke 296 + sync 20 + transfer 23 + chart 25
 ```
 
 ---
@@ -201,7 +202,7 @@ Khi nhập CSV: ví/danh mục/danh mục con/sự kiện chưa tồn tại sẽ
 
 ```bash
 npm run check                                          # tĩnh, không cần dependency
-npm install jsdom --no-save && npm test   # smoke 296 + sync 20 + transfer 23
+npm install jsdom --no-save && npm test   # smoke 296 + sync 20 + transfer 23 + chart 25
 ```
 
 `npm run check` bắt được thứ mà mắt người hay bỏ sót ở dự án không bundler: inline handler gọi hàm không tồn tại, `getElementById` trỏ vào id đã đổi tên, JWT lỡ commit vào HTML.

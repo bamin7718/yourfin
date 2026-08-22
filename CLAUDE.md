@@ -17,7 +17,8 @@ npm run check          # kiểm tra tĩnh wiring HTML ↔ JS (không cần depen
 npm run smoke          # chạy thật app trong jsdom — cần: npm install jsdom --no-save
 npm run sync-test      # hợp đồng đồng bộ: giữ request treo để soi UI giữa chừng
 npm run transfer-test  # hợp đồng chuyển ví: phí, khác tiền tệ, ngày tương lai, xoá
-npm test               # cả bốn
+npm run chart-test     # canvas giả: chạy thật code vẽ + hit-test tooltip
+npm test               # cả năm
 ```
 
 `scripts/smoke.js` là **một file assertion tuần tự**, không phải test runner — không có cách chạy lẻ một case. Muốn cô lập một luồng thì comment bớt các bước phía sau trong file, đừng thêm framework.
@@ -121,6 +122,8 @@ Vẽ bằng **Canvas thuần**, không thư viện — thêm Chart.js/Recharts s
 Tooltip hoạt động theo cặp: hàm `draw*` ghi hình học vào `chartHit.donut` / `chartHit.bars`, còn `bindDonutTip()` / `bindBarTip()` hit-test trên đó. **Không vẽ lại canvas khi con trỏ di chuyển** — chỉ đổi text/vị trí của node DOM `.chart-tip`, riêng donut vá lại đúng vòng tâm bằng `paintDonutCentre()`. Giữ nguyên tính chất này, không thì cuộn trên điện thoại sẽ giật.
 
 `bindChartTip()` gắn cờ `__tipBound` lên canvas vì `renderReportsView()` chạy lại mỗi lần đổi bộ lọc — thiếu cờ đó thì listener chồng chất.
+
+Hàm `draw*` **phải đặt lại `chartHit.*` kể cả khi không có dữ liệu** — nhánh rỗng của `drawDonut()` từng `return` sớm và để nguyên hình học của lần vẽ trước, nên đổi sang tab không có dữ liệu là chạm vào vành rỗng lại bung tooltip của danh mục cũ. `chart-test.js` khoá ca này.
 
 `setupCanvas()` **đặt `style.width='100%'` rồi mới đo** bằng `getBoundingClientRect()`. Đừng đo `canvas.clientWidth`: đó là bề rộng chính ta ghim ở lần vẽ trước, nên kích thước đầu tiên sẽ dính vĩnh viễn — xoay máy là bitmap vẫn rộng trong khi `max-width:100%` bóp phần tử lại, cho ra nét mờ, tràn khung, và tooltip lệch đúng bằng phần chênh. `devicePixelRatio` chặn trần 3x.
 

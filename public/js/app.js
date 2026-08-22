@@ -3127,11 +3127,9 @@ function deleteCategory(catId){
    REPORTS
    ============================================================ */
 
-function setDonutMode(mode, el){
+function setDonutMode(mode){
   donutMode = mode;
-  el.parentNode.querySelectorAll('.seg').forEach(s=>s.classList.remove('active'));
-  el.classList.add('active');
-  renderReportsView();
+  renderReportsView();      /* repaints the switcher too */
 }
 /* Range for the report period, shifted by `extra` periods relative to the current view */
 /* Preset windows instead of a period type plus an offset: people reach for
@@ -3218,6 +3216,9 @@ function openWalletReport(walletId){
 function renderReportsView(){
   if(reportWalletId!=='all' && !getWallet(reportWalletId)) reportWalletId = 'all';
   document.getElementById('report-pending-chip').classList.toggle('active', reportIncludePending);
+  /* one owner for the switcher's lit state, so it can never drift from donutMode */
+  document.getElementById('seg-donut-expense').classList.toggle('active', donutMode==='expense');
+  document.getElementById('seg-donut-income').classList.toggle('active', donutMode==='income');
   document.getElementById('report-wallet-filter').innerHTML =
     `<div class="chip ${reportWalletId==='all'?'active':''}" onclick="setReportWallet('all')">${icon('layers')}Tất cả ví</div>` +
     getUserWallets().map(w=>
@@ -3396,6 +3397,11 @@ function drawDonut(id, data, total, centerLabel){
   const cx = w/2, cy = h/2, rOuter = Math.min(w,h)/2 - 8, rInner = rOuter*0.62;
   const cardBg = cssVar('--card') || '#fff';
   if(!total || !data.length){
+    /* Drop the previous chart's geometry. Leaving it meant switching to a mode
+       with no data kept the old slices live under an empty ring: touching it
+       popped a tooltip naming categories that were not on screen, and painted
+       a percentage over the "no data" label. */
+    chartHit.donut = null;
     ctx.beginPath(); ctx.arc(cx,cy,rOuter,0,2*Math.PI); ctx.fillStyle = cssVar('--card-2'); ctx.fill();
     ctx.beginPath(); ctx.arc(cx,cy,rInner,0,2*Math.PI); ctx.fillStyle = cardBg; ctx.fill();
     ctx.fillStyle = cssVar('--muted'); ctx.font='13px sans-serif'; ctx.textAlign='center';
@@ -3573,7 +3579,7 @@ function drawBars(id, series){
     ctx.fillStyle = cssVar('--muted'); ctx.font='9px sans-serif'; ctx.textAlign='center';
     ctx.fillText(s.label, gx+groupW/2, h-7);
   });
-  chartHit.bars = {padL, padT, chartW, chartH, groupW, series};
+  chartHit.bars = series.length ? {padL, padT, chartW, chartH, groupW, series} : null;
 }
 function drawLine(id, points){
   const c = setupCanvas(id); if(!c) return;
