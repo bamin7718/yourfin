@@ -10,7 +10,7 @@ rất dễ gây sự cố.
 
 ```bash
 npm install jsdom --no-save
-npm test          # check + smoke 307 + sync 20 + transfer 23 + chart 39 + header 22
+npm test          # check + smoke 307 + sync 20 + transfer 23 + chart 44 + header 22
 ```
 
 - [ ] `npm test` xanh cả ba suite
@@ -26,7 +26,7 @@ npm test          # check + smoke 307 + sync 20 + transfer 23 + chart 39 + heade
 | `smoke.js` | 307 assertion chạy thật app trong jsdom: auth, onboarding, giao dịch, ví, ngân sách, nợ, định kỳ, báo cáo, PIN, PWA, giao diện |
 | `sync-test.js` | 20 assertion giữ request Supabase treo để soi UI giữa chừng: cache render trước mạng, ghi optimistic, offline→online tự đẩy, **đóng tab lúc offline không mất dữ liệu** |
 | `header-test.js` | 22 assertion đi hết mọi màn hình (đăng nhập, onboarding, 11 tab, khoá PIN, đăng xuất, thiếu key) và kiểm app bar ở đúng trạng thái ẩn/phẳng — chỉ Dashboard được giữ vành cho thẻ số dư đè lên |
-| `chart-test.js` | 39 assertion dựng canvas giả để **chạy thật** code vẽ và hit-test: chạm đúng lát donut, phần trăm ở tâm, và đổi tab Chi tiêu ↔ Thu nhập không để lát cũ sống sót |
+| `chart-test.js` | 44 assertion dựng canvas giả để **chạy thật** code vẽ và hit-test: chạm đúng lát donut, phần trăm ở tâm, và đổi tab Chi tiêu ↔ Thu nhập không để lát cũ sống sót |
 | `transfer-test.js` | 23 assertion cho chuyển ví — thao tác duy nhất phải giữ hai ví khớp nhau: có phí, khác tiền tệ, ngày tương lai, và xoá phải gỡ đúng mọi bản ghi nó tạo ra |
 
 ### ⚠️ Máy không kiểm được ba thứ này

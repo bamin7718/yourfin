@@ -102,9 +102,13 @@ function fakeSupabase(){
   /* jsdom lays nothing out; pin a phone-width box so geometry is deterministic */
   const CSS_W = 240;   /* khớp max-width của .chart-donut-container */
   window.HTMLCanvasElement.prototype.getBoundingClientRect = function(){
-    /* mirror the CSS: the donut sits in a square box, the others keep the
-       height from their own attribute */
-    const h = this.hasAttribute('data-fill') ? CSS_W : (Number(this.getAttribute('height')) || 200);
+    /* A browser reports the LAID-OUT size, i.e. what style.height resolves to.
+       Mirroring that is what makes a compounding bug reproducible here — the
+       old mock read the height attribute, which is exactly the value the bug
+       poisons, and it still looked fine. */
+    const h = this.hasAttribute('data-fill')
+      ? CSS_W
+      : (parseFloat(this.style.height) || Number(this.getAttribute('data-h')) || 200);
     return { left:0, top:0, right:CSS_W, bottom:h, width:CSS_W, height:h, x:0, y:0 };
   };
 
@@ -227,6 +231,27 @@ function fakeSupabase(){
     const h = $('tip-bar').innerHTML;
     return !$('tip-bar').classList.contains('hidden') && /Thu/.test(h) && /Chi/.test(h) && /Ròng/.test(h);
   })(), $('tip-bar').textContent.slice(0, 60));
+
+  console.log('\n--- vẽ lại nhiều lần: bitmap không được phình ---');
+  {
+    /* Assigning canvas.height writes the height ATTRIBUTE back. Read that
+       attribute next render and you multiply by dpr again — the bar chart
+       went 200 → 600 → 1800 → 5400 … and a phone eventually refuses to
+       allocate the bitmap at all. Both axes of every canvas, please. */
+    Object.defineProperty(window, 'devicePixelRatio', { value: 3, configurable: true });
+    const ids = ['chart-donut', 'chart-bar', 'chart-line'];
+    window.renderReportsView(); await sleep(40);
+    const before = ids.map(id => $(id).width + 'x' + $(id).height);
+    for (let i = 0; i < 6; i++) { window.renderReportsView(); await sleep(15); }
+    const after = ids.map(id => $(id).width + 'x' + $(id).height);
+    ids.forEach((id, i) => check(`${id}: 6 lần vẽ lại vẫn giữ nguyên bitmap`,
+      before[i] === after[i], `${before[i]} → ${after[i]}`));
+    check('chiều cao CSS không trôi theo',
+      $('chart-bar').style.height === '200px' && $('chart-line').style.height === '180px',
+      $('chart-bar').style.height + ' / ' + $('chart-line').style.height);
+    check('bitmap bị chặn trần, không thể xin cả gigabyte',
+      ids.every(id => $(id).width <= 4096 && $(id).height <= 4096));
+  }
 
   console.log('\n--- tháng rỗng vẫn phải thấy được ---');
   {

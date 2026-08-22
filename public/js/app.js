@@ -3382,9 +3382,15 @@ function setupCanvas(id){
      difference. A percentage width cannot go stale, and it accounts for the
      card's padding without us having to know about it. */
   /* `data-fill` means the wrapper decides both dimensions (the square donut
-     box); otherwise the height comes from the element's own attribute. */
+     box); otherwise the height comes from data-h.
+
+     NOT from the `height` attribute: assigning canvas.height writes that
+     attribute back, so reading it next time returns the previous BITMAP
+     height and multiplies by dpr again. At dpr 3 the bar chart went
+     200 → 600 → 1800 → 5400 → 16200 … and every filter tap was another
+     render. data-h is ours alone and nothing ever overwrites it. */
   const fill = canvas.hasAttribute('data-fill');
-  const attrH = Number(canvas.getAttribute('height')) || 200;
+  const attrH = Number(canvas.getAttribute('data-h')) || 200;
   canvas.style.width = '100%';
   canvas.style.height = fill ? '100%' : attrH + 'px';
   const r = canvas.getBoundingClientRect ? canvas.getBoundingClientRect() : {width:0, height:0};
@@ -3398,8 +3404,11 @@ function setupCanvas(id){
   /* Above 3x the extra pixels are invisible and the bitmap gets 16x heavier —
      a 512px-wide donut at dpr 4 is an 8MB buffer redrawn on every filter tap. */
   const dpr = Math.min(window.devicePixelRatio || 1, 3);
-  canvas.width  = Math.round(cssW * dpr);
-  canvas.height = Math.round(cssH * dpr);
+  /* A belt to go with the braces above: whatever arithmetic goes wrong later,
+     a canvas never gets to ask the browser for a gigabyte. */
+  const MAX_PX = 4096;
+  canvas.width  = Math.min(MAX_PX, Math.round(cssW * dpr));
+  canvas.height = Math.min(MAX_PX, Math.round(cssH * dpr));
 
   const ctx = canvas.getContext('2d');
   if(!ctx) return null;

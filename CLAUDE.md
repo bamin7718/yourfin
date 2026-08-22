@@ -132,6 +132,8 @@ Tooltip hoạt động theo cặp: hàm `draw*` ghi hình học vào `chartHit.d
 
 Hàm `draw*` **phải đặt lại `chartHit.*` kể cả khi không có dữ liệu** — nhánh rỗng của `drawDonut()` từng `return` sớm và để nguyên hình học của lần vẽ trước, nên đổi sang tab không có dữ liệu là chạm vào vành rỗng lại bung tooltip của danh mục cũ. `chart-test.js` khoá ca này.
 
+**Chiều cao canvas lấy từ `data-h`, tuyệt đối không từ thuộc tính `height`.** Gán `canvas.height = X` sẽ **ghi ngược vào thuộc tính `height`**, nên lần vẽ sau đọc lại chính bitmap cũ rồi nhân dpr thêm lần nữa: 200 → 600 → 1800 → 5400 → 16200… mỗi lần đổi bộ lọc là một lần nhân. Điện thoại cuối cùng từ chối cấp bitmap và biểu đồ chết. `data-h` là của riêng ta, không ai ghi đè. Có thêm trần `MAX_PX = 4096` chặn mọi phép tính sai trong tương lai.
+
 `setupCanvas()` **đặt `style.width='100%'` rồi mới đo** bằng `getBoundingClientRect()`. Đừng đo `canvas.clientWidth`: đó là bề rộng chính ta ghim ở lần vẽ trước, nên kích thước đầu tiên sẽ dính vĩnh viễn — xoay máy là bitmap vẫn rộng trong khi `max-width:100%` bóp phần tử lại, cho ra nét mờ, tràn khung, và tooltip lệch đúng bằng phần chênh. `devicePixelRatio` chặn trần 3x.
 
 `shortMoney()` (nhãn trục) tôn trọng `state.app.privacy` — bật con mắt thì trục cũng phải che, không thì số vẫn đọc được qua vai.
