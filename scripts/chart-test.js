@@ -100,7 +100,9 @@ function fakeSupabase(){
   /* jsdom lays nothing out; pin a phone-width box so geometry is deterministic */
   const CSS_W = 320;
   window.HTMLCanvasElement.prototype.getBoundingClientRect = function(){
-    const h = Number(this.getAttribute('height')) || 200;
+    /* mirror the CSS: the donut sits in a square box, the others keep the
+       height from their own attribute */
+    const h = this.hasAttribute('data-fill') ? CSS_W : (Number(this.getAttribute('height')) || 200);
     return { left:0, top:0, right:CSS_W, bottom:h, width:CSS_W, height:h, x:0, y:0 };
   };
 
@@ -125,6 +127,10 @@ function fakeSupabase(){
   check('chartHit.donut được điền sau khi vẽ', !!g && g.slices.length === 3,
     g ? g.slices.length + ' lát' : 'null');
   check('canvas dùng đúng bề rộng CSS đo được', !!g && g.cx === CSS_W/2, g && g.cx);
+  check('khung donut vuông nên tâm nằm giữa cả hai chiều',
+    !!g && g.cx === g.cy, g && (g.cx + ' / ' + g.cy));
+  check('bán kính lấy theo cạnh vuông, không bị bóp theo chiều thấp',
+    !!g && Math.abs(g.rOuter - (CSS_W/2 - 8)) < 1e-9, g && g.rOuter);
   check('tỷ lệ các lát đúng 50 / 33 / 17',
     !!g && g.slices.map(s=>s.pct).join('/') === '50/33/17', g && g.slices.map(s=>s.pct).join('/'));
   check('lát đầu bắt đầu từ mốc -90°', !!g && Math.abs(g.slices[0].from + Math.PI/2) < 1e-9);
@@ -187,6 +193,24 @@ function fakeSupabase(){
   check('hình học được dựng lại đủ 3 lát', hit().donut && hit().donut.slices.length === 3);
   const back = probe(aim(0));
   check('tooltip hoạt động trở lại', !back.classList.contains('hidden'));
+
+  console.log('\n--- biểu đồ hỏng không được kéo sập danh sách ---');
+  {
+    const real = window.drawDonut;
+    window.drawDonut = function(){ throw new Error('canvas nổ'); };
+    let threw = null;
+    try { window.renderReportsView(); } catch (e) { threw = e.message; }
+    await sleep(40);
+    check('renderReportsView không ném lỗi ra ngoài', !threw, threw);
+    check('danh sách xếp hạng VẪN render dù biểu đồ nổ',
+      $('rep-cat-list').querySelectorAll('.rank-row').length === 3,
+      $('rep-cat-list').querySelectorAll('.rank-row').length + ' hàng');
+    check('thẻ tổng quan vẫn có số', /[0-9]/.test($('rep-income').textContent));
+    window.drawDonut = real;
+    window.renderReportsView(); await sleep(40);
+    check('khôi phục thì biểu đồ vẽ lại bình thường',
+      !!hit().donut && hit().donut.slices.length === 3);
+  }
 
   console.log('\n--- biểu đồ cột ---');
   const b = hit().bars;

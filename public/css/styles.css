@@ -409,7 +409,12 @@ html[data-theme="dark"] .tag{color:var(--primary);}
    while a filter recomputes, the page jumps, and the absolutely positioned
    tooltip has nothing to anchor to. */
 .chart-wrap{position:relative;width:100%;min-height:200px;}
-#chart-donut{min-height:250px;}
+/* The donut was drawn into whatever box the card gave it — about 416x250 on a
+   480px shell — so its radius came from the SHORT side and it floated in the
+   middle of ~90px of dead space either side. A square, centred, capped box
+   makes the circle fill what it is given. */
+.chart-square{width:100%;max-width:320px;aspect-ratio:1/1;margin:0 auto;min-height:0;}
+.chart-square>canvas{height:100%;}
 #chart-bar{min-height:200px;}
 .chart-tip{position:absolute;pointer-events:none;z-index:5;transform:translate(-50%,-115%);
   background:var(--text);color:var(--card);border-radius:10px;padding:6px 9px;font-size:.68rem;

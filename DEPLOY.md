@@ -10,7 +10,7 @@ rất dễ gây sự cố.
 
 ```bash
 npm install jsdom --no-save
-npm test          # check + smoke 296 + sync 20 + transfer 23 + chart 25
+npm test          # check + smoke 299 + sync 20 + transfer 23 + chart 31
 ```
 
 - [ ] `npm test` xanh cả ba suite
@@ -23,9 +23,9 @@ npm test          # check + smoke 296 + sync 20 + transfer 23 + chart 25
 | Suite | Phạm vi |
 |---|---|
 | `check.js` | wiring HTML ↔ JS, cú pháp, rò rỉ khoá, manifest/sw hợp lệ, **mọi asset `index.html` nạp đều nằm trong precache** (quên một file = offline vỡ âm thầm, đây là thứ duy nhất bắt được) |
-| `smoke.js` | 296 assertion chạy thật app trong jsdom: auth, onboarding, giao dịch, ví, ngân sách, nợ, định kỳ, báo cáo, PIN, PWA, giao diện |
+| `smoke.js` | 299 assertion chạy thật app trong jsdom: auth, onboarding, giao dịch, ví, ngân sách, nợ, định kỳ, báo cáo, PIN, PWA, giao diện |
 | `sync-test.js` | 20 assertion giữ request Supabase treo để soi UI giữa chừng: cache render trước mạng, ghi optimistic, offline→online tự đẩy, **đóng tab lúc offline không mất dữ liệu** |
-| `chart-test.js` | 25 assertion dựng canvas giả để **chạy thật** code vẽ và hit-test: chạm đúng lát donut, phần trăm ở tâm, và đổi tab Chi tiêu ↔ Thu nhập không để lát cũ sống sót |
+| `chart-test.js` | 31 assertion dựng canvas giả để **chạy thật** code vẽ và hit-test: chạm đúng lát donut, phần trăm ở tâm, và đổi tab Chi tiêu ↔ Thu nhập không để lát cũ sống sót |
 | `transfer-test.js` | 23 assertion cho chuyển ví — thao tác duy nhất phải giữ hai ví khớp nhau: có phí, khác tiền tệ, ngày tương lai, và xoá phải gỡ đúng mọi bản ghi nó tạo ra |
 
 ### ⚠️ Máy không kiểm được ba thứ này

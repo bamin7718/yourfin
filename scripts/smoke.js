@@ -852,9 +852,11 @@ async function boot(opts) {
     check('canvas đặt width theo phần trăm, không ghim pixel',
       donut.style.width === '100%' && bar.style.width === '100%',
       donut.style.width + ' / ' + bar.style.width);
-    check('chiều cao canvas lấy từ thuộc tính height của chính nó',
-      donut.style.height === '250px' && bar.style.height === '200px',
+    check('donut lấp đầy khung vuông, cột giữ chiều cao thuộc tính',
+      donut.style.height === '100%' && bar.style.height === '200px',
       donut.style.height + ' / ' + bar.style.height);
+    check('donut nằm trong khung vuông có giới hạn bề rộng',
+      donut.parentNode.classList.contains('chart-square') && donut.hasAttribute('data-fill'));
 
     // đổi bộ lọc nhiều lần không được làm bitmap phình ra
     const w0 = donut.width;
@@ -880,8 +882,11 @@ async function boot(opts) {
     const css = fs.readFileSync(path.join(PUBLIC, 'css', 'styles.css'), 'utf8');
     check('khung chứa canvas có position/width/min-height',
       /\.chart-wrap\{position:relative;width:100%;min-height:200px/.test(css));
-    check('donut và cột có min-height riêng',
-      /#chart-donut\{min-height:250px/.test(css) && /#chart-bar\{min-height:200px/.test(css));
+    check('khung donut vuông, canh giữa, chặn bề rộng 320px',
+      /\.chart-square\{width:100%;max-width:320px;aspect-ratio:1\/1;margin:0 auto/.test(css));
+    check('biểu đồ cột có min-height riêng', /#chart-bar\{min-height:200px/.test(css));
+    check('có safeDraw để một biểu đồ hỏng không kéo sập danh sách',
+      /function safeDraw\(/.test(fs.readFileSync(path.join(PUBLIC, 'js', 'app.js'), 'utf8')));
     check('tab Thu \/ Chi không bị co ép',
       /\.segment\{display:flex;flex:0 0 auto/.test(css)
       && /\.segment \.seg\{flex:1 1 0;min-width:0/.test(css));

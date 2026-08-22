@@ -3251,8 +3251,10 @@ function renderReportsView(){
     const c = findCategory(mode, cid) || {name:'Khác', color:'#94A3B8', icon:'📦'};
     return {label:c.name, value:val, color:c.color, icon:c.icon};
   });
-  drawDonut('chart-donut', data, total, mode==='expense'?'Tổng chi':'Tổng thu');
-  bindDonutTip('chart-donut', 'tip-donut');
+  safeDraw('cơ cấu danh mục', ()=>{
+    drawDonut('chart-donut', data, total, mode==='expense'?'Tổng chi':'Tổng thu');
+    bindDonutTip('chart-donut', 'tip-donut');
+  });
   document.getElementById('donut-legend').innerHTML = data.slice(0,8).map(d=>
     `<div class="legend-item"><span class="legend-dot" style="background:${d.color};"></span>${esc(d.label)} ${total?Math.round(d.value/total*100):0}%</div>`).join('');
 
@@ -3292,8 +3294,10 @@ function renderReportsView(){
     });
     series.push({label:rr.shortLabel, inc:ri, exp:re, end:rr.end});
   }
-  drawBars('chart-bar', series);
-  bindBarTip('chart-bar', 'tip-bar');
+  safeDraw('dòng tiền', ()=>{
+    drawBars('chart-bar', series);
+    bindBarTip('chart-bar', 'tip-bar');
+  });
 
   /* cumulative balance at the end of each period — whole portfolio, or the picked wallet */
   const scope = reportWalletScope();
@@ -3309,7 +3313,7 @@ function renderReportsView(){
     });
     return {label:s.label, value:cum};
   });
-  drawLine('chart-line', linePoints);
+  safeDraw('xu hướng số dư', ()=>drawLine('chart-line', linePoints));
 
   /* per-wallet spending */
   const walletTotals = {};
@@ -3356,6 +3360,13 @@ function jumpToCategory(catId){
 
 /* ---------- CANVAS CHART HELPERS ---------- */
 function cssVar(name){ return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+/* renderReportsView() paints the charts before it builds the ranked list, so
+   anything thrown inside a draw used to take the numbers down with it and
+   leave the card empty. A chart is decoration; the figures are the point. */
+function safeDraw(label, fn){
+  try{ fn(); }
+  catch(err){ console.warn('Không vẽ được biểu đồ ' + label, err); }
+}
 function setupCanvas(id){
   const canvas = document.getElementById(id);
   if(!canvas || !canvas.getContext) return null;
@@ -3367,11 +3378,19 @@ function setupCanvas(id){
      the element: blurry, overflowing, and every tooltip hit-test off by the
      difference. A percentage width cannot go stale, and it accounts for the
      card's padding without us having to know about it. */
-  const cssH = Number(canvas.getAttribute('height')) || 200;
+  /* `data-fill` means the wrapper decides both dimensions (the square donut
+     box); otherwise the height comes from the element's own attribute. */
+  const fill = canvas.hasAttribute('data-fill');
+  const attrH = Number(canvas.getAttribute('height')) || 200;
   canvas.style.width = '100%';
-  canvas.style.height = cssH + 'px';
-  const measured = canvas.getBoundingClientRect ? canvas.getBoundingClientRect().width : 0;
-  const cssW = Math.max(1, Math.round(measured || canvas.clientWidth || 300));
+  canvas.style.height = fill ? '100%' : attrH + 'px';
+  const r = canvas.getBoundingClientRect ? canvas.getBoundingClientRect() : {width:0, height:0};
+  /* A hidden or not-yet-laid-out canvas measures 0. Falling through to a
+     sane default keeps the draw from dividing by zero and leaving a blank
+     card that never repairs itself. */
+  const cssW = Math.max(1, Math.round(r.width) || canvas.clientWidth || 300);
+  const cssH = fill ? Math.max(1, Math.round(r.height) || canvas.clientHeight || 300)
+                    : attrH;
 
   /* Above 3x the extra pixels are invisible and the bitmap gets 16x heavier —
      a 512px-wide donut at dpr 4 is an 8MB buffer redrawn on every filter tap. */
