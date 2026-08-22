@@ -22,9 +22,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # 22, không phải 20: @capacitor/cli đặt engines.node ">=22.0.0" và
+      # `cap add` bỏ cuộc ngay trên Node 20.
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
 
       # Capacitor 8 dựng bằng AGP 8.13 và đặt sourceCompatibility = 21.

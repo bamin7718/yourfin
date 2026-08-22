@@ -155,6 +155,41 @@ if (!fs.existsSync(SW)) {
   }
 }
 
+/* ---------- 8. CI runs a Node new enough for the toolchain ---------- */
+/* @capacitor/cli floors at node 22. The workflow asked for 20, `cap add` quit,
+   and it took a round trip through CI to find out — which is the whole reason
+   this check exists. */
+const WF = path.join(ROOT, '.github', 'workflows', 'build-apk.yml');
+if (fs.existsSync(WF)) {
+  const wf = read(WF);
+  const ciNode = Number((/node-version:\s*'?"?(\d+)/.exec(wf) || [])[1] || 0);
+  if (!ciNode) {
+    warnings.push('Không đọc được node-version trong build-apk.yml.');
+  } else {
+    const pkg = JSON.parse(read(path.join(ROOT, 'package.json')));
+    const declared = Number((/(\d+)/.exec(String((pkg.engines || {}).node || '')) || [])[1] || 0);
+    if (declared && ciNode < declared) {
+      errors.push(`CI dùng Node ${ciNode} nhưng package.json khai engines.node >=${declared}.`);
+    }
+    for (const dep of Object.keys(pkg.devDependencies || {})) {
+      const dp = path.join(ROOT, 'node_modules', dep, 'package.json');
+      if (!fs.existsSync(dp)) continue;
+      const need = String(((JSON.parse(read(dp)).engines) || {}).node || '');
+      /* A range like "^20.19.0 || ^22.13.0 || >=24.0.0" is satisfied by the
+         LOWEST of its alternatives, so take the smallest major mentioned —
+         reading only the ">=" clause would flag Node 22 as too old. */
+      const majors = [...need.matchAll(/(\d+)/g)].map(m => Number(m[1])).filter(n => n >= 10);
+      const floor = majors.length ? Math.min(...majors) : 0;
+      if (floor && ciNode < floor) {
+        errors.push(`CI dùng Node ${ciNode} nhưng ${dep} cần node ${need} — bước dùng nó sẽ fail.`);
+      }
+      if (floor && declared && declared < floor) {
+        errors.push(`package.json khai engines.node >=${declared} nhưng ${dep} cần ${need}.`);
+      }
+    }
+  }
+}
+
 /* ---------- report ---------- */
 for (const w of warnings) console.warn('⚠ ' + w);
 if (errors.length) {
