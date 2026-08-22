@@ -18,7 +18,8 @@ npm run smoke          # chạy thật app trong jsdom — cần: npm install js
 npm run sync-test      # hợp đồng đồng bộ: giữ request treo để soi UI giữa chừng
 npm run transfer-test  # hợp đồng chuyển ví: phí, khác tiền tệ, ngày tương lai, xoá
 npm run chart-test     # canvas giả: chạy thật code vẽ + hit-test tooltip
-npm test               # cả năm
+npm run header-test    # app bar đúng trạng thái ẩn/phẳng trên mọi màn hình
+npm test               # cả sáu
 ```
 
 `scripts/smoke.js` là **một file assertion tuần tự**, không phải test runner — không có cách chạy lẻ một case. Muốn cô lập một luồng thì comment bớt các bước phía sau trong file, đừng thêm framework.
@@ -111,7 +112,7 @@ Icon *hệ thống* dùng `icon('name')` (bảng `ICON_PATHS` ở đầu `app.js
 
 Ngôn ngữ thiết kế bám theo **VietinBank iPay**: xanh `#00529C` / `#003B70`, đỏ nhấn `#ED1C24` (`--brand-red`), nền `#F4F7FA`. Ba gradient riêng biệt, đừng dùng lẫn: `--gradient` (app bar), `--gradient-card` (thẻ ví/tài sản), `--gradient-fab` (nút +). **Thứ tự xếp lớp**: `header` để `z-index:1`, `.view` để `z-index:2`. Đừng nâng header lên — nó từng để `25` (di sản thời còn `position:sticky`) và nuốt mất nửa dòng "Tổng tài sản ròng" vì thẻ số dư cố tình kéo lên đè vào vành header. `.view` có `z-index` nên tạo stacking context riêng: đặt `z-index` cho `.hero` bên trong là vô ích, phải chỉnh ở tầng `.view`.
 
-`header` là app bar full-bleed giữ một vành 26px phía dưới để **riêng thẻ số dư của Dashboard** đè lên (`margin-top:-20px`). Mọi màn khác mở đầu bằng `.view-title` / `.sub-view-head` — không có nền riêng — nên sẽ bị màu xanh nuốt mất chữ. Vì vậy `switchTab()` gắn cờ `.hd-flat` lên header khi **không** ở Dashboard: vành thu lại còn 12px và view được `padding-top:20px`. **Đừng áp `margin-top` âm cho `.view` nói chung** — đó chính là lỗi đã từng che mất tiêu đề "Cài đặt". Cũng **giữ nguyên `:not(.hidden)`**: bỏ đi thì màn đăng nhập/onboarding (vốn ẩn header) sẽ bị cắt mất đỉnh.
+`header` là app bar full-bleed giữ một vành 26px phía dưới để **riêng thẻ số dư của Dashboard** đè lên (`margin-top:-20px`). Mọi màn khác mở đầu bằng `.view-title` / `.sub-view-head` — không có nền riêng — nên sẽ bị màu xanh nuốt mất chữ. **`.hd-flat` là mặc định trong HTML** — chỉ Dashboard mới gỡ nó ra, và chỉ qua `switchTab()`. Mặc định phải nghiêng về phía phẳng vì có màn hình hiện header mà **không** đi qua `switchTab` (onboarding), trước đây nó thừa hưởng cờ cũ và kéo tiêu đề "Tạo ví đầu tiên" vào nền xanh. Vì vậy `switchTab()` gắn cờ `.hd-flat` lên header khi **không** ở Dashboard: vành thu lại còn 12px và view được `padding-top:20px`. **Đừng áp `margin-top` âm cho `.view` nói chung** — đó chính là lỗi đã từng che mất tiêu đề "Cài đặt". Cũng **giữ nguyên `:not(.hidden)`**: bỏ đi thì màn đăng nhập/onboarding (vốn ẩn header) sẽ bị cắt mất đỉnh.
 
 Lưới Tiện ích cố định **4×2 = 8 ô**. Thêm tính năng mới thì cho vào `MORE_FEATURES` (sheet "Tất cả tiện ích"), đừng nhồi thêm ô — 9 ô sẽ vỡ lưới và bỏ rơi một màn hình.
 

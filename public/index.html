@@ -62,7 +62,11 @@
 <div class="app">
 
   <!-- ============ HEADER ============ -->
-  <header id="main-header" class="hidden">
+<!-- hd-flat is the default: only the dashboard asks for the overlapping lip,
+     and it does so through switchTab(). Any screen that becomes visible some
+     other way — onboarding does — is then flat rather than eating its own
+     first heading. -->
+  <header id="main-header" class="hidden hd-flat">
     <div class="hd-who">
       <span class="greet" id="header-greet">Xin chào</span>
       <span class="uname" id="user-display-name">User</span>
