@@ -116,6 +116,21 @@ jobs:
       - name: Đặt tên file
         run: cp android/app/build/outputs/apk/debug/app-debug.apk sofin.apk
 
+      # Đối chiếu chữ ký của APK vừa dựng với vân tay đã biết. Bước "Khoá ký cố
+      # định" ở trên chỉ chắc rằng FILE khoá tồn tại — nó không chứng minh Gradle
+      # đã dùng đúng file đó. Mà sai chữ ký thì hỏng lặng lẽ: APK cài được, chạy
+      # được, chỉ là không ai nâng cấp đè lên nó được, và chỉ phát hiện ra khi
+      # người dùng thử cập nhật. Vân tay chứng chỉ không phải bí mật — nó nằm sẵn
+      # trong mọi APK đã phát hành.
+      - name: Đối chiếu chữ ký
+        run: |
+          APKSIGNER=$(ls "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)
+          GOT=$("$APKSIGNER" verify --print-certs sofin.apk \
+            | grep -i 'SHA-256 digest' | head -1 | tr -d ' ' | cut -d: -f2 | tr 'A-F' 'a-f')
+          WANT=f73a128dce734c3d0b68107598cb41bf5d7d030a645dc42b2d3ad845ac920017
+          echo "signer=$GOT"
+          test "$GOT" = "$WANT" || { echo "::error::APK ký bằng khoá LẠ ($GOT). Bản này sẽ không cài đè được lên bản trước."; exit 1; }
+
       - uses: actions/upload-artifact@v4
         with:
           name: sofin-apk

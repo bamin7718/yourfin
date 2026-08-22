@@ -1603,6 +1603,16 @@ function renderDashboard(){
 
   renderFeatureTiles('db-quick-access');
 }
+
+/* Một chỗ sinh chuỗi phiên bản cho cả màn đăng nhập lẫn chân trang Cài đặt:
+   hai nơi hiển thị hai số khác nhau thì người dùng không biết tin chỗ nào, mà
+   đó lại đúng là lúc họ cần biết — ngay sau khi cập nhật. */
+function renderVersionLine(elId){
+  const el = document.getElementById(elId);
+  if(!el) return;
+  el.innerHTML = `<span class="dv-name">SoFin Finance</span>
+    <span class="footer-version-badge">v${esc(APP_VERSION)}</span>`;
+}
 function sortTxDesc(a,b){
   if(a.date !== b.date) return a.date < b.date ? 1 : -1;
   return (b.createdAt||'') > (a.createdAt||'') ? 1 : -1;
@@ -4533,6 +4543,7 @@ document.getElementById('mc-sub-name').addEventListener('keydown', e=>{ if(e.key
 /* Wrap every static input.money with its 000 shortcut. Dynamically rendered
    fields call attachMoneyButtons(container) themselves. */
 attachMoneyButtons();
+renderVersionLine('login-version');
 registerServiceWorker();
 
 /* Only the packaged app can act on this — a browser updates itself. Three

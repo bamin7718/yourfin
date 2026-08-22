@@ -1076,6 +1076,13 @@ async function boot(opts) {
     })());
     check('thiếu khoá thì CHẶN phát hành, không lặng lẽ ra bản không cài đè được',
       /::error::Thiếu secret ANDROID_DEBUG_KEYSTORE_B64/.test(wf));
+    /* Nạp được file khoá không có nghĩa Gradle đã dùng đúng file đó. Sai chữ ký
+       thì APK vẫn cài và chạy bình thường — chỉ vỡ ở lần cập nhật sau. */
+    check('CI đối chiếu vân tay chữ ký của APK vừa dựng', (() => {
+      const v = wf.indexOf('apksigner');
+      const rel = wf.indexOf('softprops/action-gh-release');
+      return v > 0 && v < rel && /f73a128dce734c3d0b68107598cb41bf5d7d030a645dc42b2d3ad845ac920017/.test(wf);
+    })());
 
     // nút tải trong Cài đặt
     window.switchTab('settings'); await sleep(20);
@@ -1734,6 +1741,16 @@ async function boot(opts) {
     check('badge phiên bản lấy từ bản build, không phải chữ cứng',
       f.querySelector('.footer-version-badge').textContent === 'v' + PKG2,
       f.querySelector('.footer-version-badge').textContent);
+
+    /* Phiên bản hiện ở hai nơi: màn đăng nhập và chân trang Cài đặt. Hai nơi
+       nói hai số khác nhau thì người dùng không biết tin chỗ nào — mà lúc cần
+       biết chính là ngay sau khi cập nhật. */
+    const lv = $('login-version');
+    check('màn đăng nhập cũng hiện phiên bản', !!lv && lv.textContent.includes('v' + PKG2),
+      lv && lv.textContent.trim());
+    check('hai nơi nói cùng một số',
+      lv.querySelector('.footer-version-badge').textContent
+        === f.querySelector('.footer-version-badge').textContent);
 
     check('năm bản quyền theo đồng hồ, không đóng cứng',
       f.querySelector('.footer-copyright').textContent.includes('© ' + window.todayISO().slice(0, 4)),

@@ -793,3 +793,8 @@ html[data-theme="dark"] .alert-info{color:var(--primary);}
 .wallet-amount{font-size:.95rem;font-weight:800;white-space:nowrap;letter-spacing:-.2px;}
 .btn-wallet-more{color:var(--muted);font-size:1.1rem;line-height:1;padding:2px 2px 2px 0;flex:0 0 auto;}
 .pick-item.danger{color:var(--expense);}
+
+/* Dòng phiên bản dưới màn đăng nhập. Nhạt và nhỏ: để tra cứu sau khi cập
+   nhật, không phải để đọc mỗi ngày. */
+.app-version-line{display:flex;align-items:center;justify-content:center;gap:7px;margin-top:10px;}
+.app-version-line .dv-name{font-size:.72rem;font-weight:700;color:var(--muted);}
