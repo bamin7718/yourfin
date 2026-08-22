@@ -678,6 +678,12 @@ function attachMoneyButtons(root){
     if(el.parentNode && el.parentNode.classList.contains('money-field')) return;
     const wrap = document.createElement('div');
     wrap.className = 'money-field';
+    /* Lề đi theo khung bao. Nút 000 canh giữa theo khung, nên margin còn nằm
+       trên input sẽ làm khung cao hơn ô và đẩy nút lệch khỏi tâm. */
+    [...el.classList].filter(c=>/^m[tb](4|8|12|16)$/.test(c)).forEach(c=>{
+      el.classList.remove(c);
+      wrap.classList.add(c);
+    });
     el.parentNode.insertBefore(wrap, el);
     wrap.appendChild(el);
     const btn = document.createElement('button');
@@ -2113,20 +2119,42 @@ function renderWalletsView(){
 function renderWalletItem(w){
   const bal = getWalletBalance(w.id);
   const extra = w.type==='savings' && w.interestRate ? ` · ${w.interestRate}%/năm${w.maturityDate?' · đáo hạn '+fmtDate(w.maturityDate):''}` : '';
-  return `<div class="wallet-item">
-    <div class="w-avatar" style="background:${walletMeta(w).color}22;">${w.icon}</div>
-    <div class="flex1">
-      <div class="font-bold text-sm"><span class="order-badge">#${w.displayOrder||'?'}</span> ${esc(w.name)} ${w.excludeFromTotal?'<span class="tag">Không tính tổng</span>':''}</div>
-      <div class="text-xs muted">Đầu kỳ ${fmtW(w.startingBalance,w)}${extra}</div>
-      <div class="font-x ${bal>=0?'c-income':'c-expense'} tabular mt4">${fmtW(bal,w)}</div>
-      ${w.currency!==mainCurrency()?`<div class="text-xs muted">≈ ${fmt(toMain(bal,w.currency))}</div>`:''}
+  /* Hai bên: nhận diện ví bên trái, tiền bên phải. Ba nút xếp dọc trước đây
+     ăn hết một phần ba chiều ngang trên máy 360px và ép số dư xuống dòng —
+     giờ chúng nằm trong sheet mở từ chính thẻ. */
+  return `<div class="wallet-item wallet-card-item ripple-host" onclick="openWalletMenu('${w.id}')">
+    <div class="wallet-info-main">
+      <div class="w-avatar" style="background:${walletMeta(w).color}22;">${w.icon}</div>
+      <div class="wi-text">
+        <div class="wi-name"><span class="order-badge">#${w.displayOrder||'?'}</span> ${esc(w.name)} ${w.excludeFromTotal?'<span class="tag">Không tính tổng</span>':''}</div>
+        <div class="wi-open">Đầu kỳ ${fmtW(w.startingBalance,w)}${extra}</div>
+      </div>
     </div>
-    <div style="display:flex;flex-direction:column;gap:6px;">
-      <button class="btn btn-secondary btn-xs" onclick="openWalletReport('${w.id}')">Báo cáo</button>
-      <button class="btn btn-secondary btn-xs" onclick="openWalletModal('${w.id}')">Sửa</button>
-      <button class="btn btn-danger btn-xs" onclick="deleteWallet('${w.id}')">Xóa</button>
+    <div class="wallet-balance-group">
+      <div>
+        <div class="wallet-amount ${bal>=0?'c-income':'c-expense'} tabular">${fmtW(bal,w)}</div>
+        ${w.currency!==mainCurrency()?`<div class="wi-open">≈ ${fmt(toMain(bal,w.currency))}</div>`:''}
+      </div>
+      <span class="btn-wallet-more" aria-hidden="true">⋮</span>
     </div>
   </div>`;
+}
+
+/* Menu của một ví. Mở từ cả thẻ lẫn nút ⋮ — cùng một hành động, vì cả thẻ đã
+   là vùng chạm rồi thì bắt người dùng nhắm đúng ba chấm là vô ích. */
+function openWalletMenu(walletId){
+  const w = getWallet(walletId);
+  if(!w) return;
+  uiSheet(`${w.icon} ${w.name}`,
+    `<div class="pick-list">
+       <div class="pick-item" onclick="closeSheet();openWalletReport('${w.id}')">
+         <span class="pi-ic">📊</span><span class="flex1">Báo cáo chi tiêu của ví</span><span class="muted">›</span></div>
+       <div class="pick-item" onclick="closeSheet();openWalletModal('${w.id}')">
+         <span class="pi-ic">✏️</span><span class="flex1">Chỉnh sửa ví</span><span class="muted">›</span></div>
+       <div class="pick-item danger" onclick="closeSheet();deleteWallet('${w.id}')">
+         <span class="pi-ic">🗑️</span><span class="flex1">Xóa ví</span></div>
+     </div>
+     <button class="btn btn-ghost mt8" onclick="closeSheet()">Đóng</button>`);
 }
 function renderCreditCard(w){
   const used = getCardUsedAmount(w), avail = getCardAvailableLimit(w), pct = getCardUsagePct(w);
@@ -2799,7 +2827,7 @@ function setRecurType(type){
   document.getElementById('mr-type-expense').classList.toggle('active', type==='expense');
   document.getElementById('mr-type-income').classList.toggle('active', type==='income');
   mrSelectedCatId = null; mrSelectedSubId = null;
-  renderRecurCatChips();
+  renderRecurCatRow();
 }
 function openRecurringModal(recurId){
   const wallets = getUserWallets();
@@ -2817,12 +2845,14 @@ function openRecurringModal(recurId){
     else { document.getElementById('mr-wallet').value = wallets[0].id; toast('Ví cũ không còn, đã chọn ví khác','err'); }
     document.getElementById('mr-duedate').value = r.dueDate;
     document.getElementById('mr-enddate').value = r.endDate||'';
+    document.getElementById('mr-has-end').checked = !!r.endDate;
     document.getElementById('mr-interval').value = r.interval||1;
     document.getElementById('mr-auto').checked = !!r.autoProcess;
     mrSelectedCatId = r.categoryId; mrSelectedSubId = r.subcategoryId; mrSelectedFreq = r.frequency;
   } else {
     mrType = 'expense';
     ['mr-name','mr-amount','mr-enddate'].forEach(id=>document.getElementById(id).value='');
+    document.getElementById('mr-has-end').checked = false;
     document.getElementById('mr-wallet').value = wallets[0].id;
     document.getElementById('mr-duedate').value = todayISO();
     document.getElementById('mr-interval').value = 1;
@@ -2831,32 +2861,69 @@ function openRecurringModal(recurId){
   }
   document.getElementById('mr-type-expense').classList.toggle('active', mrType==='expense');
   document.getElementById('mr-type-income').classList.toggle('active', mrType==='income');
-  document.querySelectorAll('#mr-freq-chips .chip').forEach(c=>c.classList.toggle('active', c.dataset.val===mrSelectedFreq));
+  document.querySelectorAll('#mr-freq-seg button').forEach(c=>c.classList.toggle('active', c.dataset.val===mrSelectedFreq));
   updateIntervalUnit();
-  renderRecurCatChips();
+  toggleRecurEnd();
+  renderRecurCatRow();
   openModal('modal-recurring');
 }
-function renderRecurCatChips(){
+/* Dòng danh mục — chỉ hiển thị lựa chọn hiện tại. Danh sách đầy đủ nằm trong
+   sheet, nên số danh mục có tăng bao nhiêu thì form vẫn cao bấy nhiêu. */
+function renderRecurCatRow(){
   const cats = getCats(mrType==='income'?'income':'expense');
   if(!mrSelectedCatId || !cats.find(c=>c.id===mrSelectedCatId)) mrSelectedCatId = cats.length ? cats[0].id : null;
-  document.getElementById('mr-cat-chips').innerHTML = cats.map(c=>
-    `<div class="chip ${c.id===mrSelectedCatId?'active':''}" onclick="selectRecurCat('${c.id}')">${c.icon} ${esc(c.name)}</div>`).join('');
   const cat = cats.find(c=>c.id===mrSelectedCatId);
-  const subGroup = document.getElementById('mr-sub-group');
-  if(cat && cat.subs && cat.subs.length){
-    subGroup.classList.remove('hidden');
-    if(!mrSelectedSubId || !cat.subs.find(s=>s.id===mrSelectedSubId)) mrSelectedSubId = cat.subs[0].id;
-    document.getElementById('mr-sub-chips').innerHTML = cat.subs.map(s=>
-      `<div class="chip ${s.id===mrSelectedSubId?'active':''}" onclick="selectRecurSub('${s.id}')">${esc(s.name)}</div>`).join('');
-  } else { subGroup.classList.add('hidden'); mrSelectedSubId = null; }
+  /* danh mục con cũ có thể đã bị xoá, hoặc thuộc danh mục khác */
+  if(mrSelectedSubId && !(cat && (cat.subs||[]).some(s=>s.id===mrSelectedSubId))) mrSelectedSubId = null;
+  const sub = cat && (cat.subs||[]).find(s=>s.id===mrSelectedSubId);
+  document.getElementById('mr-cat-ic').textContent = cat ? cat.icon : '📦';
+  document.getElementById('mr-cat-name').textContent = cat ? cat.name : 'Chọn danh mục';
+  document.getElementById('mr-cat-sub').textContent = sub ? sub.name : '';
 }
-function selectRecurCat(id){ mrSelectedCatId = id; mrSelectedSubId = null; renderRecurCatChips(); }
-function selectRecurSub(id){ mrSelectedSubId = id; renderRecurCatChips(); }
+function openRecurCatPicker(catId){
+  const cats = getCats(mrType==='income'?'income':'expense');
+  /* Bước 2: danh mục này có danh mục con thì hỏi tiếp, không thì chọn xong luôn. */
+  if(catId){
+    const cat = cats.find(c=>c.id===catId);
+    const subs = (cat && cat.subs) || [];
+    if(!subs.length){ selectRecurCat(catId, null); return; }
+    uiSheet(cat.icon + ' ' + cat.name,
+      `<div class="pick-list">
+         <div class="pick-item" onclick="selectRecurCat('${cat.id}',null)">
+           <span class="pi-ic">${cat.icon}</span><span class="flex1">Không chọn danh mục con</span></div>
+         ${subs.map(s=>`<div class="pick-item" onclick="selectRecurCat('${cat.id}','${s.id}')">
+           <span class="pi-ic">•</span><span class="flex1">${esc(s.name)}</span></div>`).join('')}
+       </div>
+       <button class="btn btn-ghost mt8" onclick="openRecurCatPicker()">‹ Đổi danh mục khác</button>`);
+    return;
+  }
+  /* Bước 1: lưới danh mục chính. */
+  uiSheet('Chọn danh mục',
+    `<div class="cat-grid">${cats.map(c=>`
+       <div class="cat-tile ${c.id===mrSelectedCatId?'active':''}" onclick="openRecurCatPicker('${c.id}')">
+         <div class="cat-circle" style="background:${c.color}22;">${c.icon}</div>
+         <div class="cat-name">${esc(c.name)}</div>
+       </div>`).join('')}</div>`);
+}
+function selectRecurCat(id, subId){
+  mrSelectedCatId = id;
+  mrSelectedSubId = subId || null;
+  closeSheet();
+  renderRecurCatRow();
+}
 function selectRecurFreq(val, el){
   mrSelectedFreq = val;
-  el.parentNode.querySelectorAll('.chip').forEach(c=>c.classList.remove('active'));
+  el.parentNode.querySelectorAll('button').forEach(c=>c.classList.remove('active'));
   el.classList.add('active');
   updateIntervalUnit();
+}
+/* Ngày kết thúc là tuỳ chọn: tắt công tắc thì xoá luôn giá trị, để không có
+   chuyện một ngày còn nằm trong ô ẩn rồi bất ngờ được lưu. */
+function toggleRecurEnd(){
+  const on = document.getElementById('mr-has-end').checked;
+  const el = document.getElementById('mr-enddate');
+  el.classList.toggle('hidden', !on);
+  if(!on) el.value = '';
 }
 /* "Lặp mỗi [2] tuần" — keeps the interval box unambiguous */
 function updateIntervalUnit(){
@@ -3929,23 +3996,50 @@ async function checkAppUpdate(opts){
     try{ seen = localStorage.getItem(UPDATE_SEEN_KEY); }catch(e){}
     if(seen && compareVersions(tag, seen) <= 0) return null;
   }
-  showUpdateSheet(rel);
+  showUpdateModal(rel);
   return tag;
 }
 
-function showUpdateSheet(rel){
+/* Ghi chú phát hành đến từ GitHub — người khác gõ, Markdown thô, dài tuỳ ý.
+   Cắt còn vài dòng đầu, bỏ ký tự Markdown cho dễ đọc, và esc() trước khi nhét
+   vào innerHTML: đây là chuỗi từ mạng, không phải chuỗi của mình. */
+function formatReleaseNotes(body){
+  const lines = String(body||'')
+    .replace(/\r/g,'')
+    .split('\n')
+    .map(l=>l.replace(/^\s*[-*+]\s+/,'· ').replace(/[*_`#]/g,'').trim())
+    .filter(Boolean)
+    .slice(0, 6);
+  return lines;
+}
+
+/* Một modal riêng chứ không dùng sheet chung: sheet chung đang phục vụ luồng
+   đặt lại mật khẩu và bộ chọn dữ liệu cũ, mà thông báo cập nhật thì tự bật sau
+   3 giây — hai thứ tranh nhau một element là chuyện sớm muộn. */
+function showUpdateModal(rel){
   const tag = String(rel.tag_name).replace(/^v/i,'');
   /* Prefer the asset this release actually carries; fall back to the alias. */
   const asset = (rel.assets||[]).find(a=>/\.apk$/i.test(a.name||''));
   const url = (asset && asset.browser_download_url) || APK_URL;
   const size = asset && asset.size ? ` · ${(asset.size/1048576).toFixed(1)} MB` : '';
-  uiSheet('Đã có phiên bản mới',
-    `<p class="text-sm muted mb4">Bạn đang dùng <b>v${esc(APP_VERSION)}</b></p>
-     <div class="text-lg font-bold c-primary mb12">v${esc(tag)}${size}</div>
-     <p class="text-sm muted mb12">Cập nhật ngay để trải nghiệm tính năng mới.</p>
-     <a class="btn btn-primary" href="${url}" rel="noopener" download
-        onclick="dismissUpdate('${esc(tag)}')" style="text-decoration:none;">Tải bản cập nhật (.apk)</a>
-     <button class="btn btn-ghost mt8" onclick="dismissUpdate('${esc(tag)}');closeSheet();">Để sau</button>`);
+
+  document.getElementById('update-title').textContent = `Đã có phiên bản mới v${tag}`;
+  document.getElementById('update-meta').innerHTML =
+    `<span class="um-new">v${esc(tag)}${esc(size)}</span>
+     <span class="um-old">đang dùng v${esc(APP_VERSION)}</span>`;
+
+  const notes = formatReleaseNotes(rel.body);
+  document.getElementById('update-notes').innerHTML = notes.length
+    ? notes.map(l=>`<div class="un-line">${esc(l)}</div>`).join('')
+    : `<div class="un-line muted">Bản dựng mới nhất từ nhánh chính.</div>`;
+
+  const dl = document.getElementById('update-download');
+  dl.href = url;
+  /* Ghi nhớ ngay lúc bấm tải: nếu người dùng rời app sang trình cài đặt rồi
+     quay lại, không hỏi lại họ về đúng phiên bản vừa tải. */
+  dl.onclick = ()=>{ dismissUpdate(tag); closeModal('update-modal'); };
+  document.getElementById('update-later').onclick = ()=>{ dismissUpdate(tag); closeModal('update-modal'); };
+  openModal('update-modal');
 }
 
 /* Remember the version, not a boolean: the next release must ask again. */

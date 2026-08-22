@@ -278,18 +278,39 @@ html[data-theme="dark"] .tag-pending{color:#241C00;}
 
 /* Money fields: the 000 shortcut sits inside the box, so the input reserves
    room for it. The big centred amount boxes pad both sides to stay centred. */
-.money-field{position:relative;display:flex;align-items:center;width:100%;}
-.money-field>input.money{flex:1;min-width:0;padding-right:52px;}
-.money-field>input.money-lg{padding-left:52px;}
-/* z-index để nút nổi trên nền input; user-select để chạm hai lần không bôi đen
+/* display:block, không phải flex. Nút đã absolute nên flex chẳng còn xếp gì
+   nữa, mà lại kéo theo một hệ quả tinh vi: margin của input cộng vào chiều cao
+   dòng flex, làm khung cao hơn ô và đẩy nút lệch khỏi tâm. Block thì không. */
+.money-field{position:relative;display:block;width:100%;}
+/* 64px, không phải 52px: nút rộng ~44px cộng 8px lề phải là vừa đúng 52 — chữ
+   chạm sát mép nút. 64 để lại 12px thở. Ô căn giữa (.money-lg) phải đệm CẢ HAI
+   bên bằng nhau, không thì con số nhìn lệch trái ngay giữa thẻ. */
+.money-field>input.money{width:100%;min-width:0;padding-right:64px;}
+.money-field>input.money-lg{padding-left:64px;}
+/* Lề của ô phải nằm trên KHUNG BAO, không nằm trên input — nút được canh giữa
+   theo khung (top:50%), nên một margin-top còn sót lại trên input sẽ làm khung
+   cao hơn ô và đẩy nút lệch lên nửa khoảng lề đó. attachMoneyButtons() dời các
+   lớp mt*/mb* sang khung; dòng dưới là lưới an toàn cho mọi đường khác. */
+.money-field>input.money{margin-top:0;margin-bottom:0;}
+
+/* Phải là `.money-field>.btn-000` chứ không phải `.btn-000` trơn.
+   Nút mang cả class .ripple-host, mà `.ripple-host{position:relative}` nằm SAU
+   trong file này và cùng độ ưu tiên (0,1,0) — nên nó thắng, nút rơi về
+   position:relative, thành một flex item bình thường đứng sau input rồi bị đẩy
+   hẳn ra ngoài khung nhập. Chuỗi selector này lên (0,2,0) nên giữ được absolute
+   dù .ripple-host có đứng ở đâu.
+   z-index để nút nổi trên nền input; user-select để chạm hai lần không bôi đen
    chữ "000" thay vì bấm. Màu lấy từ biến theme — số hex cứng sẽ thành ô sáng
    chói nằm giữa form tối khi bật dark mode. */
-.btn-000{position:absolute;right:6px;top:50%;transform:translateY(-50%);height:28px;padding:0 10px;
+.money-field>.btn-000{position:absolute;right:8px;top:50%;transform:translateY(-50%);}
+.btn-000{height:32px;padding:0 10px;margin:0;line-height:1;
+  display:flex;align-items:center;justify-content:center;
   border:1px solid var(--border);border-radius:9px;background:var(--bg);color:var(--muted);
   font-size:.7rem;font-weight:800;letter-spacing:.5px;cursor:pointer;transition:.12s;
   z-index:1;user-select:none;-webkit-user-select:none;}
 @media (hover:hover){ .btn-000:hover{border-color:var(--primary);color:var(--primary);} }
-.btn-000:active{transform:translateY(-50%) scale(.94);background:var(--primary-light);border-color:var(--primary);}
+.money-field>.btn-000:active{transform:translateY(-50%) scale(.94);}
+.btn-000:active{background:var(--primary-light);border-color:var(--primary);}
 .money-field>input.money:disabled ~ .btn-000{opacity:.4;pointer-events:none;}
 
 /* A filter promoted out of the collapsed panel and onto the main view. */
@@ -690,3 +711,85 @@ html[data-theme="dark"] .alert-info{color:var(--primary);}
 }
 @media (prefers-reduced-motion:reduce){ .status-dot-active.dot-synced{animation:none;} }
 .footer-copyright{font-size:.62rem;color:var(--muted);opacity:.8;}
+
+/* ---------- MODAL CẬP NHẬT ỨNG DỤNG ---------- */
+.update-head{display:flex;align-items:center;gap:12px;margin-bottom:14px;}
+.update-ic{width:46px;height:46px;flex:0 0 auto;border-radius:14px;display:grid;place-items:center;
+  font-size:1.5rem;background:var(--primary-light);}
+.update-meta{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;margin-bottom:12px;}
+.um-new{font-size:1.1rem;font-weight:800;color:var(--primary);letter-spacing:-.3px;}
+.um-old{font-size:.7rem;color:var(--muted);font-weight:600;}
+/* Ghi chú phát hành có thể dài; giới hạn chiều cao rồi cho cuộn thay vì đẩy
+   hai nút bấm xuống dưới mép màn hình. */
+.update-notes{background:var(--card-2);border:1px solid var(--border);border-radius:12px;
+  padding:10px 12px;margin-bottom:12px;max-height:132px;overflow-y:auto;}
+.un-line{font-size:.75rem;line-height:1.6;color:var(--text);word-break:break-word;}
+.update-hint{display:flex;align-items:flex-start;gap:7px;margin-bottom:14px;
+  font-size:.68rem;line-height:1.5;color:var(--muted);}
+.update-hint .uh-ic{flex:0 0 auto;}
+
+/* ---------- FORM ĐỊNH KỲ ----------
+   Màu lấy từ biến theme: bản gốc đề xuất #f8fafc/#e2e8f0/#005baa, đúng sắc độ
+   này ở light theme, nhưng đóng cứng thì cả cụm sẽ sáng trắng giữa form tối. */
+.mb0{margin-bottom:0;}
+.btn-lg{min-height:48px;font-weight:800;}
+
+/* Một dòng bấm được thay cho băng chip cuộn ngang: form không cao thêm khi
+   người dùng tạo nhiều danh mục, và không lựa chọn nào bị giấu ngoài mép. */
+.picker-row{display:flex;align-items:center;gap:10px;padding:11px 12px;margin-top:6px;
+  background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);
+  cursor:pointer;position:relative;overflow:hidden;transition:.15s;}
+.picker-row:active{transform:scale(.99);}
+@media (hover:hover){ .picker-row:hover{border-color:var(--primary);} }
+.picker-row .pr-ic{width:34px;height:34px;flex:0 0 auto;border-radius:10px;display:grid;place-items:center;
+  font-size:1rem;background:var(--card-2);}
+.picker-row .pr-mid{flex:1;min-width:0;}
+.picker-row .pr-title{font-size:.85rem;font-weight:700;}
+.picker-row .pr-sub{font-size:.68rem;color:var(--muted);}
+.picker-row .pr-sub:empty{display:none;}
+
+/* Danh sách chọn trong sheet (danh mục con) */
+.pick-list{display:flex;flex-direction:column;}
+.pick-item{display:flex;align-items:center;gap:10px;padding:12px 4px;font-size:.85rem;cursor:pointer;
+  border-bottom:1px solid var(--border);}
+.pick-item:last-child{border-bottom:none;}
+.pick-item:active{background:var(--primary-light);}
+.pick-item .pi-ic{width:22px;text-align:center;flex:0 0 auto;}
+
+/* Cụm lịch lặp: gom 4 trường rời rạc thành một khối, để mắt thấy ngay đâu là
+   "lịch" và đâu là phần còn lại của form. */
+.recurring-card-group{background:var(--card-2);border:1px solid var(--border);
+  border-radius:12px;padding:14px;margin-bottom:16px;}
+.rcg-label{display:block;font-size:.75rem;font-weight:700;color:var(--muted);
+  letter-spacing:.02em;margin-bottom:8px;}
+.frequency-segmented-control{display:flex;background:var(--border);padding:3px;border-radius:8px;
+  margin-bottom:12px;gap:2px;}
+.frequency-segmented-control button{flex:1;min-width:0;padding:7px 0;font-size:.78rem;font-weight:700;
+  border:none;background:transparent;color:var(--muted);border-radius:6px;cursor:pointer;transition:.15s;}
+.frequency-segmented-control button.active{background:var(--card);color:var(--primary);
+  box-shadow:0 1px 3px rgba(0,0,0,.10);}
+.grid-2-cols{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.rcg-end{margin-top:12px;padding-top:12px;border-top:1px solid var(--border);}
+
+/* Thẻ công tắc — nhãn và phụ đề bên trái, công tắc bên phải. */
+.toggle-card{display:flex;align-items:center;gap:12px;padding:12px;margin-bottom:16px;
+  background:var(--card);border:1px solid var(--border);border-radius:12px;}
+.switch-ok input:checked + .slider{background:var(--income);}
+
+/* ---------- THẺ VÍ Ở MÀN HÌNH VÍ ---------- */
+/* Nút tạo ví trên tiêu đề: tròn, viền mảnh, đối xứng với nút ‹ bên trái. */
+.btn-icon-head{font-size:1.25rem;font-weight:700;line-height:1;color:var(--primary);}
+@media (hover:hover){ .btn-icon-head:hover{border-color:var(--primary);background:var(--primary-light);} }
+
+.wallet-card-item{display:flex;align-items:center;justify-content:space-between;gap:10px;
+  padding:14px 16px;cursor:pointer;position:relative;overflow:hidden;transition:.2s ease;}
+.wallet-card-item:active{background:var(--card-2);transform:scale(.99);}
+.wallet-info-main{display:flex;align-items:center;gap:12px;min-width:0;flex:1;}
+.wallet-info-main .wi-text{min-width:0;}
+.wi-name{font-size:.92rem;font-weight:700;line-height:1.35;}
+.wi-open{font-size:.7rem;color:var(--muted);line-height:1.4;}
+/* Số tiền không bao giờ xuống dòng: một số dư bị ngắt đôi đọc ra số khác. */
+.wallet-balance-group{display:flex;align-items:center;gap:8px;text-align:right;flex:0 0 auto;}
+.wallet-amount{font-size:.95rem;font-weight:800;white-space:nowrap;letter-spacing:-.2px;}
+.btn-wallet-more{color:var(--muted);font-size:1.1rem;line-height:1;padding:2px 2px 2px 0;flex:0 0 auto;}
+.pick-item.danger{color:var(--expense);}

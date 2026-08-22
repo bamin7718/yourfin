@@ -169,7 +169,9 @@ git commit -am "..." && git tag v5.0.1 && git push origin main v5.0.1
 - `APP_VERSION` đến từ `__ENV__.VERSION` do `generate-env.js` chép từ `package.json`; hằng số dự phòng trong `app.js` chỉ dùng khi mở thư mục không qua build — smoke bắt nó phải trùng `package.json`, để nó cũ đi là app tự đòi cập nhật vô cớ.
 - `compareVersions()` so theo **số** từng đoạn: `5.0.10 > 5.0.9`, so chuỗi thì ngược lại.
 - Tự kiểm tra **chỉ trên bản native**, 3 giây sau khi mở, và **im lặng khi lỗi mạng** — trên web nút cập nhật là chính việc tải lại trang.
-- `FINYOURTIN_UPDATE_DISMISSED` lưu *số phiên bản* đã bấm "Để sau", không phải boolean: bản kế tiếp phải hỏi lại. Local, không sync sang máy khác.
+- `FINYOURTIN_UPDATE_DISMISSED` lưu *số phiên bản* đã bấm "Để sau", không phải boolean: bản kế tiếp phải hỏi lại. Local, không sync sang máy khác. Bấm **Tải** cũng ghi cờ này — người dùng rời app sang trình cài đặt rồi quay lại, hỏi lại đúng bản họ vừa tải là phiền.
+- Dùng modal riêng `#update-modal`, **không** dùng `uiSheet()`: sheet chung đang phục vụ luồng đặt lại mật khẩu và bộ chọn dữ liệu cũ, mà hộp cập nhật thì tự bật sau 3 giây — hai thứ tranh nhau một element là chuyện sớm muộn.
+- Ghi chú phát hành lấy từ `body` của release: **chuỗi Markdown từ mạng**. `formatReleaseNotes()` cắt còn 6 dòng, bỏ ký tự Markdown, và bắt buộc qua `esc()` trước khi vào `innerHTML`.
 
 ## PWA
 

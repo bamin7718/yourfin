@@ -439,7 +439,10 @@
     <div class="sub-view-head">
       <button class="icon-btn" onclick="switchTab('dashboard')">‹</button>
       <h3>Ví & Tài khoản</h3>
-      <button class="btn btn-primary btn-sm" onclick="openWalletModal()">+ Tạo ví</button>
+      <!-- Nút tròn viền mảnh: cùng ngôn ngữ với nút ‹ bên trái, không còn một
+           khối xanh đặc chiếm hết góc phải tiêu đề. -->
+      <button class="icon-btn btn-icon-head" id="btn-add-wallet" aria-label="Tạo ví mới"
+              title="Tạo ví mới" onclick="openWalletModal()">+</button>
     </div>
     <div class="card tight mb12" id="wallets-total"></div>
     <div id="wallets-list"></div>
@@ -779,30 +782,58 @@
       <div class="seg expense active" id="mr-type-expense" onclick="setRecurType('expense')">Khoản chi</div>
       <div class="seg income" id="mr-type-income" onclick="setRecurType('income')">Khoản thu</div>
     </div>
-    <div class="form-group"><label>Tên khoản</label><input type="text" id="mr-name" class="input" placeholder="VD: Tiền nhà, Lương tháng..."></div>
-    <div class="form-group"><label>Số tiền</label><input type="text" inputmode="decimal" id="mr-amount" class="input money" placeholder="0"></div>
-    <div class="form-group"><label>Ví</label><select id="mr-wallet" class="input"></select></div>
-    <div class="form-group"><label>Danh mục</label><div id="mr-cat-chips" class="chip-scroll"></div></div>
-    <div class="form-group hidden" id="mr-sub-group"><label>Danh mục con</label><div id="mr-sub-chips" class="chip-scroll"></div></div>
+    <div class="form-group"><label>Tên khoản</label><input type="text" id="mr-name" class="input" placeholder="VD: Tiền nhà, Lương hàng tháng, Netflix..."></div>
     <div class="form-group">
-      <label>Tần suất</label>
-      <div class="chip-row" id="mr-freq-chips">
-        <div class="chip" data-val="daily" onclick="selectRecurFreq('daily',this)">Hàng ngày</div>
-        <div class="chip" data-val="weekly" onclick="selectRecurFreq('weekly',this)">Hàng tuần</div>
-        <div class="chip active" data-val="monthly" onclick="selectRecurFreq('monthly',this)">Hàng tháng</div>
-        <div class="chip" data-val="yearly" onclick="selectRecurFreq('yearly',this)">Hàng năm</div>
+      <label>Số tiền</label>
+      <input type="text" inputmode="decimal" id="mr-amount" class="input money" placeholder="0">
+    </div>
+    <div class="form-group"><label>Ví ghi nhận</label><select id="mr-wallet" class="input"></select></div>
+    <!-- Danh mục: một dòng bấm được, mở sheet chọn — thay cho hai băng chip
+         cuộn ngang vốn giấu mất phần lớn lựa chọn ngoài mép phải. -->
+    <div class="form-group">
+      <label>Danh mục</label>
+      <div class="picker-row ripple-host" id="mr-cat-row" onclick="openRecurCatPicker()">
+        <div class="pr-ic" id="mr-cat-ic">📦</div>
+        <div class="pr-mid">
+          <div class="pr-title" id="mr-cat-name">Chọn danh mục</div>
+          <div class="pr-sub" id="mr-cat-sub"></div>
+        </div>
+        <span class="muted">›</span>
       </div>
     </div>
-    <div class="form-group field-row">
-      <div><label>Lặp mỗi <span id="mr-interval-unit" class="c-primary">tháng</span></label><input type="number" id="mr-interval" class="input" min="1" value="1"></div>
-      <div><label>Đến hạn kế tiếp</label><input type="date" id="mr-duedate" class="input"></div>
+
+    <div class="recurring-card-group">
+      <label class="rcg-label">Lịch lặp lại</label>
+      <div class="frequency-segmented-control" id="mr-freq-seg">
+        <button type="button" data-val="daily" onclick="selectRecurFreq('daily',this)">Ngày</button>
+        <button type="button" data-val="weekly" onclick="selectRecurFreq('weekly',this)">Tuần</button>
+        <button type="button" class="active" data-val="monthly" onclick="selectRecurFreq('monthly',this)">Tháng</button>
+        <button type="button" data-val="yearly" onclick="selectRecurFreq('yearly',this)">Năm</button>
+      </div>
+      <div class="grid-2-cols">
+        <div class="form-group mb0"><label>Lặp mỗi <span id="mr-interval-unit" class="c-primary">tháng</span></label>
+          <input type="number" id="mr-interval" class="input" min="1" value="1"></div>
+        <div class="form-group mb0"><label>Đến hạn kế tiếp</label>
+          <input type="date" id="mr-duedate" class="input"></div>
+      </div>
+      <div class="rcg-end">
+        <div class="between">
+          <span class="text-sm font-sb">Có ngày kết thúc</span>
+          <label class="switch"><input type="checkbox" id="mr-has-end" onchange="toggleRecurEnd()"><span class="slider"></span></label>
+        </div>
+        <input type="date" id="mr-enddate" class="input mt8 hidden">
+      </div>
     </div>
-    <div class="form-group"><label>Kết thúc vào (tùy chọn)</label><input type="date" id="mr-enddate" class="input"></div>
-    <div class="setting-row" style="border:none;padding:4px 0 14px;">
-      <div class="sr-mid"><div class="sr-title">Tự động ghi nhận khi đến hạn</div><div class="sr-sub">App tự tạo giao dịch, không cần xác nhận</div></div>
-      <label class="switch"><input type="checkbox" id="mr-auto"><span class="slider"></span></label>
+
+    <div class="toggle-card">
+      <div class="flex1">
+        <div class="sr-title">Tự động ghi nhận khi đến hạn</div>
+        <div class="sr-sub">Tự tạo giao dịch vào ví mà không cần xác nhận thủ công</div>
+      </div>
+      <label class="switch switch-ok"><input type="checkbox" id="mr-auto"><span class="slider"></span></label>
     </div>
-    <button class="btn btn-primary" onclick="saveRecurringModal()">Lưu</button>
+
+    <button class="btn btn-primary btn-lg" onclick="saveRecurringModal()">Lưu giao dịch</button>
     <button class="btn btn-ghost mt8" onclick="closeModal('modal-recurring')">Hủy</button>
   </div>
 </div>
@@ -908,6 +939,31 @@
     <div class="handle"></div>
     <div id="event-detail-content"></div>
     <button class="btn btn-ghost mt12" onclick="closeModal('modal-event-detail')">Đóng</button>
+  </div>
+</div>
+
+<!-- CẬP NHẬT ỨNG DỤNG (bản Android) -->
+<div id="update-modal" class="modal hidden">
+  <div class="sheet">
+    <div class="handle"></div>
+    <div class="update-head">
+      <div class="update-ic">🚀</div>
+      <div class="flex1">
+        <div class="text-xs muted font-bold">Cập nhật phần mềm</div>
+        <h3 id="update-title" class="mt4">Đã có phiên bản mới</h3>
+      </div>
+    </div>
+    <div id="update-meta" class="update-meta"></div>
+    <div id="update-notes" class="update-notes"></div>
+    <p class="update-hint">
+      <span class="uh-ic">🛡️</span>
+      <span>File tải về cài đè lên bản đang dùng, <b>không mất dữ liệu</b>. Máy sẽ hỏi xác nhận vì app cài ngoài Play Store.</span>
+    </p>
+    <!-- href do showUpdateModal() gán từ asset của release. Để trống hẳn ở đây:
+         một placeholder trỏ vào dấu thăng sẽ bị check.js bắt là tài nguyên cục
+         bộ không tồn tại — và nó bắt đúng, đó là một link gãy. -->
+    <a class="btn btn-primary" id="update-download" rel="noopener" download>Tải &amp; Cập nhật ngay</a>
+    <button class="btn btn-ghost mt8" id="update-later">Để sau</button>
   </div>
 </div>
 

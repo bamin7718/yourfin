@@ -537,6 +537,40 @@ async function boot(opts) {
       check('nút nằm lọt trong ô: input chừa chỗ bên phải',
         /\.money-field>input\.money\{[^}]*padding-right:\d+px/.test(
           fs.readFileSync(path.join(PUBLIC, 'css', 'styles.css'), 'utf8')));
+
+      /* Lề phải nằm trên khung bao. Nút canh giữa theo khung (top:50%), nên một
+         mt12 còn sót trên input làm khung cao hơn ô và đẩy nút lệch khỏi tâm. */
+      check('lề của ô tiền được dời sang khung bao',
+        all.every(i => ![...i.classList].some(c => /^m[tb](4|8|12|16)$/.test(c))),
+        all.filter(i => [...i.classList].some(c => /^m[tb]\d/.test(c))).map(i => '#' + i.id).join(', '));
+      check('khung bao giữ lại đúng lề đó',
+        !!$('tx-amount-raw').parentNode.classList.contains('mt12'),
+        $('tx-amount-raw').parentNode.className);
+
+      /* Cascade thật, không phải đọc chuỗi CSS. Nút mang cả .ripple-host, mà
+         `.ripple-host{position:relative}` nằm SAU `.btn-000` và cùng độ ưu
+         tiên — nên nó từng thắng, nút rơi về relative, thành flex item đứng
+         sau input và bị đẩy hẳn ra ngoài khung nhập. */
+      {
+        const css = fs.readFileSync(path.join(PUBLIC, 'css', 'styles.css'), 'utf8');
+        const probe = new JSDOM(`<!doctype html><style>${css}</style>` +
+          `<div class="money-field"><input id="p1" class="input money"><button class="btn-000 ripple-host">000</button></div>` +
+          `<div class="money-field"><input id="p2" class="input money money-lg"><button class="btn-000 ripple-host">000</button></div>`);
+        const pw = probe.window;
+        const cs = sel => pw.getComputedStyle(pw.document.querySelector(sel));
+        check('khung bao là mốc định vị', cs('.money-field').position === 'relative');
+        check('nút 000 THỰC SỰ absolute sau khi cascade xong — không bị .ripple-host kéo về relative',
+          cs('.btn-000').position === 'absolute', cs('.btn-000').position);
+        check('ripple vẫn bị cắt gọn trong nút', cs('.btn-000').overflow === 'hidden');
+        /* Nút rộng ~44px + 8px lề: dưới 56px là chữ chạm mép nút. */
+        check('ô thường chừa đủ chỗ bên phải cho nút',
+          parseInt(cs('#p1').paddingRight, 10) >= 56, cs('#p1').paddingRight);
+        /* Ô căn giữa: lệch một bên là con số nhìn không còn ở giữa thẻ. */
+        check('ô căn giữa đệm cân hai bên',
+          cs('#p2').paddingLeft === cs('#p2').paddingRight,
+          cs('#p2').paddingLeft + ' / ' + cs('#p2').paddingRight);
+        pw.close();
+      }
     }
 
     window.switchTab('add'); await sleep(20);
@@ -782,6 +816,72 @@ async function boot(opts) {
     check('ví đứng đầu cũ trở lại #1', window.getUserWallets()[0].id === wasFirst, order().join(' | '));
   }
 
+  console.log('\n· thẻ ví ở màn hình Ví');
+  {
+    window.switchTab('wallets'); await sleep(20);
+    const card = () => $('wallets-list').querySelector('.wallet-card-item');
+    check('thẻ ví dùng bố cục hai bên', !!card()
+      && !!card().querySelector('.wallet-info-main') && !!card().querySelector('.wallet-balance-group'));
+    /* Ba nút xếp dọc cũ ăn một phần ba chiều ngang trên máy 360px. */
+    check('KHÔNG còn ba nút Báo cáo/Sửa/Xóa nằm ngay trên thẻ',
+      $('wallets-list').querySelectorAll('.wallet-item button.btn-xs').length === 0,
+      String($('wallets-list').querySelectorAll('.wallet-item button.btn-xs').length));
+    check('bên trái: icon + tên + số dư đầu kỳ',
+      !!card().querySelector('.w-avatar') && !!card().querySelector('.wi-name')
+      && card().querySelector('.wi-open').textContent.includes('Đầu kỳ'));
+    check('bên phải: số dư hiện tại + nút ⋮',
+      !!card().querySelector('.wallet-amount') && !!card().querySelector('.btn-wallet-more'));
+    check('cả thẻ là vùng chạm', (card().getAttribute('onclick') || '').startsWith('openWalletMenu('));
+
+    const wid2 = window.getUserWallets()[0].id;
+    window.openWalletMenu(wid2); await sleep(20);
+    const items = () => [...$('sheet-body').querySelectorAll('.pick-item')];
+    check('mở sheet menu của đúng ví', visible('modal-sheet')
+      && txt('sheet-title').includes(window.getWallet(wid2).name), txt('sheet-title'));
+    check('đủ ba tuỳ chọn', items().length === 3
+      && /Báo cáo/.test(items()[0].textContent)
+      && /Chỉnh sửa/.test(items()[1].textContent)
+      && /Xóa/.test(items()[2].textContent),
+      items().map(i => i.textContent.trim()).join(' | '));
+    check('mục Xóa được đánh dấu nguy hiểm', items()[2].classList.contains('danger'));
+
+    items()[1].click(); await sleep(20);
+    check('bấm Chỉnh sửa: đóng sheet, mở modal sửa đúng ví',
+      !visible('modal-sheet') && visible('modal-wallet')
+      && $('mw-wallet-id').value === wid2, $('mw-wallet-id').value);
+    window.closeModal('modal-wallet');
+
+    /* Ví đã có giao dịch thì chặn từ đầu, không hỏi han gì — xoá nó là bỏ rơi
+       cả một mớ giao dịch không còn ví nào đọc tới. */
+    window.openWalletMenu(wid2); await sleep(15);
+    items()[2].click(); await sleep(20);
+    check('ví đã có giao dịch: chặn ngay, không mở hộp xác nhận',
+      !visible('modal-confirm') && window.getUserWallets().some(w => w.id === wid2));
+
+    /* Ví trống thì mới có đường xoá — và vẫn phải hỏi. */
+    S().wallets.push({ id: 'w_menu', userId: S().currentUser, name: 'Ví trống', icon: '👛',
+      type: 'cash', currency: 'VND', startingBalance: 0, displayOrder: window.nextWalletOrder() });
+    window.saveStorage(); window.renderWalletsView(); await sleep(20);
+    window.openWalletMenu('w_menu'); await sleep(15);
+    items()[2].click(); await sleep(20);
+    check('bấm Xóa: hỏi xác nhận trước, chưa xoá gì', visible('modal-confirm')
+      && window.getUserWallets().some(w => w.id === 'w_menu'));
+    $('confirm-no').click(); await sleep(20);
+    check('huỷ thì ví còn nguyên', window.getUserWallets().some(w => w.id === 'w_menu'));
+    window.openWalletMenu('w_menu'); await sleep(15);
+    items()[2].click(); await sleep(20);
+    $('confirm-yes').click(); await sleep(30);
+    check('đồng ý thì ví bị xoá thật', !window.getUserWallets().some(w => w.id === 'w_menu'));
+
+    check('nút tạo ví trên tiêu đề là nút tròn, không phải khối xanh đặc',
+      !!$('btn-add-wallet') && $('btn-add-wallet').classList.contains('icon-btn')
+      && !$('btn-add-wallet').classList.contains('btn-primary'),
+      $('btn-add-wallet') && $('btn-add-wallet').className);
+    $('btn-add-wallet').click(); await sleep(20);
+    check('… và vẫn mở được form tạo ví', visible('modal-wallet') && $('mw-wallet-id').value === '');
+    window.closeModal('modal-wallet');
+  }
+
   console.log('\n· giao diện: màu, nav, icon SVG');
   {
     const css = fs.readFileSync(path.join(PUBLIC, 'css', 'styles.css'), 'utf8');
@@ -1016,33 +1116,64 @@ async function boot(opts) {
     const reply = body => { window.fetch = async () => { calls++; return { ok:true, json: async () => body }; }; };
     try { window.localStorage.removeItem('FINYOURTIN_UPDATE_DISMISSED'); } catch (e) {}
 
-    reply({ tag_name: 'v9.9.9', assets: [
-      { name: 'sofin.apk', size: 4400000, browser_download_url: 'https://x/sofin.apk' }] });
+    reply({ tag_name: 'v9.9.9', body: '## Tính năng mới\n- Thêm ví điện tử\n* Sửa nút 000\n\n\n',
+      assets: [{ name: 'sofin.apk', size: 4400000, browser_download_url: 'https://x/sofin.apk' }] });
     let tag = await window.checkAppUpdate(); await sleep(20);
     check('phát hiện bản mới hơn', tag === 'v9.9.9', String(tag));
-    check('hiện sheet thông báo', visible('modal-sheet')
-      && $('sheet-body').innerHTML.includes('9.9.9'), txt('sheet-title'));
-    check('sheet có nút tải .apk trỏ đúng asset', (() => {
-      const a = $('sheet-body').querySelector('a[href="https://x/sofin.apk"]');
-      return !!a && /Tải bản cập nhật/.test(a.textContent);
-    })(), $('sheet-body').innerHTML.slice(0, 80));
-    check('có hiển thị dung lượng', $('sheet-body').innerHTML.includes('4.2 MB'));
+    /* Modal riêng, không dùng sheet chung: sheet chung đang phục vụ luồng đặt
+       lại mật khẩu và bộ chọn dữ liệu cũ, mà hộp này tự bật sau 3 giây. */
+    check('hiện modal cập nhật riêng, không chiếm sheet chung',
+      visible('update-modal') && !visible('modal-sheet'));
+    check('tiêu đề mang số phiên bản mới', txt('update-title').includes('v9.9.9'), txt('update-title'));
+    check('có đối chiếu bản đang dùng', txt('update-meta').includes('v' + window.eval('APP_VERSION')),
+      txt('update-meta'));
+    check('có hiển thị dung lượng', txt('update-meta').includes('4.2 MB'), txt('update-meta'));
 
-    window.dismissUpdate('9.9.9'); window.closeSheet();
+    /* Release notes: chuỗi Markdown từ mạng, phải dọn và phải esc. */
+    const notes = () => $('update-notes').textContent;
+    check('hiện ghi chú phát hành từ API',
+      notes().includes('Thêm ví điện tử') && notes().includes('Sửa nút 000'), notes());
+    check('bỏ ký tự Markdown thô', !/[#*]/.test(notes()), notes());
+    check('gạch đầu dòng thành ký hiệu đọc được', notes().includes('· Thêm ví điện tử'));
+    check('bỏ dòng trống', $('update-notes').querySelectorAll('.un-line').length === 3,
+      String($('update-notes').querySelectorAll('.un-line').length));
+
+    check('nút tải trỏ đúng asset của release',
+      $('update-download').getAttribute('href') === 'https://x/sofin.apk',
+      $('update-download').getAttribute('href'));
+    check('nút tải có thuộc tính download', $('update-download').hasAttribute('download'));
+    check('có trấn an chuyện cài đè không mất dữ liệu',
+      /cài đè/.test(txt('update-modal')) && /không mất dữ liệu/.test(txt('update-modal')),
+      txt('update-modal').slice(-90));
+
+    /* Bấm "Tải" cũng phải ghi nhớ: người dùng rời app sang trình cài đặt rồi
+       quay lại, không hỏi lại họ về đúng bản vừa tải. */
+    /* chặn điều hướng thật: jsdom không mở được URL ngoài, và ta chỉ quan tâm
+       tới phần xử lý của mình */
+    $('update-download').addEventListener('click', e => e.preventDefault(), { once: true });
+    $('update-download').click(); await sleep(20);
+    check('bấm Tải thì đóng modal', !visible('update-modal'));
+    check('… và nhớ luôn phiên bản đó',
+      window.localStorage.getItem('FINYOURTIN_UPDATE_DISMISSED') === '9.9.9',
+      window.localStorage.getItem('FINYOURTIN_UPDATE_DISMISSED'));
     tag = await window.checkAppUpdate(); await sleep(20);
-    check('đã bấm "để sau" thì không hỏi lại cùng phiên bản', tag === null && !visible('modal-sheet'));
+    check('đã bấm "để sau" thì không hỏi lại cùng phiên bản', tag === null && !visible('update-modal'));
 
     reply({ tag_name: 'v10.0.0', assets: [] });
     tag = await window.checkAppUpdate(); await sleep(20);
     check('nhưng phiên bản mới hơn nữa thì vẫn báo', tag === 'v10.0.0');
     check('không có asset thì lùi về link mặc định',
-      !!$('sheet-body').querySelector('a[href*="releases/latest/download/sofin.apk"]'));
-    window.closeSheet();
+      $('update-download').getAttribute('href').includes('releases/latest/download/sofin.apk'),
+      $('update-download').getAttribute('href'));
+    check('release không có ghi chú thì vẫn có một dòng thay thế',
+      $('update-notes').textContent.trim().length > 0, notes());
+    $('update-later').click(); await sleep(20);
+    check('bấm "Để sau" thì đóng modal', !visible('update-modal'));
     try { window.localStorage.removeItem('FINYOURTIN_UPDATE_DISMISSED'); } catch (e) {}
 
     reply({ tag_name: 'v1.0.0', assets: [] });
     tag = await window.checkAppUpdate(); await sleep(20);
-    check('bản cũ hơn thì im lặng', tag === null && !visible('modal-sheet'));
+    check('bản cũ hơn thì im lặng', tag === null && !visible('update-modal'));
 
     window.fetch = async () => { throw new Error('mất mạng'); };
     let threw = null;
@@ -1365,6 +1496,92 @@ async function boot(opts) {
     try { window.switchTab(tab); } catch (e) { threw = e.message; }
     await sleep(15);
     check('tab ' + tab, !threw && consoleErrors.length === errBefore, threw || consoleErrors[errBefore]);
+  }
+
+  console.log('\n· form khoản định kỳ');
+  {
+    const before = S().recurring.length;
+    window.openRecurringModal(); await sleep(20);
+    check('mở được form', visible('modal-recurring'));
+
+    /* Danh mục: một dòng bấm được, danh sách nằm trong sheet — không còn hai
+       băng chip cuộn ngang giấu mất lựa chọn ngoài mép phải. */
+    check('danh mục là dòng chọn, không phải băng chip',
+      !!$('mr-cat-row') && !$('mr-cat-chips') && !$('mr-sub-chips'));
+    check('dòng danh mục hiện sẵn lựa chọn mặc định', txt('mr-cat-name').length > 0, txt('mr-cat-name'));
+
+    window.openRecurCatPicker(); await sleep(20);
+    check('bấm vào thì mở sheet chọn', visible('modal-sheet')
+      && $('sheet-body').querySelectorAll('.cat-tile').length > 0);
+    /* c_bill có danh mục con (s_rent) → phải hỏi tiếp chứ không chọn vội */
+    window.openRecurCatPicker('c_bill'); await sleep(20);
+    check('danh mục có con thì hỏi tiếp danh mục con',
+      visible('modal-sheet') && $('sheet-body').querySelectorAll('.pick-item').length > 1);
+    check('luôn có lối bỏ qua danh mục con',
+      $('sheet-body').textContent.includes('Không chọn danh mục con'));
+    const subItem = [...$('sheet-body').querySelectorAll('.pick-item')]
+      .find(i => i.textContent.includes('Thuê nhà'));
+    check('danh mục con của c_bill hiện ra', !!subItem, $('sheet-body').textContent.slice(0, 70));
+    subItem.click(); await sleep(20);
+    check('chọn xong thì đóng sheet', !visible('modal-sheet'));
+    check('dòng danh mục cập nhật cả cha lẫn con',
+      txt('mr-cat-name') === 'Hóa đơn' && txt('mr-cat-sub') === 'Thuê nhà',
+      txt('mr-cat-name') + ' / ' + txt('mr-cat-sub'));
+
+    /* Tần suất: 4 nút bằng nhau thay cho chip "Hàng ngày/Hàng tuần…" */
+    const segs = [...$('mr-freq-seg').querySelectorAll('button')];
+    check('4 nút tần suất', segs.map(b => b.textContent).join('|') === 'Ngày|Tuần|Tháng|Năm',
+      segs.map(b => b.textContent).join('|'));
+    check('mặc định là Tháng', segs.find(b => b.classList.contains('active')).dataset.val === 'monthly');
+    segs.find(b => b.dataset.val === 'weekly').click(); await sleep(15);
+    check('đổi tần suất thì nút đó sáng',
+      segs.find(b => b.classList.contains('active')).dataset.val === 'weekly'
+      && segs.filter(b => b.classList.contains('active')).length === 1);
+    check('đơn vị "lặp mỗi" đổi theo', txt('mr-interval-unit') === 'tuần', txt('mr-interval-unit'));
+
+    /* Ngày kết thúc là tuỳ chọn, ẩn sau công tắc. */
+    check('ô ngày kết thúc ẩn khi chưa bật', $('mr-enddate').classList.contains('hidden'));
+    $('mr-has-end').checked = true; window.toggleRecurEnd(); await sleep(10);
+    check('bật công tắc thì hiện ô ngày', !$('mr-enddate').classList.contains('hidden'));
+    const endDay = window.isoOf(new Date(new Date().getFullYear() + 1, 0, 15));
+    $('mr-enddate').value = endDay;
+    $('mr-has-end').checked = false; window.toggleRecurEnd(); await sleep(10);
+    check('tắt lại thì XOÁ luôn giá trị, không lưu lén ngày trong ô ẩn',
+      $('mr-enddate').value === '', $('mr-enddate').value);
+    $('mr-has-end').checked = true; window.toggleRecurEnd();
+    $('mr-enddate').value = endDay;
+
+    $('mr-name').value = 'Netflix';
+    $('mr-amount').value = '260000';
+    $('mr-interval').value = '2';
+    $('mr-auto').checked = false;
+    window.saveRecurringModal(); await sleep(30);
+    check('lưu được', S().recurring.length === before + 1 && !visible('modal-recurring'));
+    const r = S().recurring[S().recurring.length - 1];
+    check('lưu đúng danh mục và danh mục con',
+      r.categoryId === 'c_bill' && r.subcategoryId === 's_rent',
+      r.categoryId + ' / ' + r.subcategoryId);
+    check('lưu đúng tần suất và số kỳ', r.frequency === 'weekly' && r.interval === 2,
+      r.frequency + ' / ' + r.interval);
+    check('lưu đúng ngày kết thúc', r.endDate === endDay, r.endDate);
+    check('số tiền là number sạch', r.amount === 260000 && typeof r.amount === 'number', r.amount);
+
+    /* Mở lại để sửa: form phải dựng lại đúng trạng thái vừa lưu. */
+    window.openRecurringModal(r.id); await sleep(20);
+    check('sửa: công tắc ngày kết thúc bật sẵn', $('mr-has-end').checked
+      && !$('mr-enddate').classList.contains('hidden'));
+    check('sửa: đúng nút tần suất sáng',
+      $('mr-freq-seg').querySelector('button.active').dataset.val === 'weekly');
+    check('sửa: dòng danh mục dựng lại đúng',
+      txt('mr-cat-sub') === 'Thuê nhà', txt('mr-cat-name') + ' / ' + txt('mr-cat-sub'));
+    window.closeModal('modal-recurring');
+    S().recurring = S().recurring.filter(x => x.id !== r.id);
+    window.saveStorage();
+
+    const css3 = fs.readFileSync(path.join(PUBLIC, 'css', 'styles.css'), 'utf8');
+    check('cụm lịch lặp dùng màu theo theme, không hex cứng',
+      /\.recurring-card-group\{background:var\(--card-2\)/.test(css3)
+      && /\.frequency-segmented-control button\.active\{background:var\(--card\)/.test(css3));
   }
 
   console.log('\n· settings');
