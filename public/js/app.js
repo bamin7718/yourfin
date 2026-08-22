@@ -1472,11 +1472,9 @@ function renderDashboard(){
     const sub   = card ? 'Còn ' + fmtW(getCardAvailableLimit(w), w)
                        : walletMeta(w).label + (w.currency!=='VND' ? ' · '+w.currency : '');
     return `<div class="wallet-card ${card?'cc-mini':''} ripple-host" onclick="jumpToWallet('${w.id}')">
-      <div class="w-left">
-        <div class="wicon">${w.icon}</div>
+      <div class="wicon">${w.icon}</div>
+      <div class="w-body">
         <div class="wname">${esc(w.name)}</div>
-      </div>
-      <div class="w-right">
         <div class="wbal tabular${amtClass(fmtW(money, w))}">${fmtW(money, w)}</div>
         <div class="wsub">${esc(sub)}</div>
       </div>

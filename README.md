@@ -29,7 +29,7 @@ SoFin/
 │   ├── generate-env.js         build: env → public/js/env.js (kèm BUILD stamp)
 │   ├── generate-icons.js       vẽ bộ icon PWA bằng zlib, không cần thư viện ảnh
 │   ├── check.js                kiểm tra wiring HTML ↔ JS + manifest/sw
-│   ├── smoke.js                chạy thật app bằng jsdom (318 assertion)
+│   ├── smoke.js                chạy thật app bằng jsdom (327 assertion)
 │   ├── sync-test.js            hợp đồng đồng bộ: giữ mạng treo để soi UI (20 assertion)
 │   ├── transfer-test.js        hợp đồng chuyển ví: hai ví luôn khớp nhau (23 assertion)
 │   ├── chart-test.js           canvas giả để chạy thật hit-test biểu đồ (44 assertion)
@@ -70,7 +70,7 @@ Không muốn tạo `.env`? Cứ mở app — nó sẽ hiện **màn hình cấu
 
 ```bash
 npm run check                             # wiring HTML ↔ JS, syntax, rò rỉ khoá, phủ offline
-npm install jsdom --no-save && npm test   # smoke 318 + sync 20 + transfer 23 + chart 44 + header 22
+npm install jsdom --no-save && npm test   # smoke 327 + sync 20 + transfer 23 + chart 44 + header 22
 ```
 
 ---
@@ -131,7 +131,7 @@ Last-write-wins theo `data.updatedAt` (đồng hồ client, đóng dấu bởi `
 | **Điều hướng** | Thanh nav đúng 4 mục — Tổng quan · Giao dịch · Báo cáo · Cài đặt — cộng nút **+**. Các màn hình phụ (ví, ngân sách, sổ nợ, định kỳ, sự kiện, danh mục) vào từ lưới **Truy cập nhanh** ở Tổng quan. Chạm một ví → nhảy sang Giao dịch đã lọc sẵn ví đó; chạm một danh mục → lọc theo danh mục. Bộ lọc **Ví** nằm ngay trên màn hình Giao dịch, không phải mở panel nâng cao. |
 | **PWA** | Cài lên máy được, chạy standalone, mở offline 100% nhờ service worker cache-first. Cài đặt → *Thông tin ứng dụng* có nút cài (và hướng dẫn riêng cho iOS Safari), báo trạng thái offline và nút tải bản cập nhật. |
 | **Bảo mật** | Khóa PIN 4 chữ số (SHA-256, WebCrypto). Một form đổi **mã PIN** hoặc **mật khẩu đăng nhập**: nhập mã/mật khẩu hiện tại → mới → xác nhận. PIN đối chiếu hash trong `state`; mật khẩu thì xác thực lại với Supabase vì `updateUser()` không tự hỏi mật khẩu cũ. |
-| **Giao diện** | Ngôn ngữ thiết kế **VietinBank iPay**: app bar gradient xanh gọn một hàng (~70px), thẻ tổng tài sản trắng bo 16px đè lên app bar với nút con mắt ngay cạnh con số, thẻ ví dạng **hàng ngang thu gọn ~78px** cuộn ngang, nền `#F4F7FA`. Lưới **Tiện ích 5 ô** nằm cuối trang, icon trong khung gradient nhạt có inner shadow. Bottom nav kính mờ (`backdrop-filter`), tab active xanh kèm vạch đỏ `#ED1C24`; nút **+** là FAB gradient xanh–đỏ có glow thở nhẹ. Ripple + rung nhẹ khi chạm. Mobile-first 480px, Dark/Light/Tự động. |
+| **Giao diện** | Ngôn ngữ thiết kế **VietinBank iPay**: app bar gradient xanh gọn một hàng (~70px), thẻ tổng tài sản trắng bo 16px đè lên app bar với nút con mắt ngay cạnh con số, ví xếp **lưới 2 cột** (6 ví = 3 hàng, không phải vuốt), nền `#F4F7FA`. Lưới **Tiện ích 5 ô** nằm cuối trang, icon trong khung gradient nhạt có inner shadow. Bottom nav kính mờ (`backdrop-filter`), tab active xanh kèm vạch đỏ `#ED1C24`; nút **+** là FAB gradient xanh–đỏ có glow thở nhẹ. Ripple + rung nhẹ khi chạm. Mobile-first 480px, Dark/Light/Tự động. |
 | **Hệ thống icon** | Icon *của app* (nav, nút, hàng cài đặt, empty state, cảnh báo) là SVG stroke 24×24 inline, khai báo trong `ICON_PATHS` và dựng bằng `icon(name)` — thừa kế `currentColor` và cỡ chữ nên một rule CSS chỉnh được tất cả. Emoji **do người dùng chọn** (ví, danh mục, sự kiện) là dữ liệu trong `state`, giữ nguyên. |
 
 ---

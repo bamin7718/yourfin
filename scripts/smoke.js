@@ -650,8 +650,12 @@ async function boot(opts) {
     check('header thu gọn còn một hàng ~70px',
       /header\{[^}]*padding:calc\(9px \+ env\(safe-area-inset-top,0px\)\) 14px 26px/.test(css)
       && /header \.hd-who\{display:flex/.test(css));
-    check('thẻ ví thu gọn dạng hàng ngang',
-      /\.wallet-card\{[^}]*min-height:78px/.test(css) && /\.wallet-card \.w-right\{/.test(css));
+    check('ví xếp lưới 2 cột, không cuộn ngang',
+      /\.wallet-grid\{display:grid;grid-template-columns:repeat\(2,1fr\)/.test(css)
+      && !/\.wallet-scroll\{/.test(css));
+    check('thẻ ví gọn, chống tràn khi số tiền dài',
+      /\.wallet-card\{width:100%;min-width:0;min-height:72px/.test(css)
+      && /\.wallet-card \.wbal\.amt-xs\{/.test(css));
     check('nav bar dùng glassmorphism', /\.nav-bar\{[^}]*backdrop-filter:blur\(14px\)/.test(css));
     check('vạch chỉ báo tab active màu đỏ',
       /\.nav-item::before\{[^}]*background:var\(--brand-red\)/.test(css));
@@ -977,6 +981,53 @@ async function boot(opts) {
 
     S().recurring.length = 0; window.saveStorage();
     pick('thismonth'); await sleep(20);
+  }
+
+
+  console.log('\n· "Ví của bạn": lưới 2 cột');
+  {
+    window.switchTab('dashboard'); await sleep(20);
+    const uid0 = S().currentUser;
+    const before = S().wallets.length;
+    /* đủ 6 ví để thấy hình dạng 2x3, kèm một số dư rất lớn và một tên rất dài */
+    while (S().wallets.length < 6) {
+      const n = S().wallets.length + 1;
+      S().wallets.push({ id: 'wg' + n, userId: uid0, name: 'Ví số ' + n, icon: '👛',
+        type: 'cash', currency: 'VND', startingBalance: 1000000 * n, displayOrder: n + 10 });
+    }
+    S().wallets[S().wallets.length - 1].name = 'Ngân hàng Thương mại Cổ phần Ngoại thương';
+    S().wallets[S().wallets.length - 1].startingBalance = -159800000000;
+    window.saveStorage();
+    window.switchTab('dashboard'); await sleep(30);
+
+    const grid = $('db-wallet-scroll');
+    const cards = [...grid.querySelectorAll('.wallet-card:not(.add)')];
+    check('render đủ 6 ví, không giấu bớt', cards.length === 6, cards.length + ' thẻ');
+    check('container là lưới, không phải carousel',
+      grid.classList.contains('wallet-grid') && !grid.classList.contains('wallet-scroll'));
+    check('thẻ nằm trực tiếp trong lưới, không bọc div thừa',
+      cards.every(c => c.parentNode === grid));
+    check('ô "Thêm ví" cũng là một ô lưới',
+      !!grid.querySelector('.wallet-card.add') && grid.querySelector('.wallet-card.add').parentNode === grid);
+
+    const last = cards[cards.length - 1];
+    /* jsdom không layout nên không đo được pixel; kiểm hợp đồng CSS thay vào đó */
+    check('tên ví dài dựa vào ellipsis chứ không xuống dòng làm vỡ thẻ',
+      last.querySelector('.wname').textContent.length > 20
+      && /\.wallet-card \.wname\{[^}]*text-overflow:ellipsis/.test(
+           fs.readFileSync(path.join(PUBLIC, 'css', 'styles.css'), 'utf8')));
+    check('số âm rất lớn được thu nhỏ font thay vì cắt cụt', (() => {
+      const bal = last.querySelector('.wbal');
+      return bal.className.includes('amt-') && /159\.800\.000\.000/.test(bal.textContent);
+    })(), last.querySelector('.wbal').textContent + ' | ' + last.querySelector('.wbal').className);
+    check('mỗi thẻ có icon và cột nội dung xếp dọc',
+      cards.every(c => c.querySelector('.wicon') && c.querySelector('.w-body')
+        && c.querySelector('.w-body .wname') && c.querySelector('.w-body .wbal')));
+
+    S().wallets = S().wallets.filter(w => !/^wg\d/.test(w.id));
+    window.saveStorage();
+    window.switchTab('dashboard'); await sleep(20);
+    check('dọn dẹp: về lại số ví ban đầu', S().wallets.length === before);
   }
 
 
