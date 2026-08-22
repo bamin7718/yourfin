@@ -46,8 +46,11 @@
     box-shadow: 0 24px 70px rgba(15,23,42,.20), 0 2px 8px rgba(15,23,42,.08);
     border: 1px solid var(--border);
   }
-  /* On desktop the column scrolls, not the page — so the bar sits outside the
-     scrollport and is permanently visible without needing to stick. */
+  /* On desktop the column scrolls, not the page: the bar is a sibling of the
+     scrollport, so it is permanently visible while sitting in normal flow.
+     Fixed would pin it to the viewport and float it off the frame. */
+  header{ position: static; transform: none; max-width: none; }
+  #main-header:not(.hidden) ~ .view{ padding-top: 12px; }
   .app > .view{ overflow-y: auto; overflow-x: hidden; }
   .nav-bar{
     position: absolute;

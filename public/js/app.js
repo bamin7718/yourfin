@@ -1330,6 +1330,7 @@ function initUserSession(){
   document.getElementById('view-login').classList.add('hidden');
   document.getElementById('main-header').classList.remove('hidden');
   document.getElementById('user-display-name').textContent = displayName();
+  syncHeaderHeight();
   const h = new Date().getHours();
   /* no trailing emoji: the greeting shares one compact line with the name */
   document.getElementById('header-greet').textContent =
@@ -1419,6 +1420,16 @@ const VIEW_RENDERERS = {
   categories: renderCategoriesView,
   settings: renderSettingsView
 };
+/* The bar is position:fixed, so nothing below it knows how tall it is. Publish
+   the measured height — the safe-area inset makes it a runtime value, not one
+   we can hard-code. */
+function syncHeaderHeight(){
+  const hd = document.getElementById('main-header');
+  if(!hd || hd.classList.contains('hidden')) return;
+  const h = hd.offsetHeight;
+  if(h) document.documentElement.style.setProperty('--hd-h', h + 'px');
+}
+
 function switchTab(tab){
   if(tab==='add' && getUserWallets().length===0){ toast('Bạn cần tạo ít nhất 1 ví trước','err'); tab='wallets'; }
   currentTab = tab;
@@ -1438,6 +1449,7 @@ function switchTab(tab){
   if(hd) hd.classList.add('hd-flat');
   const fn = VIEW_RENDERERS[tab];
   if(fn) fn();
+  syncHeaderHeight();
   window.scrollTo({top:0});
 }
 function renderAll(){
@@ -4263,6 +4275,7 @@ async function boot(){
 }
 let resizeTimer = null;
 window.addEventListener('resize', ()=>{
+  syncHeaderHeight();
   clearTimeout(resizeTimer);
   resizeTimer = setTimeout(()=>{ if(currentTab==='reports') renderReportsView(); }, 200);
 });

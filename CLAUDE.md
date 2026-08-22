@@ -112,7 +112,11 @@ Icon *hệ thống* dùng `icon('name')` (bảng `ICON_PATHS` ở đầu `app.js
 
 Ngôn ngữ thiết kế bám theo **VietinBank iPay**: xanh `#00529C` / `#003B70`, đỏ nhấn `#ED1C24` (`--brand-red`), nền `#F4F7FA`. Ba gradient riêng biệt, đừng dùng lẫn: `--gradient` (app bar), `--gradient-card` (thẻ ví/tài sản), `--gradient-fab` (nút +). **Thứ tự xếp lớp**: `header` để `z-index:1`, `.view` để `z-index:2`. Đừng nâng header lên — nó từng để `25` (di sản thời còn `position:sticky`) và nuốt mất nửa dòng "Tổng tài sản ròng" vì thẻ số dư cố tình kéo lên đè vào vành header. `.view` có `z-index` nên tạo stacking context riêng: đặt `z-index` cho `.hero` bên trong là vô ích, phải chỉnh ở tầng `.view`.
 
-**App bar `position:sticky; top:0`** — và điều kiện sống còn của nó là `.app` dùng `overflow-x:clip` **chứ không phải `hidden`**. `hidden` ở một trục khiến trình duyệt tính trục kia thành `auto`, `.app` trở thành scroll container, mà nó lại không bao giờ cuộn (có `min-height` chứ không có `height`) → sticky im lặng không dính, không báo lỗi gì. Trên desktop (`shell.css`) thì `.app > .view` mới là vùng cuộn, header nằm ngoài nên luôn thấy.
+**App bar dùng `position:fixed`, KHÔNG dùng `sticky`.** Sticky neo vào scrollport gần nhất, mà bất kỳ tổ tiên nào có `overflow` khác `visible` cũng trở thành scrollport — `.app` có `overflow-x` để chặn trôi ngang, nên nó nhận vai đó rồi không bao giờ cuộn, và bar trôi theo trang. Đổi sang `clip` **không cứu được**; đã thử và vẫn hỏng. `.nav-bar` fixed từ đầu và chưa bao giờ dính lỗi này, header giờ dùng đúng công thức đó: `fixed; left:50%; transform:translateX(-50%); max-width:520px`.
+
+Bar ra khỏi luồng nên không gì bên dưới biết nó cao bao nhiêu: `syncHeaderHeight()` đo rồi công bố `--hd-h` (chiều cao phụ thuộc safe-area, chỉ biết lúc chạy), `.view` chừa `calc(var(--hd-h) + 12px)`. Gọi lại sau mỗi `switchTab`, khi hiện header, và khi resize.
+
+Trên desktop (`shell.css`) `.app > .view` mới là vùng cuộn và bar nằm ngoài nó, nên media query trả header về `position:static` — fixed sẽ ghim nó vào viewport và văng khỏi khung.
 
 **Chỉ có MỘT kiểu app bar: phẳng.** `switchTab()` luôn `add('hd-flat')`, HTML cũng đặt sẵn cờ đó cho màn hình nào hiện header mà không đi qua `switchTab` (onboarding). Trước đây Dashboard giữ một vành 26px để thẻ số dư kéo lên đè vào — cơ chế đó cần cờ `hd-flat` phải đúng trên **mọi** đường vào **mọi** màn hình, và nó sai hai lần: nuốt tiêu đề "Cài đặt", rồi nuốt tiêu đề onboarding. Đã bỏ hẳn: không còn `margin-top` âm, `.hero` nằm dưới header như tiêu đề mọi trang khác.
 

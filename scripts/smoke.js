@@ -627,17 +627,30 @@ async function boot(opts) {
     const zHeader = Number((/header\{[^}]*z-index:(\d+)/.exec(css) || [])[1]);
     const zView = Number((/#main-header:not\(\.hidden\) ~ \.view\{[^}]*z-index:(\d+)/.exec(css) || [])[1]);
     const zNav = Number((/\.nav-bar\{[^}]*z-index:(\d+)/.exec(css) || [])[1]);
-    check('header ghim ở đỉnh màn hình', /header\{position:sticky;top:0/.test(css));
-    check('header vẽ trên nội dung đang cuộn qua', zHeader > zView, `header z=${zHeader} vs view z=${zView}`);
-    check('thanh nav vẫn nằm trên header', zNav > zHeader, `nav z=${zNav}`);
-    /* Cái bẫy: overflow-x:hidden khiến trình duyệt tính overflow-y thành auto,
-       .app thành scroll container — và sticky bên trong một scrollport không
-       bao giờ cuộn thì không bao giờ dính. Phải là `clip`. */
-    check('.app dùng overflow-x:clip, không phải hidden (nếu không sticky chết lặng)',
-      /\.app\{[^}]*overflow-x:clip/.test(css) && !/\.app\{[^}]*overflow-x:hidden/.test(css));
-    check('không tổ tiên nào của header đặt overflow ẩn', (() => {
-      const body = /^body\{[^}]*\}/m.exec(css);
-      return !body || !/overflow/.test(body[0]);
+    /* FIXED, không phải sticky: sticky neo vào scrollport gần nhất, mà bất kỳ
+       tổ tiên nào có overflow khác `visible` cũng thành scrollport — .app có
+       overflow-x nên nó nhận vai đó rồi không bao giờ cuộn, và thanh bar trôi
+       theo trang. .nav-bar đã fixed từ đầu và chưa bao giờ dính lỗi này. */
+    check('header ghim bằng position:fixed, không phụ thuộc overflow của tổ tiên',
+      /header\{position:fixed;top:0;left:50%/.test(css));
+    check('header canh giữa và giới hạn đúng bề rộng cột như thanh nav',
+      /header\{[^}]*transform:translateX\(-50%\)[^}]*max-width:520px/.test(css));
+    check('header vẽ trên nội dung cuộn qua', zHeader > zView, `header z=${zHeader} vs view z=${zView}`);
+    check('header và nav đều dưới modal',
+      Math.max(zHeader, zNav) < Number((/\.modal\{[^}]*z-index:(\d+)/.exec(css) || [])[1]),
+      `header=${zHeader} nav=${zNav}`);
+    /* Bar ra khỏi luồng thì không gì bên dưới biết nó cao bao nhiêu. */
+    check('mọi trang chừa đúng chiều cao header đo được lúc chạy',
+      /#main-header:not\(\.hidden\) ~ \.view\{padding-top:calc\(var\(--hd-h/.test(css));
+    check('có JS đo và công bố --hd-h', /function syncHeaderHeight\(\)/.test(
+      fs.readFileSync(path.join(PUBLIC, 'js', 'app.js'), 'utf8')));
+    check('màn hình ẩn header thì không chừa khoảng thừa',
+      /#main-header:not\(\.hidden\) ~ \.view\{padding-top/.test(css));
+    /* Desktop: cột cuộn chứ không phải trang, bar nằm ngoài vùng cuộn nên
+       fixed sẽ ghim nó vào viewport và văng khỏi khung. */
+    check('khung desktop trả header về luồng thường', (() => {
+      const shell = fs.readFileSync(path.join(PUBLIC, 'css', 'shell.css'), 'utf8');
+      return /header\{ position: static/.test(shell);
     })());
     check('thẻ số dư không còn margin âm, nằm dưới header như mọi trang',
       /\.hero\{[^}]*padding:16px;margin-top:0/.test(css)
@@ -646,7 +659,7 @@ async function boot(opts) {
     check('không còn quy tắc kéo view lên đè header',
       !/:not\(\.hd-flat\) ~ \.view\{margin-top:-/.test(css));
     check('mọi trang đều chừa khoảng dưới header',
-      /#main-header\.hd-flat ~ \.view\{padding-top:20px/.test(css));
+      /#main-header:not\(\.hidden\) ~ \.view\{padding-top:calc\(var\(--hd-h/.test(css));
     check('header thu gọn còn một hàng ~70px',
       /header\{[^}]*padding:calc\(9px \+ env\(safe-area-inset-top,0px\)\) 14px 26px/.test(css)
       && /header \.hd-who\{display:flex/.test(css));

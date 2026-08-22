@@ -79,7 +79,18 @@ input,select,textarea,button{font-family:inherit;}
 /* Sticky at the top of the page. z-index only has to clear the views (2) and
    stay under the nav bar (30) and the overlays above that. Nothing overlaps
    the bar any more, so there is no card left for it to bury. */
-header{position:sticky;top:0;z-index:20;display:flex;justify-content:space-between;align-items:center;
+/* FIXED, not sticky. Sticky anchors to the nearest scrollport, and any
+   ancestor with an overflow other than `visible` becomes one — .app carries
+   overflow-x to stop sideways drift, so it was volunteering as a scrollport
+   that never scrolls, and the bar rode away with the page. .nav-bar has been
+   pinned this way since the beginning and has never had the problem; the bar
+   now uses the same recipe, which no ancestor can interfere with.
+
+   The height it occupies is published as --hd-h (measured in JS, because the
+   safe-area inset is only known at runtime) and the views pad by it. */
+header{position:fixed;top:0;left:50%;transform:translateX(-50%);
+  width:100%;max-width:520px;z-index:40;
+  display:flex;justify-content:space-between;align-items:center;
   gap:10px;padding:calc(9px + env(safe-area-inset-top,0px)) 14px 26px;background:var(--gradient);
   color:#fff;border-bottom-left-radius:20px;border-bottom-right-radius:20px;
   transition:padding-bottom .2s ease;}
@@ -102,9 +113,12 @@ header .icon-btn:hover{background:rgba(255,255,255,.26);}
 
    (Login, config and onboarding hide the bar entirely; the :not(.hidden) guard
    keeps them from being pulled off the top of the viewport.) */
+/* The bar is out of flow now, so every screen reserves its height. Hidden bar
+   (login, config) matches no selector and gets no padding. 58px is only the
+   value used for the instant before JS measures the real one. */
 #main-header:not(.hidden) ~ .view{position:relative;z-index:2;}
 #main-header.hd-flat{padding-bottom:12px;}
-#main-header.hd-flat ~ .view{padding-top:20px;}
+#main-header:not(.hidden) ~ .view{padding-top:calc(var(--hd-h, 58px) + 12px);}
 .icon-btn{width:36px;height:36px;border-radius:50%;background:var(--card);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:1rem;cursor:pointer;color:var(--text);flex:0 0 auto;transition:.15s;}
 .icon-btn:active{transform:scale(.92);}
 .badge-dot{position:absolute;top:2px;right:2px;width:8px;height:8px;border-radius:50%;background:var(--expense);border:2px solid var(--bg);}

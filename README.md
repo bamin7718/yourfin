@@ -30,7 +30,7 @@ SoFin/
 │   ├── generate-env.js         build: env → public/js/env.js (kèm BUILD stamp)
 │   ├── generate-icons.js       vẽ bộ icon PWA bằng zlib, không cần thư viện ảnh
 │   ├── check.js                kiểm tra wiring HTML ↔ JS + manifest/sw
-│   ├── smoke.js                chạy thật app bằng jsdom (347 assertion)
+│   ├── smoke.js                chạy thật app bằng jsdom (350 assertion)
 │   ├── sync-test.js            hợp đồng đồng bộ: giữ mạng treo để soi UI (20 assertion)
 │   ├── transfer-test.js        hợp đồng chuyển ví: hai ví luôn khớp nhau (23 assertion)
 │   ├── chart-test.js           canvas giả để chạy thật hit-test biểu đồ (44 assertion)
@@ -74,7 +74,7 @@ Không muốn tạo `.env`? Cứ mở app — nó sẽ hiện **màn hình cấu
 
 ```bash
 npm run check                             # wiring HTML ↔ JS, syntax, rò rỉ khoá, phủ offline
-npm install jsdom --no-save && npm test   # smoke 347 + sync 20 + transfer 23 + chart 44 + header 22
+npm install jsdom --no-save && npm test   # smoke 350 + sync 20 + transfer 23 + chart 44 + header 22
 ```
 
 ---
