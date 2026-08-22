@@ -169,7 +169,9 @@ git commit -am "..." && git tag v5.0.1 && git push origin main v5.0.1
 Hai cái bẫy trong workflow đã cắn thật, đừng nới:
 
 - **`concurrency.group` phải kèm `${{ github.ref }}`.** Lệnh push trên đẩy nhánh và tag cùng lúc → hai run song song; một nhóm chung thì cái sau giết cái trước, và đã có lần cái bị giết là run của tag: tag lên remote nhưng **không có release nào**, không một dòng báo lỗi.
-- **`ANDROID_DEBUG_KEYSTORE_B64` phải có.** Runner sạch không có `~/.android/debug.keystore` nên Gradle sinh khoá ngẫu nhiên mỗi lần build; chữ ký đổi thì Android từ chối cài đè và người dùng phải gỡ app — mất sạch localStorage. CI chặn job phát hành nếu thiếu secret. Alias/mật khẩu bắt buộc là `androiddebugkey`/`android`/`android`, xem `DEPLOY.md`.
+- **`ANDROID_DEBUG_KEYSTORE_B64` phải có.** Runner là máy sạch nên Gradle sinh khoá debug ngẫu nhiên mỗi lần build; chữ ký đổi thì Android từ chối cài đè và người dùng phải gỡ app — mất sạch localStorage. CI chặn job phát hành nếu thiếu secret. Alias/mật khẩu bắt buộc là `androiddebugkey`/`android`/`android`, xem `DEPLOY.md`.
+- **Cách ký: `apksigner sign` ký đè SAU khi build, không phải đặt khoá cho Gradle tìm.** Đã thử ghi vào `~/.android/debug.keystore` và Gradle vẫn ký bằng khoá tự sinh (`CN=Android Debug`) — nó tìm khoá theo `ANDROID_USER_HOME`/`ANDROID_SDK_HOME` mà `setup-android` đặt, không theo `$HOME`. Ký đè thì không phụ thuộc biến môi trường nào.
+- **Bước "Đối chiếu chữ ký" là thứ duy nhất bắt được sai khoá**, đừng gỡ: nó so vân tay SHA-256 của APK với `f73a128d…` và chặn phát hành nếu lệch. Sai khoá hỏng hoàn toàn im lặng — APK cài được, chạy được, chỉ là không ai nâng cấp đè lên nó được, và chỉ lộ ra vài tuần sau. Đúng ca này đã xảy ra ở v5.0.4. Bật cả v1 lẫn v2 khi ký để `keytool -printcert -jarfile` ngoài máy cũng kiểm được.
 
 - `APP_VERSION` đến từ `__ENV__.VERSION` do `generate-env.js` chép từ `package.json`; hằng số dự phòng trong `app.js` chỉ dùng khi mở thư mục không qua build — smoke bắt nó phải trùng `package.json`, để nó cũ đi là app tự đòi cập nhật vô cớ.
 - `compareVersions()` so theo **số** từng đoạn: `5.0.10 > 5.0.9`, so chuỗi thì ngược lại.
