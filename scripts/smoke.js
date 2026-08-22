@@ -623,6 +623,18 @@ async function boot(opts) {
     check('card có shadow nổi 0 8px 24px rgba(0,82,156,.12)',
       /--shadow-lift:0 8px 24px rgba\(0,82,156,\.12\)/.test(css));
     check('header là app bar gradient', /header\{[^}]*background:var\(--gradient\)/.test(css));
+    // Thứ tự xếp lớp: thẻ số dư kéo lên đè vào vành header, nên nó PHẢI vẽ
+    // sau header. Header từng để z-index:25 (di sản thời còn sticky) và nuốt
+    // mất nửa dòng "Tổng tài sản ròng".
+    const zHeader = (/header\{[^}]*z-index:(\d+)/.exec(css) || [])[1];
+    const zView = (/#main-header:not\(\.hidden\) ~ \.view\{[^}]*z-index:(\d+)/.exec(css) || [])[1];
+    check('thẻ số dư vẽ ĐÈ LÊN header, không bị header nuốt',
+      Number(zView) > Number(zHeader), `header z=${zHeader} vs view z=${zView}`);
+    check('thanh nav vẫn nằm trên cùng so với nội dung',
+      Number((/\.nav-bar\{[^}]*z-index:(\d+)/.exec(css) || [])[1]) > Number(zView));
+    check('thẻ số dư có padding-top thoáng hơn hai bên',
+      /\.hero\{[^}]*padding:18px 16px 14px/.test(css));
+
     check('chỉ Dashboard mới đè lên header',
       /#main-header:not\(\.hidden\):not\(\.hd-flat\) ~ \.view\{margin-top:-20px/.test(css)
       && /#main-header\.hd-flat ~ \.view\{padding-top:20px/.test(css));
