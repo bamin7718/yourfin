@@ -1,6 +1,6 @@
 {
   "name": "sofin",
-  "version": "5.0.3",
+  "version": "5.0.4",
   "private": true,
   "description": "Ứng dụng quản lý tài chính cá nhân mobile-first, đồng bộ đa thiết bị qua Supabase.",
   "scripts": {
