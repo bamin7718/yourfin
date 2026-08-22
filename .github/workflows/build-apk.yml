@@ -83,6 +83,29 @@ jobs:
           npx cap add android
           npx cap sync android
 
+      # KHOÁ KÝ CỐ ĐỊNH — bước này là thứ quyết định app có cài đè được không.
+      # Runner là máy sạch, không có ~/.android/debug.keystore, nên Gradle tự
+      # sinh một khoá NGẪU NHIÊN mới cho mỗi lần build. Android từ chối cài đè
+      # khi chữ ký khác nhau (INSTALL_FAILED_UPDATE_INCOMPATIBLE), nên mỗi bản
+      # phát hành lại bắt người dùng gỡ app — và gỡ app là xoá sạch localStorage.
+      # Khoá phải đúng alias/mật khẩu mặc định của debug thì signingConfig sẵn
+      # có của Gradle mới dùng được: androiddebugkey / android / android.
+      - name: Khoá ký cố định
+        env:
+          KS: ${{ secrets.ANDROID_DEBUG_KEYSTORE_B64 }}
+        run: |
+          if [ -z "$KS" ]; then
+            if [ "${GITHUB_REF#refs/tags/v}" != "$GITHUB_REF" ]; then
+              echo "::error::Thiếu secret ANDROID_DEBUG_KEYSTORE_B64. Phát hành mà không có khoá cố định thì bản này KHÔNG cài đè được lên bản trước."
+              exit 1
+            fi
+            echo "::warning::Chưa có ANDROID_DEBUG_KEYSTORE_B64 — artifact này ký bằng khoá ngẫu nhiên, không cài đè được."
+          else
+            mkdir -p ~/.android
+            echo "$KS" | base64 -d > ~/.android/debug.keystore
+            echo "Đã nạp khoá ký cố định."
+          fi
+
       - name: Build APK
         run: |
           chmod +x android/gradlew

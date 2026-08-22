@@ -189,9 +189,28 @@ git tag v5.0.1 && git push origin main v5.0.1
 - [ ] ⚠️ `SITE_URL` **bắt buộc** cho bản APK: origin của app là `https://localhost`, nên link
       đặt lại mật khẩu phải trỏ về trang web thật — thiếu nó thì người dùng app không đổi
       được mật khẩu
-- [ ] ⚠️ APK ký **debug**: cài được nhưng Android cảnh báo nguồn ngoài Play Store, và
-      **không nâng cấp đè lên bản ký bằng khoá khác** được. Phát hành thật thì thêm keystore
-      vào secrets rồi đổi `assembleDebug` → `assembleRelease`
+- [ ] ⚠️ **`ANDROID_DEBUG_KEYSTORE_B64` là secret bắt buộc để phát hành.** Thiếu nó, mỗi lần
+      build runner lại sinh một khoá ký ngẫu nhiên mới, Android từ chối cài đè
+      (`INSTALL_FAILED_UPDATE_INCOMPATIBLE`) và người dùng phải **gỡ app** mỗi bản — gỡ app
+      là xoá sạch localStorage. CI chặn job phát hành nếu thiếu secret này.
+
+  Tạo một lần, trên máy bạn (cần JDK — `keytool` nằm trong đó):
+
+  ```bash
+  keytool -genkeypair -v -keystore sofin-debug.keystore \
+    -storepass android -keypass android -alias androiddebugkey \
+    -dname "CN=SoFin, O=SoFin, C=VN" -keyalg RSA -keysize 2048 -validity 10000
+  base64 sofin-debug.keystore | tr -d '\n'      # dán chuỗi này vào secret
+  ```
+
+  Alias và cả hai mật khẩu **phải đúng** `androiddebugkey` / `android` / `android` —
+  đó là những gì `signingConfigs.debug` của Gradle mặc định đi tìm. Giữ file
+  `sofin-debug.keystore` ở nơi an toàn và **đừng commit**: mất nó là mất luôn khả năng
+  nâng cấp đè cho mọi bản đã cài.
+- [ ] ⚠️ Lần đầu áp khoá cố định, người dùng **vẫn phải gỡ và cài lại một lần** — bản đang
+      cài trên máy họ ký bằng khoá ngẫu nhiên cũ. Từ bản sau trở đi mới cài đè được.
+- [ ] APK vẫn ký **debug**: Android cảnh báo nguồn ngoài Play Store. Muốn hết cảnh báo thì
+      chuyển sang keystore release và đổi `assembleDebug` → `assembleRelease`
 - [ ] Thử không cần push: **Actions → Build and Release APK → Run workflow**
 
 ### ⚠️ Nếu link tải báo 404

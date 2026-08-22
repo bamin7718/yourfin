@@ -1066,6 +1066,16 @@ async function boot(opts) {
     check('nhóm concurrency tách theo ref — push nhánh không được giết build của tag',
       /concurrency:\s*\n\s*group:\s*apk-\$\{\{\s*github\.ref\s*\}\}/.test(wf),
       (/group:.*/.exec(wf) || [])[0]);
+    /* Runner là máy sạch: không có debug.keystore thì Gradle sinh khoá ngẫu
+       nhiên mỗi lần build, và Android từ chối cài đè khi chữ ký đổi — mỗi bản
+       phát hành lại bắt người dùng gỡ app, tức xoá sạch localStorage. */
+    check('CI nạp khoá ký cố định từ secret trước khi build', (() => {
+      const ks = wf.indexOf('ANDROID_DEBUG_KEYSTORE_B64');
+      const build = wf.indexOf('assembleDebug');
+      return ks > 0 && ks < build && /~\/\.android\/debug\.keystore/.test(wf);
+    })());
+    check('thiếu khoá thì CHẶN phát hành, không lặng lẽ ra bản không cài đè được',
+      /::error::Thiếu secret ANDROID_DEBUG_KEYSTORE_B64/.test(wf));
 
     // nút tải trong Cài đặt
     window.switchTab('settings'); await sleep(20);
@@ -1150,8 +1160,13 @@ async function boot(opts) {
       $('update-download').getAttribute('href'));
     check('nút tải có thuộc tính download', $('update-download').hasAttribute('download'));
     check('có trấn an chuyện cài đè không mất dữ liệu',
-      /cài đè/.test(txt('update-modal')) && /không mất dữ liệu/.test(txt('update-modal')),
+      /cài đè/i.test(txt('update-modal')) && /không mất dữ liệu/.test(txt('update-modal')),
       txt('update-modal').slice(-90));
+    /* Chữ ký đổi thì Android từ chối cài đè. Đã xảy ra thật, nên câu trấn an
+       phải kèm lối thoát chứ không hứa suông. */
+    check('… kèm lối thoát khi máy từ chối cài đè',
+      /gỡ bản cũ rồi cài lại/.test(txt('update-modal'))
+      && /đám mây/.test(txt('update-modal')), txt('update-modal').slice(-120));
 
     /* Bấm "Tải" cũng phải ghi nhớ: người dùng rời app sang trình cài đặt rồi
        quay lại, không hỏi lại họ về đúng bản vừa tải. */
