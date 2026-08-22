@@ -29,7 +29,7 @@ SoFin/
 │   ├── generate-env.js         build: env → public/js/env.js (kèm BUILD stamp)
 │   ├── generate-icons.js       vẽ bộ icon PWA bằng zlib, không cần thư viện ảnh
 │   ├── check.js                kiểm tra wiring HTML ↔ JS + manifest/sw
-│   ├── smoke.js                chạy thật app bằng jsdom (307 assertion)
+│   ├── smoke.js                chạy thật app bằng jsdom (318 assertion)
 │   ├── sync-test.js            hợp đồng đồng bộ: giữ mạng treo để soi UI (20 assertion)
 │   ├── transfer-test.js        hợp đồng chuyển ví: hai ví luôn khớp nhau (23 assertion)
 │   ├── chart-test.js           canvas giả để chạy thật hit-test biểu đồ (44 assertion)
@@ -70,7 +70,7 @@ Không muốn tạo `.env`? Cứ mở app — nó sẽ hiện **màn hình cấu
 
 ```bash
 npm run check                             # wiring HTML ↔ JS, syntax, rò rỉ khoá, phủ offline
-npm install jsdom --no-save && npm test   # smoke 307 + sync 20 + transfer 23 + chart 44 + header 22
+npm install jsdom --no-save && npm test   # smoke 318 + sync 20 + transfer 23 + chart 44 + header 22
 ```
 
 ---
@@ -121,6 +121,7 @@ Last-write-wins theo `data.updatedAt` (đồng hồ client, đóng dấu bởi `
 | **Danh mục** | CRUD đầy đủ, danh mục con, đổi emoji/màu. Xóa danh mục đang dùng → tự dời giao dịch sang *Khác*. Danh mục hệ thống được bảo vệ. |
 | **Ngân sách** | Tuần/Tháng/Năm, theo danh mục hoặc tổng chi, giới hạn theo ví. Progress bar vàng ở 80%, đỏ khi vượt. Cảnh báo ngay lúc lưu giao dịch. |
 | **Sổ nợ** | Đi vay và cho vay riêng, trả/thu từng phần hoặc tất toán, tự sinh giao dịch, nhắc hạn và đánh dấu quá hạn. |
+| **Sắp đến hạn** | 5 mốc: Trong tháng · 7 ngày tới · Tháng tới · 3 tháng · 6 tháng. Khoản định kỳ được **đếm đủ số kỳ rơi vào cửa sổ** (gộp một dòng kèm nhãn ×N), nên tổng "Dự kiến phải chi" của 6 tháng là sáu lần tiền nhà chứ không phải một. |
 | **Định kỳ** | Ngày/Tuần/Tháng/Năm, lặp mỗi N kỳ, tự ghi nhận và bù các kỳ đã lỡ khi mở lại app. Bấm ✓ để ghi tay: sheet xác nhận cho **chọn lại ngày và ví** trước khi tạo giao dịch; lịch vẫn neo theo ngày đến hạn nên trả muộn không làm trôi cả chu kỳ. |
 | **Báo cáo** | Bộ lọc mốc thời gian **Tháng này · Tháng trước · 3 tháng · Năm nay · Tùy chỉnh** (mặc định tháng hiện tại). Thứ tự thị giác: 3 **thẻ tổng quan** Thu / Chi / Dòng tiền ròng → **donut** cơ cấu danh mục (phần trăm ở tâm, đổi theo lát đang chạm) → **cột nhóm** Thu vs Chi 6 tháng → **xếp hạng chi tiêu** có progress bar. Tooltip chạm/hover trên cả donut lẫn cột. Vẽ bằng Canvas thuần, xử lý `devicePixelRatio`, tự đổi màu theo theme. |
 | **Đa tiền tệ** | 10 loại tiền, mỗi ví một tiền tệ, quy đổi về tiền tệ chính. Tỷ giá chỉnh tay trong Cài đặt. |

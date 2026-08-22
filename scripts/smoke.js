@@ -923,6 +923,63 @@ async function boot(opts) {
       window.eval('reportSource().every(t => t.status !== "pending")'));
   }
 
+  console.log('\n· "Sắp đến hạn": mốc 3 tháng và 6 tháng');
+  {
+    window.switchTab('dashboard'); await sleep(20);
+    const chips = [...d.querySelectorAll('#upcoming-filter .chip')];
+    check('đủ 5 mốc thời gian',
+      chips.map(c => c.dataset.val).join() === 'thismonth,nextweek,nextmonth,3m,6m',
+      chips.map(c => c.dataset.val).join());
+    check('hàng chip cuộn ngang, không xuống dòng',
+      $('upcoming-filter').classList.contains('chip-scroll'));
+
+    // một khoản định kỳ hằng tháng, 2.000.000 mỗi kỳ, bắt đầu từ hôm nay
+    S().recurring.length = 0;
+    S().transactions = S().transactions.filter(t => t.id !== 'tx_far');
+    S().recurring.push({ id: 'r_m', userId: S().currentUser, name: 'Tiền nhà', type: 'expense',
+      amount: 2000000, walletId: S().wallets[0].id, categoryId: 'c_bill', subcategoryId: 's_rent',
+      frequency: 'monthly', interval: 1, dueDate: window.todayISO(), endDate: '', autoProcess: false });
+    window.saveStorage();
+
+    const pick = v => { window.setUpcomingFilter(v, chips.find(c => c.dataset.val === v)); };
+    const row = () => [...d.querySelectorAll('#upcoming-list .upcoming-row')]
+      .find(r => r.querySelector('.up-title').textContent.includes('Tiền nhà'));
+    const amount = () => window.parseAmount(row().querySelector('.up-amt').textContent);
+
+    pick('thismonth'); await sleep(25);
+    check('trong tháng: đúng 1 kỳ = 2.000.000', amount() === 2000000, String(amount()));
+    check('một kỳ thì không hiện nhãn ×N', !/×/.test(row().querySelector('.up-title').textContent));
+
+    pick('3m'); await sleep(25);
+    check('chip "3 tháng" sáng lên',
+      chips.find(c => c.dataset.val === '3m').classList.contains('active'));
+    /* 90 ngày kể từ hôm nay ôm trọn 3 hoặc 4 kỳ tuỳ ngày trong tháng */
+    const n3 = amount() / 2000000;
+    check('3 tháng: cộng dồn nhiều kỳ, không phải một kỳ',
+      n3 >= 3 && n3 <= 4 && Number.isInteger(n3), n3 + ' kỳ');
+    check('hiện nhãn ×N khi có nhiều kỳ',
+      row().querySelector('.up-title').textContent.includes('×' + n3),
+      row().querySelector('.up-title').textContent);
+
+    pick('6m'); await sleep(25);
+    const n6 = amount() / 2000000;
+    check('6 tháng: nhiều kỳ hơn 3 tháng', n6 > n3, n3 + ' → ' + n6 + ' kỳ');
+    check('6 tháng ≈ gấp đôi 3 tháng', Math.abs(n6 - n3 * 2) <= 1, n3 + ' vs ' + n6);
+    check('tổng "Dự kiến phải chi" khớp số kỳ',
+      window.parseAmount(txt('upcoming-total')) >= n6 * 2000000,
+      txt('upcoming-total'));
+
+    // ngày kết thúc phải chặn việc đếm quá tay
+    S().recurring[0].endDate = window.addDaysISO(window.todayISO(), 45);
+    window.saveStorage(); pick('6m'); await sleep(25);
+    check('ngày kết thúc giới hạn số kỳ được đếm',
+      amount() / 2000000 <= 2, amount() / 2000000 + ' kỳ');
+
+    S().recurring.length = 0; window.saveStorage();
+    pick('thismonth'); await sleep(20);
+  }
+
+
   console.log('\n· views render');
   for (const tab of ['dashboard', 'transactions', 'add', 'reports', 'wallets', 'budget', 'debts', 'recurring', 'events', 'categories', 'settings']) {
     const errBefore = consoleErrors.length;

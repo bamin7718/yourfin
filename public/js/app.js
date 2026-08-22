@@ -2849,17 +2849,31 @@ function setUpcomingFilter(val, el){
 }
 function getUpcomingRange(){
   const today = todayISO(), d = parseISO(today);
-  if(upcomingFilter==='nextweek') return addDaysISO(today,7);
+  if(upcomingFilter==='nextweek') return addDaysISO(today, 7);
+  if(upcomingFilter==='3m')       return addDaysISO(today, 90);
+  if(upcomingFilter==='6m')       return addDaysISO(today, 180);
   if(upcomingFilter==='nextmonth') return isoOf(new Date(d.getFullYear(), d.getMonth()+2, 0));
   return isoOf(new Date(d.getFullYear(), d.getMonth()+1, 0));
 }
 function getUpcomingItems(rangeEnd){
+  /* Count every occurrence that lands inside the window, not just the next
+     one. Over "trong tháng" that is almost always 1 and nothing changes, but
+     a monthly bill across "6 tháng" is six payments — showing one would have
+     understated the total by five sixths the moment the longer tabs existed.
+     Repeats collapse into a single row carrying ×N so the card stays short. */
   const recurItems = getUserRecurring()
     .filter(r=> r.type!=='income' && r.dueDate <= rangeEnd && (!r.endDate || r.dueDate <= r.endDate))
-    /* No wallet means no known currency — read the amount as already being in
-       the main currency rather than letting rateOf() fall back to 1. */
-    .map(r=>({kind:'recurring', id:r.id, name:r.name, dueDate:r.dueDate, walletId:r.walletId,
-              amount:toMain(r.amount, (getWallet(r.walletId)||{}).currency || mainCurrency())}));
+    .map(r=>{
+      let n = 0, due = r.dueDate, guard = 0;
+      while(due <= rangeEnd && (!r.endDate || due <= r.endDate) && guard < 400){
+        n++; due = nextDueDate(due, r.frequency, r.interval); guard++;
+      }
+      /* No wallet means no known currency — read the amount as already being in
+         the main currency rather than letting rateOf() fall back to 1. */
+      const unit = toMain(r.amount, (getWallet(r.walletId)||{}).currency || mainCurrency());
+      return {kind:'recurring', id:r.id, name:r.name, dueDate:r.dueDate, walletId:r.walletId,
+              amount: unit * n, occurrences: n};
+    });
   const cardItems = getUserWallets()
     .filter(w=> isCreditCard(w) && getCardUsedAmount(w) > 0)
     .map(w=>({kind:'card', id:w.id, name:w.name+' (Thẻ tín dụng)', amount:toMain(getCardUsedAmount(w), w.currency), dueDate:getCardNextDueDate(w), walletId:w.id}))
@@ -2895,7 +2909,7 @@ function renderUpcomingCard(){
     return `<div class="upcoming-row">
       <div class="up-ic ${it.kind==='card'?'up-ic-card':''}">${icon(icons[it.kind])}</div>
       <div class="up-mid">
-        <div class="up-title">${esc(it.name)}</div>
+        <div class="up-title">${esc(it.name)}${it.occurrences > 1 ? `<span class="tag">×${it.occurrences}</span>` : ''}</div>
         <div class="up-sub ${overdue?'up-overdue':''}">${sub}${relDueLabel(it.dueDate).text}</div>
       </div>
       <div class="up-amt tabular">${fmt(it.amount)}</div>
