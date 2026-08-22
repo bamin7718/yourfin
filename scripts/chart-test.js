@@ -31,14 +31,16 @@ const check = (l, ok, d) => { console.log((ok ? '  ✓ ' : '  ✗ ') + l + (ok |
 /* A 2D context that swallows every call and remembers the text it drew. Enough
    for the draw functions to run end to end without a real rasteriser. */
 function recordingContext() {
-  const texts = [];
+  const texts = [], fills = [];
   const ctx = {
     __texts: texts,
+    __fills: fills,                       /* which colour each painted shape used */
     fillText: (t) => texts.push(String(t)),
+    fill: () => fills.push(ctx.fillStyle),
     createLinearGradient: () => ({ addColorStop() {} }),
     measureText: () => ({ width: 10 })
   };
-  for (const m of ['beginPath','closePath','arc','arcTo','moveTo','lineTo','rect','fill','stroke',
+  for (const m of ['beginPath','closePath','arc','arcTo','moveTo','lineTo','rect','stroke',
                    'clearRect','fillRect','setTransform','save','restore','scale','translate']) {
     ctx[m] = () => {};
   }
@@ -118,6 +120,7 @@ function fakeSupabase(){
 
   const d = window.document, $ = id => d.getElementById(id);
   const hit = () => window.eval('chartHit');
+  const S = () => window.eval('state');
   const donutCtx = () => ctxByCanvas.get($('chart-donut'));
 
   window.switchTab('reports'); await sleep(60);
@@ -224,6 +227,44 @@ function fakeSupabase(){
     const h = $('tip-bar').innerHTML;
     return !$('tip-bar').classList.contains('hidden') && /Thu/.test(h) && /Chi/.test(h) && /Ròng/.test(h);
   })(), $('tip-bar').textContent.slice(0, 60));
+
+  console.log('\n--- tháng rỗng vẫn phải thấy được ---');
+  {
+    const barCtx = ctxByCanvas.get($('chart-bar'));
+    barCtx.__fills.length = 0;                 /* ctx tích luỹ qua các lần render */
+    window.renderReportsView(); await sleep(50);
+    const b2 = hit().bars;
+    const empty = b2.series.filter(s => !s.inc && !s.exp).length;
+    check('bộ dữ liệu thử có tháng rỗng để kiểm', empty >= 1, empty + ' tháng rỗng');
+    check('vẽ đủ 12 cột dù phần lớn tháng rỗng',
+      barCtx.__fills.length === 12, barCtx.__fills.length + ' lệnh fill');
+    /* vạch mờ áp theo từng CỘT, không theo tháng: một tháng có chi mà không có
+       thu thì cột thu vẫn là vạch mờ */
+    const nonZeroBars = b2.series.reduce((n,s)=> n + (s.inc>0?1:0) + (s.exp>0?1:0), 0);
+    const brand = barCtx.__fills.filter(c => c === '#00529C' || c === '#ED1C24').length;
+    check('chỉ cột có tiền mới dùng màu thương hiệu, còn lại là vạch mờ',
+      brand === nonZeroBars, `${brand} màu thương hiệu / ${nonZeroBars} cột có tiền`);
+    check('số vạch mờ khớp số cột bằng 0',
+      barCtx.__fills.length - brand === 12 - nonZeroBars);
+  }
+
+  console.log('\n--- sáu tháng đều rỗng: phải nói rõ, không để trục trơ ---');
+  {
+    const keep = S().transactions.slice();
+    S().transactions.length = 0;
+    window.saveStorage();
+    const barCtx = ctxByCanvas.get($('chart-bar'));
+    barCtx.__texts.length = 0; barCtx.__fills.length = 0;
+    window.renderReportsView(); await sleep(50);
+    check('hiện lời giải thích thay vì trục trống',
+      barCtx.__texts.some(t => t.includes('Chưa có giao dịch trong 6 tháng')),
+      barCtx.__texts.join(' | '));
+    check('không vẽ cột nào', barCtx.__fills.length === 0, barCtx.__fills.length + ' lệnh fill');
+    check('chartHit.bars bị xoá nên tooltip không bung', hit().bars === null);
+    S().transactions.push(...keep); window.saveStorage();
+    window.renderReportsView(); await sleep(50);
+    check('có dữ liệu trở lại thì cột vẽ lại', !!hit().bars && hit().bars.series.length === 6);
+  }
 
   console.log('\n--- đổi bộ lọc rồi chạm lại ---');
   window.setReportRange('thisyear', d.querySelector('#report-range-seg .chip[data-val="thisyear"]'));

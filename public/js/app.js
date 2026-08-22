@@ -3582,6 +3582,19 @@ function drawBars(id, series){
   const {ctx,w,h} = c;
   const padL = 40, padR = 8, padB = 22, padT = 10;
   const chartW = w - padL - padR, chartH = h - padB - padT;
+
+  /* Nothing at all in six months: say so. An axis with no bars under it looks
+     like a chart that failed rather than a period with no money moving. */
+  if(!series.length || series.every(s=>!s.inc && !s.exp)){
+    chartHit.bars = null;
+    ctx.fillStyle = cssVar('--muted'); ctx.textAlign = 'center';
+    ctx.font = '13px sans-serif';
+    ctx.fillText('Chưa có giao dịch trong 6 tháng gần đây', w/2, h/2 - 2);
+    ctx.font = '11px sans-serif';
+    ctx.fillText('Thêm giao dịch để thấy dòng tiền theo tháng', w/2, h/2 + 16);
+    return;
+  }
+
   const maxVal = Math.max(1, ...series.map(s=>Math.max(s.inc, s.exp)));
   ctx.strokeStyle = cssVar('--border'); ctx.lineWidth = 1;
   ctx.fillStyle = cssVar('--muted'); ctx.font = '9px sans-serif'; ctx.textAlign = 'right';
@@ -3593,11 +3606,23 @@ function drawBars(id, series){
   /* brand blue for money in, brand red for money out */
   const cIn = cssVar('--primary') || '#00529C', cOut = cssVar('--brand-red') || '#ED1C24';
   const groupW = chartW/series.length;
+  const STUB = 3;   /* a month with no money still gets a mark on the baseline */
+  const faint = cssVar('--border') || '#E5E9F0';   /* same fallback habit as cIn/cOut */
   series.forEach((s,i)=>{
     const gx = padL + i*groupW, barW = Math.min(16, groupW*0.28);
     const incH = (s.inc/maxVal)*chartH, expH = (s.exp/maxVal)*chartH;
-    ctx.fillStyle = cIn;  roundRect(ctx, gx+groupW/2-barW-3, padT+chartH-incH, barW, incH, 3); ctx.fill();
-    ctx.fillStyle = cOut; roundRect(ctx, gx+groupW/2+3, padT+chartH-expH, barW, expH, 3); ctx.fill();
+    /* Drawing a zero as literally zero pixels left four of six slots blank and
+       the whole chart reading as broken. A stub says "this month, nothing"
+       instead of saying nothing at all. */
+    const bar = (x, height, colour)=>{
+      const empty = height < 0.5;
+      ctx.fillStyle = empty ? faint : colour;
+      const hh = empty ? STUB : height;
+      roundRect(ctx, x, padT+chartH-hh, barW, hh, empty ? 1.5 : 3);
+      ctx.fill();
+    };
+    bar(gx+groupW/2-barW-3, incH, cIn);
+    bar(gx+groupW/2+3,      expH, cOut);
     ctx.fillStyle = cssVar('--muted'); ctx.font='9px sans-serif'; ctx.textAlign='center';
     ctx.fillText(s.label, gx+groupW/2, h-7);
   });
