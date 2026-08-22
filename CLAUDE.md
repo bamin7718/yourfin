@@ -122,6 +122,8 @@ Tooltip hoạt động theo cặp: hàm `draw*` ghi hình học vào `chartHit.d
 
 `bindChartTip()` gắn cờ `__tipBound` lên canvas vì `renderReportsView()` chạy lại mỗi lần đổi bộ lọc — thiếu cờ đó thì listener chồng chất.
 
+`setupCanvas()` **đặt `style.width='100%'` rồi mới đo** bằng `getBoundingClientRect()`. Đừng đo `canvas.clientWidth`: đó là bề rộng chính ta ghim ở lần vẽ trước, nên kích thước đầu tiên sẽ dính vĩnh viễn — xoay máy là bitmap vẫn rộng trong khi `max-width:100%` bóp phần tử lại, cho ra nét mờ, tràn khung, và tooltip lệch đúng bằng phần chênh. `devicePixelRatio` chặn trần 3x.
+
 `shortMoney()` (nhãn trục) tôn trọng `state.app.privacy` — bật con mắt thì trục cũng phải che, không thì số vẫn đọc được qua vai.
 
 ## PWA

@@ -254,8 +254,10 @@ html[data-theme="dark"] .tag-pending{color:#241C00;}
 .quick-filter.on>label{color:var(--primary);}
 .quick-filter.on>select{border-color:var(--primary);font-weight:600;}
 
-.segment{display:flex;background:var(--card-2);border:1px solid var(--border);border-radius:14px;padding:4px;margin-bottom:14px;gap:2px;}
-.segment .seg{flex:1;text-align:center;padding:9px 4px;border-radius:10px;font-size:.82rem;font-weight:700;cursor:pointer;color:var(--muted);transition:.15s;}
+/* flex:0 0 auto so a long list underneath can never squeeze the switcher and
+   overlap its labels; min-width:0 on the segments so they ellipsize instead. */
+.segment{display:flex;flex:0 0 auto;background:var(--card-2);border:1px solid var(--border);border-radius:14px;padding:4px;margin-bottom:14px;gap:2px;}
+.segment .seg{flex:1 1 0;min-width:0;text-align:center;padding:9px 4px;border-radius:10px;font-size:.82rem;font-weight:700;cursor:pointer;color:var(--muted);transition:.15s;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .segment .seg.active{background:var(--card);color:var(--text);box-shadow:0 1px 4px rgba(0,0,0,.10);}
 .segment .seg.active.expense{color:var(--expense);}
 .segment .seg.active.income{color:var(--income);}
@@ -403,7 +405,12 @@ html[data-theme="dark"] .tag{color:var(--primary);}
 
 /* Tooltip floats over the canvas; the chart itself is never redrawn to move
    it, only this node's text and position change. */
-.chart-wrap{position:relative;}
+/* Reserve the height before the numbers are in: without it the card collapses
+   while a filter recomputes, the page jumps, and the absolutely positioned
+   tooltip has nothing to anchor to. */
+.chart-wrap{position:relative;width:100%;min-height:200px;}
+#chart-donut{min-height:250px;}
+#chart-bar{min-height:200px;}
 .chart-tip{position:absolute;pointer-events:none;z-index:5;transform:translate(-50%,-115%);
   background:var(--text);color:var(--card);border-radius:10px;padding:6px 9px;font-size:.68rem;
   font-weight:700;line-height:1.35;white-space:nowrap;box-shadow:0 4px 14px rgba(15,23,42,.28);}
@@ -430,6 +437,20 @@ html[data-theme="dark"] .tag{color:var(--primary);}
 .wbal.amt-sm{font-size:.86rem;} .wbal.amt-xs{font-size:.76rem;}
 .sc-val.amt-sm{font-size:1.04rem;} .sc-val.amt-xs{font-size:.9rem;}
 .sum-card.net .sc-val.amt-sm{font-size:1.26rem;} .sum-card.net .sc-val.amt-xs{font-size:1.06rem;}
+
+/* Sub-380px (iPhone SE, narrow Android): trim the report chrome rather than
+   let it overflow. */
+@media (max-width:380px){
+  .sum-grid{gap:8px;}
+  .sum-card{padding:11px 12px;}
+  .sum-card .sc-val{font-size:1.08rem;}
+  .sum-card.net .sc-val{font-size:1.3rem;}
+  .rank-row{gap:8px;}
+  .rank-no{width:16px;font-size:.66rem;}
+  .rank-name{font-size:.75rem;}
+  .rank-amt{font-size:.76rem;}
+  .segment .seg{font-size:.76rem;padding:8px 2px;}
+}
 
 /* ---------- PROGRESS ---------- */
 .progress-track{width:100%;height:8px;border-radius:6px;background:var(--card-2);overflow:hidden;margin-top:6px;border:1px solid var(--border);}
@@ -519,7 +540,9 @@ html[data-theme="dark"] .menu-tile .mt-ic{
 .setting-row .sr-sub{font-size:.68rem;color:var(--muted);margin-top:1px;}
 
 /* ---------- CHARTS ---------- */
-canvas{max-width:100%;display:block;}
+/* Width is driven by setupCanvas() as a percentage so it can never go stale;
+   height comes from the element's own attribute. */
+canvas{display:block;width:100%;max-width:100%;}
 .legend{display:flex;flex-wrap:wrap;gap:8px 12px;margin-top:12px;}
 .legend-item{display:flex;align-items:center;gap:6px;font-size:.7rem;color:var(--muted);font-weight:600;}
 .legend-dot{width:9px;height:9px;border-radius:3px;flex:0 0 auto;}

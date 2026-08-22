@@ -847,6 +847,47 @@ async function boot(opts) {
     window.togglePrivacy(); await sleep(40);
     check('bỏ ẩn thì số quay lại', window.parseAmount(txt('rep-income')) === incNow);
 
+    // --- canvas: kích thước phải theo CSS, không tự ghim cứng ---
+    const donut = $('chart-donut'), bar = $('chart-bar');
+    check('canvas đặt width theo phần trăm, không ghim pixel',
+      donut.style.width === '100%' && bar.style.width === '100%',
+      donut.style.width + ' / ' + bar.style.width);
+    check('chiều cao canvas lấy từ thuộc tính height của chính nó',
+      donut.style.height === '250px' && bar.style.height === '200px',
+      donut.style.height + ' / ' + bar.style.height);
+
+    // đổi bộ lọc nhiều lần không được làm bitmap phình ra
+    const w0 = donut.width;
+    window.setReportRange('thisyear', chips[3]); await sleep(30);
+    window.setDonutMode('income', $('seg-donut-income')); await sleep(30);
+    window.setDonutMode('expense', $('seg-donut-expense')); await sleep(30);
+    window.setReportRange('thismonth', chips[0]); await sleep(30);
+    check('vẽ lại nhiều lần: bitmap giữ nguyên kích thước, không cộng dồn',
+      donut.width === w0, w0 + ' → ' + donut.width);
+
+    // devicePixelRatio được chặn trần ở 3x
+    const realDpr = Object.getOwnPropertyDescriptor(window, 'devicePixelRatio');
+    Object.defineProperty(window, 'devicePixelRatio', { value: 4, configurable: true });
+    window.renderReportsView(); await sleep(30);
+    check('devicePixelRatio bị chặn trần ở 3x, không để 4x đốt bộ nhớ',
+      donut.width === Math.round((donut.getBoundingClientRect().width || 300) * 3),
+      'width=' + donut.width);
+    if (realDpr) Object.defineProperty(window, 'devicePixelRatio', realDpr);
+    else Object.defineProperty(window, 'devicePixelRatio', { value: 1, configurable: true });
+    window.renderReportsView(); await sleep(30);
+
+    // --- CSS chống sập chiều cao và chống đè chữ ---
+    const css = fs.readFileSync(path.join(PUBLIC, 'css', 'styles.css'), 'utf8');
+    check('khung chứa canvas có position/width/min-height',
+      /\.chart-wrap\{position:relative;width:100%;min-height:200px/.test(css));
+    check('donut và cột có min-height riêng',
+      /#chart-donut\{min-height:250px/.test(css) && /#chart-bar\{min-height:200px/.test(css));
+    check('tab Thu \/ Chi không bị co ép',
+      /\.segment\{display:flex;flex:0 0 auto/.test(css)
+      && /\.segment \.seg\{flex:1 1 0;min-width:0/.test(css));
+    check('có nhánh responsive cho máy hẹp dưới 380px',
+      /@media \(max-width:380px\)/.test(css));
+
     // chỉ tính giao dịch đã ghi nhận
     check('báo cáo mặc định không gộp khoản dự kiến', window.eval('reportIncludePending') === false);
     check('nguồn dữ liệu báo cáo là các giao dịch completed',

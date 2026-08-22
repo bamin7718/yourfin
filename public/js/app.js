@@ -3358,15 +3358,32 @@ function cssVar(name){ return getComputedStyle(document.documentElement).getProp
 function setupCanvas(id){
   const canvas = document.getElementById(id);
   if(!canvas || !canvas.getContext) return null;
-  const dpr = window.devicePixelRatio || 1;
-  const cssW = canvas.clientWidth || canvas.parentNode.clientWidth || 300;
+
+  /* Let CSS decide the width FIRST, then measure what it settled on.
+     Reading canvas.clientWidth instead would measure the pixel width we
+     pinned on the previous pass — the first size would stick forever, so
+     rotating the phone left the bitmap wide while `max-width:100%` squeezed
+     the element: blurry, overflowing, and every tooltip hit-test off by the
+     difference. A percentage width cannot go stale, and it accounts for the
+     card's padding without us having to know about it. */
   const cssH = Number(canvas.getAttribute('height')) || 200;
-  canvas.width = cssW * dpr; canvas.height = cssH * dpr;
-  canvas.style.width = cssW+'px'; canvas.style.height = cssH+'px';
+  canvas.style.width = '100%';
+  canvas.style.height = cssH + 'px';
+  const measured = canvas.getBoundingClientRect ? canvas.getBoundingClientRect().width : 0;
+  const cssW = Math.max(1, Math.round(measured || canvas.clientWidth || 300));
+
+  /* Above 3x the extra pixels are invisible and the bitmap gets 16x heavier —
+     a 512px-wide donut at dpr 4 is an 8MB buffer redrawn on every filter tap. */
+  const dpr = Math.min(window.devicePixelRatio || 1, 3);
+  canvas.width  = Math.round(cssW * dpr);
+  canvas.height = Math.round(cssH * dpr);
+
   const ctx = canvas.getContext('2d');
   if(!ctx) return null;
-  ctx.setTransform(dpr,0,0,dpr,0,0);
-  ctx.clearRect(0,0,cssW,cssH);
+  /* setTransform, not scale: assigning width/height already reset the matrix,
+     and scale() would compound if that ever stopped being true. */
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, cssW, cssH);
   return {ctx, w:cssW, h:cssH};
 }
 /* Geometry the tooltips hit-test against. Filled while drawing so a pointer
