@@ -98,7 +98,7 @@ function fakeSupabase(){
     return ctxByCanvas.get(this);
   };
   /* jsdom lays nothing out; pin a phone-width box so geometry is deterministic */
-  const CSS_W = 320;
+  const CSS_W = 240;   /* khớp max-width của .chart-donut-container */
   window.HTMLCanvasElement.prototype.getBoundingClientRect = function(){
     /* mirror the CSS: the donut sits in a square box, the others keep the
        height from their own attribute */

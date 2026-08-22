@@ -414,12 +414,19 @@ html[data-theme="dark"] .tag{color:var(--primary);}
    while a filter recomputes, the page jumps, and the absolutely positioned
    tooltip has nothing to anchor to. */
 .chart-wrap{position:relative;width:100%;min-height:200px;}
-/* The donut was drawn into whatever box the card gave it — about 416x250 on a
-   480px shell — so its radius came from the SHORT side and it floated in the
-   middle of ~90px of dead space either side. A square, centred, capped box
-   makes the circle fill what it is given. */
-.chart-square{width:100%;max-width:320px;aspect-ratio:1/1;margin:0 auto;min-height:0;}
-.chart-square>canvas{height:100%;}
+/* The donut used to take whatever box the card gave it — roughly 416x250 on a
+   480px shell — so its radius came from the SHORT side and the circle floated
+   in ~90px of dead space either side. A square, centred, capped box makes the
+   circle fill what it is given; 240px is as much vertical room as a chart
+   deserves on a phone.
+
+   The canvas stays fluid inside that box rather than being pinned to 240px:
+   a hard width would punch out of the card on a viewport narrower than the
+   cap, and setupCanvas() measures the laid-out size, so a pinned value would
+   also be a second source of truth to keep in step. */
+.chart-donut-container{width:100%;max-width:240px;aspect-ratio:1/1;margin:12px auto;
+  display:flex;align-items:center;justify-content:center;min-height:0;}
+.chart-donut-container>canvas{width:100%;height:100%;display:block;}
 #chart-bar{min-height:200px;}
 .chart-tip{position:absolute;pointer-events:none;z-index:5;transform:translate(-50%,-115%);
   background:var(--text);color:var(--card);border-radius:10px;padding:6px 9px;font-size:.68rem;
