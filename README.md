@@ -13,6 +13,7 @@ SoFin/
 ├── public/                     ← thư mục được deploy
 │   ├── index.html              giao diện (800 dòng)
 │   ├── manifest.json           PWA manifest
+│   ├── js/vendor/supabase.js   client Supabase vendor sẵn (npm run vendor:supabase)
 │   ├── sw.js                   service worker (cache-first, bỏ qua Supabase)
 │   ├── icons/                  icon 192/512 + maskable + apple-touch
 │   ├── css/
@@ -29,13 +30,16 @@ SoFin/
 │   ├── generate-env.js         build: env → public/js/env.js (kèm BUILD stamp)
 │   ├── generate-icons.js       vẽ bộ icon PWA bằng zlib, không cần thư viện ảnh
 │   ├── check.js                kiểm tra wiring HTML ↔ JS + manifest/sw
-│   ├── smoke.js                chạy thật app bằng jsdom (327 assertion)
+│   ├── smoke.js                chạy thật app bằng jsdom (344 assertion)
 │   ├── sync-test.js            hợp đồng đồng bộ: giữ mạng treo để soi UI (20 assertion)
 │   ├── transfer-test.js        hợp đồng chuyển ví: hai ví luôn khớp nhau (23 assertion)
 │   ├── chart-test.js           canvas giả để chạy thật hit-test biểu đồ (44 assertion)
 │   └── header-test.js          app bar đồng nhất trên mọi màn hình (22 assertion)
 ├── legacy/
 │   └── index.offline-v4.html   bản single-file cũ, vẫn chạy độc lập
+├── capacitor.config.json       cấu hình bản Android/iOS (webDir = public/)
+├── .github/workflows/
+│   └── android.yml             CI: test → sinh env → dựng android/ → APK → Release
 ├── DEPLOY.md                   checklist đưa lên PROD
 ├── .env.example
 ├── .gitignore
@@ -43,7 +47,7 @@ SoFin/
 └── package.json
 ```
 
-Không có runtime dependency. `@supabase/supabase-js` nạp qua CDN.
+Không có runtime dependency. `@supabase/supabase-js` được **vendor sẵn** vào `public/js/vendor/` — app phải mở được khi hoàn toàn không có mạng, cả ở lần khởi động nguội của PWA lẫn trong APK nơi không có CDN nào để dựa vào. Capacitor, jsdom chỉ là devDependency, không có mặt lúc chạy.
 
 ---
 
@@ -70,7 +74,7 @@ Không muốn tạo `.env`? Cứ mở app — nó sẽ hiện **màn hình cấu
 
 ```bash
 npm run check                             # wiring HTML ↔ JS, syntax, rò rỉ khoá, phủ offline
-npm install jsdom --no-save && npm test   # smoke 327 + sync 20 + transfer 23 + chart 44 + header 22
+npm install jsdom --no-save && npm test   # smoke 344 + sync 20 + transfer 23 + chart 44 + header 22
 ```
 
 ---

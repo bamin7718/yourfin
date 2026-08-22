@@ -1,0 +1,86 @@
+name: Build APK
+
+# Bấm tay, hoặc gắn tag v* để phát hành một bản mới.
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write        # cần để tạo Release và đính kèm APK
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Cài phụ thuộc
+        run: npm ci
+
+      # Cùng một cổng chặn với web. Không có lý do gì đóng gói một bản
+      # mà bản web sẽ bị chặn không cho deploy.
+      - name: Kiểm thử
+        run: npm test
+
+      # public/ là nguồn duy nhất — bản mobile chỉ là chính nó đóng gói lại.
+      # Thiếu key thì generate-env --strict dừng ngay, không ra một APK trắng.
+      - name: Sinh cấu hình
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          SITE_URL: ${{ secrets.SITE_URL }}
+        run: node scripts/generate-env.js --strict
+
+      # Dự án native được sinh mới mỗi lần, không commit vào repo: không có
+      # thư mục android/ nào để lệch khỏi public/.
+      - name: Dựng dự án Android
+        run: |
+          npx cap add android
+          npx cap sync android
+
+      - name: Build APK
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon --stacktrace
+
+      - name: Đặt tên theo phiên bản
+        id: name
+        run: |
+          VER=$(node -p "require('./package.json').version")
+          SHA=$(git rev-parse --short HEAD)
+          NAME="sofin-${VER}-${SHA}.apk"
+          cp android/app/build/outputs/apk/debug/app-debug.apk "$NAME"
+          echo "apk=$NAME" >> "$GITHUB_OUTPUT"
+          ls -lh "$NAME"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sofin-apk
+          path: ${{ steps.name.outputs.apk }}
+          retention-days: 30
+
+      # Nút "Tải app" trong Cài đặt trỏ vào /releases/latest/download/sofin.apk,
+      # nên tên cố định đó phải luôn tồn tại trong bản phát hành mới nhất.
+      - name: Phát hành
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          cp "${{ steps.name.outputs.apk }}" sofin.apk
+          gh release create "${GITHUB_REF_NAME}" sofin.apk "${{ steps.name.outputs.apk }}" \
+            --title "SoFin ${GITHUB_REF_NAME}" \
+            --notes "Bản Android build từ ${GITHUB_SHA}. APK ký debug — Android sẽ hỏi xác nhận cài từ nguồn ngoài Play Store."
+        env:
+          GH_TOKEN: ${{ github.token }}

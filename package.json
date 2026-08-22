@@ -14,10 +14,22 @@
     "sync-test": "node scripts/sync-test.js",
     "transfer-test": "node scripts/transfer-test.js",
     "chart-test": "node scripts/chart-test.js",
-    "header-test": "node scripts/header-test.js"
+    "header-test": "node scripts/header-test.js",
+    "vendor:supabase": "node scripts/vendor-supabase.js",
+    "cap:sync": "node scripts/generate-env.js && npx cap sync"
   },
   "engines": {
     "node": ">=18"
   },
-  "license": "MIT"
+  "license": "MIT",
+  "devDependencies": {
+    "@capacitor/android": "^8.5.0",
+    "@capacitor/cli": "^8.5.0",
+    "@capacitor/core": "^8.5.0",
+    "@capacitor/haptics": "^8.0.2",
+    "@capacitor/ios": "^8.5.0",
+    "@capacitor/keyboard": "^8.0.5",
+    "@capacitor/status-bar": "^8.0.3",
+    "jsdom": "^29.1.1"
+  }
 }

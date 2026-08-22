@@ -58,6 +58,7 @@ const ICON_PATHS = {
   bolt:        '<path d="M13.5 2 4 13.5h6.5L10 22l9.5-11.5H13z"/>',
   layers:      '<path d="m12 3 9 5-9 5-9-5z"/><path d="m3 13 9 5 9-5"/>',
   plug:        '<path d="M9 3v6M15 3v6"/><path d="M6.5 9h11v2.5a5.5 5.5 0 0 1-11 0z"/><path d="M12 17v4"/>',
+  android:     '<path d="m6 8 1.5-2.6M18 8l-1.5-2.6"/><path d="M4.5 10h15v6.5a3 3 0 0 1-3 3h-9a3 3 0 0 1-3-3z"/><path d="M4.5 10a7.5 7.5 0 0 1 15 0"/><path d="M9 7.2v.01M15 7.2v.01"/><path d="M2 12v4M22 12v4"/>',
   eye:         '<path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3"/>',
   eyeOff:      '<path d="m3 3 18 18"/><path d="M10.6 6.1A7.9 7.9 0 0 1 12 6c6 0 9.5 6 9.5 6a15 15 0 0 1-3.2 3.8"/><path d="M6.2 8.3A15.6 15.6 0 0 0 2.5 12S6 18 12 18a8.6 8.6 0 0 0 3.4-.7"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/>',
   arrowDown:   '<path d="M12 4.5v14"/><path d="m6 13 6 6 6-6"/>',
@@ -3786,11 +3787,21 @@ function renderSettingsView(){
 /* ============================================================
    PWA — service worker + install prompt
    ============================================================ */
+/* Always the newest release, so this link never needs touching: the Android
+   workflow publishes the APK under this exact fixed name on every tag. */
+const APK_URL = 'https://github.com/bamin7718/yourfin/releases/latest/download/sofin.apk';
+
 let deferredInstall = null;      /* the beforeinstallprompt event, if offered */
 let swUpdateReady = false;
 
+/* Running inside the Capacitor shell rather than a browser tab. */
+function isNativeApp(){
+  return !!(window.Capacitor && window.Capacitor.isNativePlatform
+    ? window.Capacitor.isNativePlatform() : window.Capacitor);
+}
 function isStandalone(){
-  return window.matchMedia('(display-mode: standalone)').matches
+  return isNativeApp()
+      || window.matchMedia('(display-mode: standalone)').matches
       || window.navigator.standalone === true;     /* iOS Safari */
 }
 /* iOS never fires beforeinstallprompt — the only route is Share → Add to Home
@@ -3801,6 +3812,9 @@ function isIOS(){
 }
 
 function registerServiceWorker(){
+  /* Inside the APK every asset is already on the device; a worker would cache
+     a copy of a copy and add an update path that cannot apply. */
+  if(isNativeApp()) return;
   if(!('serviceWorker' in navigator)) return;
   /* Version the worker URL from the build stamp: a new deploy is a new script
      to the browser, which is what triggers install + old-cache cleanup. */
@@ -3885,8 +3899,19 @@ function renderAppInfo(){
     </div>`;
   }
 
+  /* Bản Android build sẵn. Không hiện khi đang chạy trong chính app đó —
+     mời người dùng tải lại thứ họ đang mở là vô nghĩa. */
+  const apkRow = isNativeApp() ? '' : `
+    <a class="setting-row pointer" href="${APK_URL}" rel="noopener"
+       style="text-decoration:none;color:inherit;">
+      <div class="sr-ic" style="color:var(--income);">${icon('android')}</div>
+      <div class="sr-mid"><div class="sr-title">Tải app Android (.apk)</div>
+        <div class="sr-sub">Bản dựng mới nhất · cài ngoài Play Store nên máy sẽ hỏi xác nhận</div></div>
+      <span class="muted">›</span>
+    </a>`;
+
   const offline = ('serviceWorker' in navigator) && navigator.serviceWorker.controller;
-  el.innerHTML = installRow + `
+  el.innerHTML = installRow + apkRow + `
     <div class="setting-row">
       <div class="sr-ic">${icon(offline ? 'cloudOff' : 'cloud')}</div>
       <div class="sr-mid"><div class="sr-title">Dùng khi mất mạng</div>

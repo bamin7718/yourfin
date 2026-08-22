@@ -40,6 +40,10 @@ const payload = {
   /* Stamped into the service worker URL (`/sw.js?v=…`). A new deploy is then a
      new script to the browser, which is what makes it install and drop the
      previous cache — otherwise users would sit on the old bundle forever. */
+  /* Where the browser build actually lives. The APK needs it: its own origin
+     is https://localhost, which cannot receive a password-reset link. */
+  SITE_URL: (process.env.SITE_URL || process.env.VERCEL_PROJECT_PRODUCTION_URL || '')
+    .replace(/^(?!https?:\/\/)(.+)$/, 'https://$1').replace(/\/+$/, ''),
   BUILD: process.env.VERCEL_GIT_COMMIT_SHA
     ? process.env.VERCEL_GIT_COMMIT_SHA.slice(0, 12)
     : new Date().toISOString().replace(/[-:.TZ]/g, '').slice(0, 14)

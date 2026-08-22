@@ -732,6 +732,53 @@ async function boot(opts) {
     check('icon trở lại con mắt mở', eyeIcon() === openEye);
   }
 
+  console.log('\n· bản Android (Capacitor)');
+  {
+    const cap = JSON.parse(fs.readFileSync(path.join(ROOT, 'capacitor.config.json'), 'utf8'));
+    check('capacitor.config.json hợp lệ', cap.appId === 'com.sofin.app' && cap.appName === 'SoFin');
+    check('webDir trỏ vào public — một nguồn duy nhất cho web lẫn mobile',
+      cap.webDir === 'public', cap.webDir);
+    check('StatusBar dùng xanh VietinBank',
+      cap.plugins.StatusBar.backgroundColor === '#00529C' && cap.plugins.StatusBar.style === 'LIGHT');
+    check('Keyboard resize body', cap.plugins.Keyboard.resize === 'body');
+
+    const ignore = fs.readFileSync(path.join(ROOT, '.gitignore'), 'utf8');
+    check('dự án native không commit vào repo (sinh lại trong CI)',
+      /^\/android\/$/m.test(ignore) && /^\/ios\/$/m.test(ignore));
+
+    const wf = fs.readFileSync(path.join(ROOT, '.github', 'workflows', 'android.yml'), 'utf8');
+    check('CI chạy npm test trước khi đóng gói', /run: npm test/.test(wf));
+    check('CI sinh env bằng --strict, không ra APK thiếu key',
+      /generate-env\.js --strict/.test(wf));
+    check('CI tự dựng android/ rồi mới build', /npx cap add android/.test(wf) && /assembleDebug/.test(wf));
+    check('CI phát hành đúng tên file cố định mà nút tải trỏ tới',
+      /cp .* sofin\.apk/.test(wf) && /gh release create/.test(wf));
+
+    // nút tải trong Cài đặt
+    window.switchTab('settings'); await sleep(20);
+    const apk = $('app-info').querySelector('a[href*="releases/latest/download"]');
+    check('Cài đặt có nút tải APK', !!apk, $('app-info').textContent.slice(0, 60));
+    check('nút trỏ tới bản phát hành mới nhất, tên file cố định',
+      !!apk && apk.getAttribute('href').endsWith('/releases/latest/download/sofin.apk'),
+      apk && apk.getAttribute('href'));
+    check('CI và nút tải dùng chung một tên file',
+      !!apk && wf.includes('sofin.apk') && apk.getAttribute('href').includes('sofin.apk'));
+
+    // trong chính app native thì không mời tải lại
+    const realCap = window.Capacitor;
+    window.Capacitor = { isNativePlatform: () => true };
+    window.renderAppInfo();
+    check('chạy trong app native thì ẩn nút tải',
+      !$('app-info').querySelector('a[href*="releases/latest/download"]'));
+    check('native được coi là đã cài, không mời cài PWA nữa',
+      $('app-info').innerHTML.includes('Đã cài trên thiết bị này'));
+    check('native không đăng ký service worker', window.eval('isNativeApp()') === true);
+    window.Capacitor = realCap;
+    window.renderAppInfo();
+    check('quay lại web thì nút tải hiện lại',
+      !!$('app-info').querySelector('a[href*="releases/latest/download"]'));
+  }
+
   console.log('\n· PWA');
   {
     const head = d.head.innerHTML;
@@ -771,7 +818,10 @@ async function boot(opts) {
     check('sw: activate xoá cache cũ', /caches\.delete/.test(sw) && /n !== CACHE/.test(sw));
     check('sw: precache đủ shell để chạy offline',
       ['/index.html', '/css/styles.css', '/js/app.js', '/js/sync.js'].every(f => sw.includes(`'${f}'`)));
-    check('sw: precache cả bundle Supabase trên CDN', sw.includes('cdn.jsdelivr.net'));
+    check('sw: precache bundle Supabase đã vendor tại chỗ',
+      sw.includes("'/js/vendor/supabase.js'"));
+    check('index.html không còn phụ thuộc CDN bên thứ ba khi khởi động',
+      !/<script src="https?:\/\//.test(head), (head.match(/<script src="https?:[^"]*"/) || [''])[0]);
 
     // mục "Thông tin ứng dụng" trong Cài đặt
     window.switchTab('settings'); await sleep(20);

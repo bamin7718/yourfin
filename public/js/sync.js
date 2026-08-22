@@ -120,7 +120,14 @@
     return client.auth.signOut();
   }
   async function resetPassword(email){
-    return client.auth.resetPasswordForEmail(email, {redirectTo: location.origin + location.pathname});
+    /* In the app `location.origin` is https://localhost, which Supabase will
+       reject and which no mail client can open anyway. Send those users to the
+       real site — it is the same app, and it can finish the reset. */
+    const native = !!(global.Capacitor && (global.Capacitor.isNativePlatform
+      ? global.Capacitor.isNativePlatform() : true));
+    const web = (global.__ENV__ && global.__ENV__.SITE_URL) || '';
+    const redirectTo = (native && web) ? web : location.origin + location.pathname;
+    return client.auth.resetPasswordForEmail(email, {redirectTo});
   }
   /* Used after a PASSWORD_RECOVERY event, when the link from the email has
      already put a short-lived recovery session in place. */

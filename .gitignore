@@ -25,3 +25,9 @@ desktop.ini
 # ---- scratch ----
 .tmp_*
 *.local
+
+# ---- Capacitor ----
+# The native projects are generated from public/ by `npx cap add` in CI, so
+# there is nothing here to keep in sync with the web app by hand.
+/android/
+/ios/

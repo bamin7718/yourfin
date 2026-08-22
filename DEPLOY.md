@@ -10,7 +10,7 @@ rất dễ gây sự cố.
 
 ```bash
 npm install jsdom --no-save
-npm test          # check + smoke 327 + sync 20 + transfer 23 + chart 44 + header 22
+npm test          # check + smoke 344 + sync 20 + transfer 23 + chart 44 + header 22
 ```
 
 - [ ] `npm test` xanh cả ba suite
@@ -23,7 +23,7 @@ npm test          # check + smoke 327 + sync 20 + transfer 23 + chart 44 + heade
 | Suite | Phạm vi |
 |---|---|
 | `check.js` | wiring HTML ↔ JS, cú pháp, rò rỉ khoá, manifest/sw hợp lệ, **mọi asset `index.html` nạp đều nằm trong precache** (quên một file = offline vỡ âm thầm, đây là thứ duy nhất bắt được) |
-| `smoke.js` | 327 assertion chạy thật app trong jsdom: auth, onboarding, giao dịch, ví, ngân sách, nợ, định kỳ, báo cáo, PIN, PWA, giao diện |
+| `smoke.js` | 344 assertion chạy thật app trong jsdom: auth, onboarding, giao dịch, ví, ngân sách, nợ, định kỳ, báo cáo, PIN, PWA, giao diện |
 | `sync-test.js` | 20 assertion giữ request Supabase treo để soi UI giữa chừng: cache render trước mạng, ghi optimistic, offline→online tự đẩy, **đóng tab lúc offline không mất dữ liệu** |
 | `header-test.js` | 22 assertion đi hết mọi màn hình (đăng nhập, onboarding, 11 tab, khoá PIN, đăng xuất, thiếu key) và kiểm app bar ở đúng trạng thái ẩn/phẳng — chỉ Dashboard được giữ vành cho thẻ số dư đè lên |
 | `chart-test.js` | 44 assertion dựng canvas giả để **chạy thật** code vẽ và hit-test: chạm đúng lát donut, phần trăm ở tâm, và đổi tab Chi tiêu ↔ Thu nhập không để lát cũ sống sót |
@@ -120,13 +120,12 @@ service worker phục vụ shell, dữ liệu đọc/ghi vào cache và tự đ�
       throttling — cái đó không chặn SW) → Ctrl+R → app vẫn mở
 - [ ] Lighthouse → **PWA** không còn cảnh báo installable
 
-### ⚠️ Phụ thuộc CDN
+### Không còn phụ thuộc CDN
 
-`@supabase/supabase-js` nạp từ `cdn.jsdelivr.net`. Service worker có precache nó nên lần mở
-sau vẫn chạy offline, nhưng **lần truy cập đầu tiên bắt buộc phải tải được jsDelivr**. Nếu
-người dùng ở mạng chặn CDN, app sẽ dừng ở màn hình cấu hình.
+`@supabase/supabase-js` đã được vendor vào `public/js/vendor/supabase.js`, nên cả lần truy cập
+đầu tiên cũng không cần với tới bên thứ ba nào. Cập nhật thư viện bằng `npm run vendor:supabase`.
 
-- [ ] Cân nhắc self-host file này vào `public/js/` nếu người dùng ở mạng nội bộ có chặn CDN
+- [ ] Nếu vừa cập nhật thư viện, xác nhận `npm test` xanh trước khi deploy
 
 ---
 
@@ -154,6 +153,27 @@ người dùng ở mạng chặn CDN, app sẽ dừng ở màn hình cấu hình
       donut đổi theo lát đang chạm
 - [ ] Bật **con mắt** ẩn số dư → đi hết Dashboard, Giao dịch, Báo cáo: không con số tiền nào
       còn đọc được (kể cả nhãn trục biểu đồ)
+
+---
+
+## 5b. Phát hành bản Android
+
+CI ở `.github/workflows/android.yml` lo hết; chỉ cần khai báo secret một lần.
+
+- [ ] **GitHub → Settings → Secrets and variables → Actions** thêm:
+  - `SUPABASE_URL`, `SUPABASE_ANON_KEY` (cùng giá trị với Vercel)
+  - `SITE_URL` = domain PROD, ví dụ `https://sofin.vercel.app`
+- [ ] ⚠️ `SITE_URL` **bắt buộc** cho bản APK: origin của app là `https://localhost`, nên link
+      đặt lại mật khẩu phải trỏ về trang web thật — thiếu nó thì người dùng app không đổi
+      được mật khẩu
+- [ ] Phát hành: `git tag v5.0.1 && git push --tags` → workflow chạy `npm test`, dựng
+      `android/`, build APK, tạo Release kèm **`sofin.apk`**
+- [ ] Nút "Tải app Android" trong Cài đặt trỏ vào `/releases/latest/download/sofin.apk`,
+      nên không phải sửa link mỗi lần phát hành
+- [ ] ⚠️ APK ký **debug**: cài được nhưng Android cảnh báo nguồn ngoài Play Store, và
+      **không nâng cấp đè lên bản ký bằng khoá khác** được. Phát hành thật thì thêm keystore
+      vào secrets rồi đổi `assembleDebug` → `assembleRelease`
+- [ ] Thử nhanh không cần tag: **Actions → Build APK → Run workflow**, tải ở mục Artifacts
 
 ---
 

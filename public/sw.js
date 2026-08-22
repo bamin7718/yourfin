@@ -39,8 +39,9 @@ const PRECACHE = [
   '/icons/icon-maskable-512.png',
   '/icons/apple-touch-icon.png',
   /* Without the client library the app cannot even reach its local cache of
-     the data, so the CDN bundle is part of the shell. */
-  'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js'
+     the data, so it ships with the shell. Same origin now that it is
+     vendored — no third party in the boot path. */
+  '/js/vendor/supabase.js'
 ];
 
 const isSupabase = url => /\.supabase\.(co|in)$/i.test(url.hostname);

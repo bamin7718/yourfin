@@ -36,7 +36,7 @@ Chạy `npm run check` **trước mỗi commit**. Dự án không có bundler n�
 2. `js/sync.js` — IIFE, export ra `window.Sync`
 3. `js/app.js` — top-level script, mọi hàm là global để inline handler trong HTML gọi được
 
-`@supabase/supabase-js` nạp qua CDN. Vì là classic script, `app.js` gắn hàm vào global scope bằng khai báo `function foo(){}` — **không dùng `const foo = ...` cho hàm mà HTML gọi qua `onclick`** (vẫn được, `check.js` nhận cả hai, nhưng `function` là quy ước hiện tại).
+`@supabase/supabase-js` **vendor sẵn** ở `public/js/vendor/supabase.js`, không nạp CDN — bản APK không có jsDelivr để dựa vào, và PWA khởi động nguội cũng vậy. Cập nhật bằng `npm run vendor:supabase` rồi chạy `npm test` (smoke boot app thật với đúng bundle đó). Vì là classic script, `app.js` gắn hàm vào global scope bằng khai báo `function foo(){}` — **không dùng `const foo = ...` cho hàm mà HTML gọi qua `onclick`** (vẫn được, `check.js` nhận cả hai, nhưng `function` là quy ước hiện tại).
 
 ### Một object `state`, một đường ghi
 
@@ -137,6 +137,19 @@ Hàm `draw*` **phải đặt lại `chartHit.*` kể cả khi không có dữ li
 `setupCanvas()` **đặt `style.width='100%'` rồi mới đo** bằng `getBoundingClientRect()`. Đừng đo `canvas.clientWidth`: đó là bề rộng chính ta ghim ở lần vẽ trước, nên kích thước đầu tiên sẽ dính vĩnh viễn — xoay máy là bitmap vẫn rộng trong khi `max-width:100%` bóp phần tử lại, cho ra nét mờ, tràn khung, và tooltip lệch đúng bằng phần chênh. `devicePixelRatio` chặn trần 3x.
 
 `shortMoney()` (nhãn trục) tôn trọng `state.app.privacy` — bật con mắt thì trục cũng phải che, không thì số vẫn đọc được qua vai.
+
+## Bản Android (Capacitor)
+
+`public/` là nguồn duy nhất — bản mobile chỉ là chính nó đóng gói lại, `webDir: "public"`.
+
+**Thư mục `android/` và `ios/` không commit.** CI chạy `npx cap add android` mỗi lần build, nên không có dự án native nào để lệch khỏi `public/`. Đổi lại: mọi tuỳ biến native phải nằm trong `capacitor.config.json`, sửa tay trong `android/` sẽ bay mất.
+
+Ba chỗ bản native khác web, đã xử lý — đừng gỡ:
+- `isNativeApp()` → **không đăng ký service worker** (asset đã nằm sẵn trên máy, worker chỉ cache bản sao của bản sao).
+- `resetPassword()` dùng `__ENV__.SITE_URL` khi chạy native: origin của app là `https://localhost`, Supabase từ chối redirect đó và không mail client nào mở được.
+- Nút tải APK trong Cài đặt tự ẩn khi đang chạy trong chính APK.
+
+Nút tải trỏ vào `/releases/latest/download/**sofin.apk**` — tên cố định đó phải khớp với bước phát hành trong `android.yml`, có assertion khoá lại.
 
 ## PWA
 

@@ -1,0 +1,21 @@
+{
+  "appId": "com.sofin.app",
+  "appName": "SoFin",
+  "webDir": "public",
+  "android": {
+    "allowMixedContent": false
+  },
+  "server": {
+    "androidScheme": "https"
+  },
+  "plugins": {
+    "StatusBar": {
+      "style": "LIGHT",
+      "backgroundColor": "#00529C",
+      "overlaysWebView": false
+    },
+    "Keyboard": {
+      "resize": "body"
+    }
+  }
+}

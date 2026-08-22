@@ -959,7 +959,9 @@
 </div>
 
 <!-- Supabase SDK (UMD build — exposes window.supabase) -->
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<!-- Vendored, not CDN: the app has to boot with no network — cold PWA start,
+     and inside the APK where there is no jsDelivr to fall back to. -->
+<script src="js/vendor/supabase.js"></script>
 <!-- Generated at build time by scripts/generate-env.js; absent in a fresh clone -->
 <script src="js/env.js" onerror="console.info('js/env.js không có — sẽ dùng meta tag hoặc màn hình cấu hình.')"></script>
 <script src="js/sync.js"></script>
