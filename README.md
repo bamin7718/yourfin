@@ -201,7 +201,7 @@ Khi nhập CSV: ví/danh mục/danh mục con/sự kiện chưa tồn tại sẽ
 
 ```bash
 npm run check                                          # tĩnh, không cần dependency
-npm install jsdom --no-save && node scripts/smoke.js   # động, 288 assertion
+npm install jsdom --no-save && npm test   # smoke 296 + sync 20 + transfer 23
 ```
 
 `npm run check` bắt được thứ mà mắt người hay bỏ sót ở dự án không bundler: inline handler gọi hàm không tồn tại, `getElementById` trỏ vào id đã đổi tên, JWT lỡ commit vào HTML.
