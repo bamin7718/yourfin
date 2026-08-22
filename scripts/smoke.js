@@ -1069,10 +1069,14 @@ async function boot(opts) {
     /* Runner là máy sạch: không có debug.keystore thì Gradle sinh khoá ngẫu
        nhiên mỗi lần build, và Android từ chối cài đè khi chữ ký đổi — mỗi bản
        phát hành lại bắt người dùng gỡ app, tức xoá sạch localStorage. */
-    check('CI nạp khoá ký cố định từ secret trước khi build', (() => {
+    /* Ghi khoá vào ~/.android/debug.keystore là KHÔNG đủ — đã thử ở v5.0.4 và
+       Gradle vẫn ký bằng khoá tự sinh của nó. Nên CI ký đè bằng apksigner. */
+    check('CI ký đè APK bằng khoá từ secret, không phó mặc Gradle', (() => {
       const ks = wf.indexOf('ANDROID_DEBUG_KEYSTORE_B64');
-      const build = wf.indexOf('assembleDebug');
-      return ks > 0 && ks < build && /~\/\.android\/debug\.keystore/.test(wf);
+      const sign = wf.indexOf('APKSIGNER" sign');
+      const verify = wf.indexOf('verify --print-certs');
+      return ks > 0 && ks < sign && sign < verify
+        && /--ks-key-alias androiddebugkey/.test(wf);
     })());
     check('thiếu khoá thì CHẶN phát hành, không lặng lẽ ra bản không cài đè được',
       /::error::Thiếu secret ANDROID_DEBUG_KEYSTORE_B64/.test(wf));

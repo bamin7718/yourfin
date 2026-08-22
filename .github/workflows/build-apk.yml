@@ -83,14 +83,17 @@ jobs:
           npx cap add android
           npx cap sync android
 
-      # KHOÁ KÝ CỐ ĐỊNH — bước này là thứ quyết định app có cài đè được không.
-      # Runner là máy sạch, không có ~/.android/debug.keystore, nên Gradle tự
-      # sinh một khoá NGẪU NHIÊN mới cho mỗi lần build. Android từ chối cài đè
-      # khi chữ ký khác nhau (INSTALL_FAILED_UPDATE_INCOMPATIBLE), nên mỗi bản
-      # phát hành lại bắt người dùng gỡ app — và gỡ app là xoá sạch localStorage.
-      # Khoá phải đúng alias/mật khẩu mặc định của debug thì signingConfig sẵn
-      # có của Gradle mới dùng được: androiddebugkey / android / android.
-      - name: Khoá ký cố định
+      # KHOÁ KÝ CỐ ĐỊNH — bước này quyết định app có cài đè được không.
+      # Runner là máy sạch: Gradle không tìm thấy khoá debug nào nên tự sinh một
+      # khoá NGẪU NHIÊN cho mỗi lần build. Chữ ký đổi thì Android từ chối cài đè
+      # (INSTALL_FAILED_UPDATE_INCOMPATIBLE), mỗi bản lại bắt người dùng gỡ app
+      # — và gỡ app là xoá sạch localStorage.
+      #
+      # Ghi khoá vào ~/.android/debug.keystore là KHÔNG ĐỦ: đã thử, Gradle vẫn ký
+      # bằng khoá tự sinh của nó (CN=Android Debug). Nó tìm khoá ở đâu còn tuỳ
+      # ANDROID_USER_HOME/ANDROID_SDK_HOME mà setup-android đặt. Nên thôi không
+      # đoán nữa: cứ để Gradle ký bằng gì tuỳ nó, rồi mình KÝ ĐÈ bằng apksigner.
+      - name: Nạp khoá ký
         env:
           KS: ${{ secrets.ANDROID_DEBUG_KEYSTORE_B64 }}
         run: |
@@ -101,9 +104,8 @@ jobs:
             fi
             echo "::warning::Chưa có ANDROID_DEBUG_KEYSTORE_B64 — artifact này ký bằng khoá ngẫu nhiên, không cài đè được."
           else
-            mkdir -p ~/.android
-            echo "$KS" | base64 -d > ~/.android/debug.keystore
-            echo "Đã nạp khoá ký cố định."
+            echo "$KS" | base64 -d > "$RUNNER_TEMP/sofin.keystore"
+            echo "Đã nạp khoá ký ($(wc -c < "$RUNNER_TEMP/sofin.keystore") byte)."
           fi
 
       - name: Build APK
@@ -113,15 +115,32 @@ jobs:
 
       # "app-debug.apk" trông đáng ngờ khi tải về điện thoại. Tên này phải khớp
       # với APK_URL trong public/js/app.js — có assertion khoá lại cặp đó.
-      - name: Đặt tên file
-        run: cp android/app/build/outputs/apk/debug/app-debug.apk sofin.apk
+      #
+      # Và đây cũng là chỗ ký đè: apksigner thay toàn bộ chữ ký cũ, không phụ
+      # thuộc vào việc Gradle đã tìm khoá ở đâu. Bật cả v1 lẫn v2 để keytool
+      # ngoài máy cũng đọc kiểm được, không chỉ apksigner.
+      - name: Đặt tên file và ký
+        run: |
+          SRC=android/app/build/outputs/apk/debug/app-debug.apk
+          if [ -f "$RUNNER_TEMP/sofin.keystore" ]; then
+            APKSIGNER=$(ls "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)
+            "$APKSIGNER" sign \
+              --ks "$RUNNER_TEMP/sofin.keystore" --ks-pass pass:android \
+              --ks-key-alias androiddebugkey --key-pass pass:android \
+              --v1-signing-enabled true --v2-signing-enabled true \
+              --out sofin.apk "$SRC"
+            echo "Đã ký đè bằng khoá cố định."
+          else
+            cp "$SRC" sofin.apk
+          fi
 
-      # Đối chiếu chữ ký của APK vừa dựng với vân tay đã biết. Bước "Khoá ký cố
-      # định" ở trên chỉ chắc rằng FILE khoá tồn tại — nó không chứng minh Gradle
-      # đã dùng đúng file đó. Mà sai chữ ký thì hỏng lặng lẽ: APK cài được, chạy
-      # được, chỉ là không ai nâng cấp đè lên nó được, và chỉ phát hiện ra khi
-      # người dùng thử cập nhật. Vân tay chứng chỉ không phải bí mật — nó nằm sẵn
-      # trong mọi APK đã phát hành.
+      # Đối chiếu chữ ký của APK sẽ phát hành với vân tay đã biết. Nạp được file
+      # khoá không có nghĩa là nó đã được dùng — đúng chuyện đã xảy ra ở v5.0.4:
+      # khoá nằm sẵn ở ~/.android/debug.keystore mà Gradle vẫn ký bằng khoá tự
+      # sinh (CN=Android Debug). Bước này là thứ duy nhất bắt được, vì sai chữ ký
+      # thì hỏng hoàn toàn lặng lẽ: APK cài được, chạy được, chỉ là không ai nâng
+      # cấp đè lên nó được, và chỉ lộ ra khi người dùng thử cập nhật.
+      # Vân tay chứng chỉ không phải bí mật — nó nằm sẵn trong mọi APK phát hành.
       - name: Đối chiếu chữ ký
         run: |
           APKSIGNER=$(ls "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)
