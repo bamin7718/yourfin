@@ -9,9 +9,10 @@
     "dev": "node scripts/generate-env.js && npx --yes serve public -l 5173",
     "check": "node scripts/check.js",
     "smoke": "node scripts/smoke.js",
-    "test": "node scripts/check.js && node scripts/smoke.js && node scripts/sync-test.js",
+    "test": "node scripts/check.js && node scripts/smoke.js && node scripts/sync-test.js && node scripts/transfer-test.js",
     "icons": "node scripts/generate-icons.js",
-    "sync-test": "node scripts/sync-test.js"
+    "sync-test": "node scripts/sync-test.js",
+    "transfer-test": "node scripts/transfer-test.js"
   },
   "engines": {
     "node": ">=18"

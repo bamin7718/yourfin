@@ -16,7 +16,8 @@ npm run dev            # build + serve public/ tại http://localhost:5173
 npm run check          # kiểm tra tĩnh wiring HTML ↔ JS (không cần dependency)
 npm run smoke          # chạy thật app trong jsdom — cần: npm install jsdom --no-save
 npm run sync-test      # hợp đồng đồng bộ: giữ request treo để soi UI giữa chừng
-npm test               # cả ba
+npm run transfer-test  # hợp đồng chuyển ví: phí, khác tiền tệ, ngày tương lai, xoá
+npm test               # cả bốn
 ```
 
 `scripts/smoke.js` là **một file assertion tuần tự**, không phải test runner — không có cách chạy lẻ một case. Muốn cô lập một luồng thì comment bớt các bước phía sau trong file, đừng thêm framework.
@@ -87,7 +88,9 @@ App tên **SoFin**, nhưng bốn khoá `localStorage` (`FINYOURTIN_STATE_V4`, `F
 - **Tiền tệ**: `fmt()` cho giá trị đã quy về tiền tệ chính, `fmtW(n, wallet)` cho giá trị thô theo tiền tệ của ví. VND là base nội bộ của bảng tỷ giá.
 - **Truy vấn dữ liệu**: luôn qua `getUserWallets()` / `getUserTransactions()` / … — chúng lọc theo `state.currentUser`; đọc thẳng `state.transactions` sẽ lẫn dữ liệu của tài khoản khác trên cùng máy.
 - **`getUserTransactions()` chỉ trả về giao dịch `completed`** — cố ý: mọi chỗ cộng tiền (số dư, ngân sách, báo cáo, sự kiện) mặc định đúng, quên sót thì lỗi nghiêng về phía an toàn (tiền dự kiến không lọt vào số dư). Cần cả sổ (danh sách, đếm, xoá danh mục, xuất file) thì gọi `getAllUserTransactions()`. Bất biến: **`completed` ⟺ `date <= hôm nay`** — `status` suy ra từ ngày ở `statusForDate()`, xác nhận sớm thì kéo `date` về hôm nay, `autoSettlePending()` lật phần còn lại lúc vào phiên. Đừng thêm đường nào đặt `status` thủ công mà không đụng `date`.
-- **Chuyển ví** tạo **một cặp** `transfer_out` + `transfer_in` chung `transferId`. Thẻ tín dụng dùng chung sổ cái với `startingBalance` âm.
+- **Chuyển ví** tạo **một cặp** `transfer_out` + `transfer_in` chung `transferId` — và **khoản phí (nếu có) cũng mang `transferId` đó**, nên một `transferId` có thể ứng với 3 bản ghi. Tìm chân đối diện phải lọc thêm `type.startsWith('transfer')`, không thì vớ phải bản ghi phí. Xoá thì xoá cả cụm: để lại nửa lần chuyển sẽ khiến hai ví bất đồng về chỗ tiền đang nằm. `scripts/transfer-test.js` khoá toàn bộ hành vi này.
+- **Không có trường `balance` trên ví.** `getWalletBalance()` phát lại sổ cái mỗi lần gọi, nên chuyển ví làm đổi số dư ngay khi hai bản ghi tồn tại — không có bước "cập nhật số dư" nào để quên. Đừng thêm trường `balance`; nó sẽ là nguồn sự thật thứ hai để lệch.
+- **Test không được phụ thuộc ngày chạy.** Dùng mốc cố định (ngày 15 tháng sau) thay vì `+40 ngày` — kiểu sau chạy cuối tháng là rơi sang tháng kế nữa và đỏ ngẫu nhiên.
 - **Số dư không lưu trữ** — `getWalletBalance()` cộng lại từ lịch sử mỗi lần gọi. Đừng cache nó vào state.
 - **Vẽ lại sau khi ghi**: dùng `renderAll()` (vẽ tab đang mở), **không** gọi cứng `renderDebtsView()` / `renderRecurringView()` — nhiều thao tác gọi được từ cả màn hình gốc lẫn thẻ "Dự kiến phải chi" trên Dashboard, gọi cứng sẽ vẽ vào view đang ẩn và màn hình thật đứng yên.
 - **Ô nhập tiền**: mọi ô số tiền là `<input type="text" class="money">` — **không** dùng `type="number"` (nó từ chối hiển thị dấu phân cách và trả về `""` ngay khi value không còn là số trần). Đọc bằng `readMoney(id)`, ghi bằng `writeMoney(id, num)`; đừng chạm `.value` trực tiếp. Nút `000` được `attachMoneyButtons()` tự gắn ở boot — ô nào render động thì gọi lại hàm đó với container. Ô số **không phải tiền** (ngày chốt, lãi suất, số kỳ) giữ `type="number"` và không có class `money`.

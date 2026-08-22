@@ -488,7 +488,10 @@ async function boot(opts) {
     window.setUpcomingFilter('nextweek', d.querySelector('#upcoming-filter .chip[data-val="nextweek"]'));
     await sleep(20);
     check('tab "7 ngày tới" có khoản cách đây 5 ngày', upList().includes('Vé máy bay'));
-    const far = window.addDaysISO(today, 40);
+    // giữa tháng sau — cố định trong khoảng "Tháng tới" mọi ngày trong năm.
+    // "+40 ngày" từng dùng ở đây là bẫy: chạy vào cuối tháng là rơi qua tháng kế nữa.
+    const nxt = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 15);
+    const far = window.isoOf(nxt);
     S().transactions.push({ id: 'tx_far', userId: S().currentUser, type: 'expense', amount: 300000,
       walletId: w, categoryId: 'c_fun', note: 'Concert', date: far, status: 'pending' });
     window.saveStorage();

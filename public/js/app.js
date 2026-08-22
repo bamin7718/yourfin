@@ -1724,7 +1724,11 @@ function openTxDetail(txId){
   const isTransfer = t.type.startsWith('transfer');
   let head, meta = '';
   if(isTransfer){
-    const pair = t.transferId ? state.transactions.find(x=>x.transferId===t.transferId && x.id!==t.id) : null;
+    /* A transfer with a fee has THREE rows under one transferId: out, in, and
+       the fee expense. Match on the transfer type too — matching on the id
+       alone only found the right leg because of the order they were pushed. */
+    const pair = t.transferId ? state.transactions.find(x=>
+      x.transferId===t.transferId && x.id!==t.id && x.type.startsWith('transfer')) : null;
     const other = pair ? getWallet(pair.walletId) : null;
     head = `<div class="cat-circle" style="width:56px;height:56px;font-size:1.6rem;background:var(--transfer-bg);margin:0 auto 8px;">⇄</div>
       <div class="text-lg font-bold c-transfer">${fmtW(t.amount, wallet)}</div>
@@ -1759,7 +1763,16 @@ function openTxDetail(txId){
 function deleteTx(txId){
   const t = state.transactions.find(x=>x.id===txId);
   if(!t) return;
-  uiConfirm('Xóa giao dịch','Giao dịch này sẽ bị xóa khỏi sổ và số dư ví sẽ được tính lại.','Xóa').then(ok=>{
+  /* A transfer is never deleted alone: both legs go, plus the fee if there was
+     one — leaving half a transfer would make the two wallets disagree about
+     where the money is, and an orphan fee would point at nothing. Say so,
+     rather than removing three rows behind a message that says "giao dịch". */
+  const group = t.transferId ? state.transactions.filter(x=>x.transferId===t.transferId) : [t];
+  const fee = group.find(x=>!x.type.startsWith('transfer'));
+  const msg = group.length > 1
+    ? `Cả hai chiều của lần chuyển tiền này sẽ bị xóa${fee ? `, kèm khoản phí ${fmtW(fee.amount, getWallet(fee.walletId))}` : ''}. Số dư hai ví sẽ được tính lại. Tiếp tục?`
+    : 'Giao dịch này sẽ bị xóa khỏi sổ và số dư ví sẽ được tính lại.';
+  uiConfirm('Xóa giao dịch', msg, 'Xóa').then(ok=>{
     if(!ok) return;
     if(t.transferId) state.transactions = state.transactions.filter(x=>x.transferId!==t.transferId);
     else state.transactions = state.transactions.filter(x=>x.id!==txId);
