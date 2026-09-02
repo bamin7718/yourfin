@@ -158,6 +158,10 @@ let currentTab = 'dashboard';
 let currentTxType = 'expense';
 let editingTxId = null;
 let txSelectedWalletId = null, txSelectedCatId = null, txSelectedSubId = null, txAmount = 0, tfAmount = 0;
+/* Bàn phím số dùng chung cho cả form thường lẫn form chuyển ví. `amtBuf` là
+   chuỗi đang gõ (dấu ',' là thập phân kiểu vi-VN), chỉ được chốt vào txAmount /
+   tfAmount khi bấm "Tiếp tục" — thoát giữa chừng thì số cũ còn nguyên. */
+let amtKind = null, amtBuf = '';
 let obSelectedWallets = [...WALLET_PRESETS], obBalances = {};
 let mwSelectedIcon = '👛', mwSelectedType = 'cash';
 let txFilters = {type:'all', walletId:'all', catId:'all', eventId:'all', range:'all', status:'all'};
@@ -1349,6 +1353,9 @@ function logout(){
   });
 }
 function showLogin(){
+  /* Overlay toàn màn hình, không phải một .view — đăng xuất mà quên đóng thì nó
+     nằm nguyên trên màn đăng nhập của người tiếp theo. */
+  if(amtKind) closeAmountSheet();
   document.querySelectorAll('.view').forEach(v=>v.classList.add('hidden'));
   document.getElementById('view-login').classList.remove('hidden');
   document.getElementById('main-header').classList.add('hidden');
@@ -1491,6 +1498,9 @@ function syncHeaderHeight(){
 }
 
 function switchTab(tab){
+  /* Bàn phím số là overlay toàn màn hình: bỏ mở mà đổi màn hình thì nó che mất
+     màn mới, và nút "Tiếp tục" của nó lại ghi vào một form không còn hiện. */
+  if(amtKind) closeAmountSheet();
   if(tab==='add' && getUserWallets().length===0){ toast('Bạn cần tạo ít nhất 1 ví trước','err'); tab='wallets'; }
   currentTab = tab;
   document.querySelectorAll('.view').forEach(v=>v.classList.add('hidden'));
@@ -1661,15 +1671,17 @@ function renderAlerts(){
    ============================================================ */
 function renderTxRows(txs){
   if(!txs.length) return `<div class="empty-state"><div class="ic">${icon('inbox')}</div><div class="text-sm">Chưa có giao dịch nào</div><div class="es-sub">Bấm nút + để thêm giao dịch đầu tiên</div></div>`;
+  /* `glyph`, không phải `icon`: một biến cục bộ tên `icon` sẽ che khuất hàm
+     icon() toàn cục trong cả callback này (TDZ, nên gọi ở đâu cũng ném lỗi). */
   return txs.map(t=>{
     const wallet = getWallet(t.walletId);
-    let icon='⇄', bg='var(--transfer-bg)', amtClass='c-transfer', prefix = t.type==='transfer_in'?'+':'-';
+    let glyph='⇄', bg='var(--transfer-bg)', amtClass='c-transfer', prefix = t.type==='transfer_in'?'+':'-';
     let title = t.note || 'Chuyển tiền';
     let sub = wallet ? esc(wallet.name) : '';
     if(t.type==='income' || t.type==='expense'){
       const cat = catOf(t);
       const s2 = findSub(t.type==='income'?'income':'expense', t.categoryId, t.subcategoryId);
-      icon = cat.icon; bg = cat.color+'22';
+      glyph = cat.icon; bg = cat.color+'22';
       amtClass = t.type==='income' ? 'c-income' : 'c-expense';
       prefix = t.type==='income' ? '+' : '-';
       title = t.note || cat.name;
@@ -1677,13 +1689,21 @@ function renderTxRows(txs){
     }
     const ev = t.eventId ? getUserEvents().find(e=>e.id===t.eventId) : null;
     const pending = isPending(t);
-    return `<div class="tx-row ${pending?'tx-pending':''}" onclick="openTxDetail('${t.id}')">
-      <div class="tx-ic" style="background:${bg};">${icon}</div>
+    const vMeta = t.isVirtual ? VIRTUAL_META[t.virtualKind] : null;
+    const action = pending ? pendingRowAction(t) : '';
+    /* Dòng ảo không có bản ghi nào để mở chi tiết — chạm vào nó là mở đúng
+       luồng xác nhận, y như bấm ✓. */
+    const open = t.isVirtual ? action : `openTxDetail('${t.id}')`;
+    return `<div class="tx-row ${pending?'tx-pending':''}${t.isVirtual?' tx-virtual':''}" onclick="${open}">
+      <div class="tx-ic" style="background:${bg};">${glyph}</div>
       <div class="tx-mid">
-        <div class="tx-title">${esc(title)}${ev?`<span class="tag">${ev.icon} ${esc(ev.name)}</span>`:''}${pending?'<span class="tag tag-pending">Dự kiến</span>':''}</div>
-        <div class="tx-sub">${sub} · ${fmtDate(t.date)}</div>
+        <div class="tx-title">${esc(title)}${ev?`<span class="tag">${ev.icon} ${esc(ev.name)}</span>`:''}${
+          vMeta ? `<span class="tag tag-virtual">${icon('clock')}${esc(vMeta.label)}</span>`
+                : pending ? '<span class="tag tag-pending">Dự kiến</span>' : ''}</div>
+        <div class="tx-sub">${sub} · ${t.isVirtual ? esc(relDueLabel(t.date).text) : fmtDate(t.date)}</div>
       </div>
       <div class="tx-amt ${amtClass} tabular">${prefix}${fmtW(t.amount, wallet)}</div>
+      ${action ? `<button class="btn-pay" title="Xác nhận đã chi" onclick="event.stopPropagation();${action}">✓</button>` : ''}
     </div>`;
   }).join('');
 }
@@ -1736,9 +1756,98 @@ function rangeBounds(){
     default: return null;
   }
 }
+/* ---------- MỤC DỰ KIẾN ẢO ----------
+   Thẻ "Sắp đến hạn" gom bốn nguồn, nhưng chỉ một trong số đó nằm trong sổ:
+   giao dịch ngày tương lai. Lịch định kỳ, thẻ tín dụng đến hạn và khoản nợ chỉ
+   là *lịch* — chúng chưa phải giao dịch, và chỉ thành giao dịch khi bấm ✓. Nên
+   lọc "Dự kiến" ở tab Giao dịch từng chỉ ra được đúng một phần tư danh sách mà
+   người dùng vừa nhìn thấy ở Tổng quan.
+
+   Hàm này dựng các dòng còn thiếu thành *pseudo-transaction* đủ hình dạng cho
+   renderTxRows(). CHÚNG KHÔNG BAO GIỜ ĐƯỢC ĐI VÀO state.transactions: chỉ sống
+   trong mảng trả về của filteredTransactions(), nên không số dư, ngân sách hay
+   báo cáo nào nhìn thấy. Cửa mở duy nhất là cờ `isVirtual` — thấy cờ đó thì
+   dừng lại và nghĩ kỹ trước khi ghi.
+
+   Khác thẻ "Sắp đến hạn" ở một điểm: KHÔNG gộp ×N. Danh sách Giao dịch xếp
+   theo ngày, gộp lại thì cả chuỗi lặp chỉ đậu được vào một ngày và các kỳ sau
+   biến mất khỏi đúng cái ngày chúng đến hạn. */
+function getVirtualPendingItems(){
+  const bounds = rangeBounds();
+  /* Không có bộ lọc thời gian thì phải tự chặn — một lịch "hàng ngày" sinh ra
+     vô hạn occurrence. 180 ngày là đúng cửa sổ dài nhất thẻ Sắp đến hạn mở. */
+  const to   = bounds ? bounds[1] : addDaysISO(todayISO(), 180);
+  const from = bounds ? bounds[0] : '';
+  const inWindow = date => !!date && date <= to && (!from || date >= from);
+  const out = [];
+
+  getUserRecurring().forEach(r=>{
+    let due = r.dueDate, guard = 0;
+    while(due && due <= to && (!r.endDate || due <= r.endDate) && guard < 400){
+      if(inWindow(due)){
+        out.push({
+          id:'v_r_'+r.id+'_'+due, isVirtual:true, virtualKind:'recurring', sourceId:r.id,
+          userId:r.userId, type:r.type||'expense', amount:r.amount, walletId:r.walletId,
+          categoryId:r.categoryId, subcategoryId:r.subcategoryId,
+          note:r.name, date:due, status:'pending'
+        });
+      }
+      due = nextDueDate(due, r.frequency, r.interval);
+      guard++;
+    }
+  });
+
+  getUserWallets().filter(w=>isCreditCard(w) && getCardUsedAmount(w)>0).forEach(w=>{
+    const due = getCardNextDueDate(w);
+    if(!inWindow(due)) return;
+    out.push({
+      id:'v_c_'+w.id+'_'+due, isVirtual:true, virtualKind:'card', sourceId:w.id,
+      userId:state.currentUser, type:'expense', amount:getCardUsedAmount(w), walletId:w.id,
+      note:'Thanh toán '+w.name, date:due, status:'pending'
+    });
+  });
+
+  getUserDebts().filter(dd=>dd.kind==='borrow' && debtRemaining(dd)>0 && inWindow(dd.dueDate)).forEach(dd=>{
+    out.push({
+      id:'v_d_'+dd.id+'_'+dd.dueDate, isVirtual:true, virtualKind:'debt', sourceId:dd.id,
+      userId:state.currentUser, type:'expense', amount:debtRemaining(dd), walletId:dd.walletId,
+      categoryId:'c_debt', subcategoryId:'s_repay',
+      note:'Trả nợ '+dd.party, date:dd.dueDate, status:'pending'
+    });
+  });
+  return out;
+}
+/* Nhãn + hành động của nút ✓ trên một dòng dự kiến. Dòng thật thì chốt tại
+   chỗ; dòng ảo thì mở đúng luồng đã có, vì mỗi loại cần hỏi thêm một thứ khác
+   nhau (ví nào, ngày nào, trả bao nhiêu). */
+const VIRTUAL_META = {
+  recurring:{label:'Lịch định kỳ', action:id=>`payRecurring('${id}')`},
+  card:     {label:'Thẻ đến hạn',  action:id=>`openCardPaymentModal('${id}')`},
+  debt:     {label:'Nợ đến hạn',   action:id=>`openDebtPayModal('${id}')`}
+};
+function pendingRowAction(t){
+  if(!t.isVirtual) return `settlePendingTx('${t.id}')`;
+  const meta = VIRTUAL_META[t.virtualKind];
+  return meta ? meta.action(t.sourceId) : '';
+}
+
 function filteredTransactions(){
   const search = (document.getElementById('tx-search').value||'').toLowerCase().trim();
   let txs = getAllUserTransactions();
+  /* Chỉ trộn khi người dùng đang thật sự hỏi về khoản dự kiến. Trộn ở mọi lúc
+     thì "Tất cả" sẽ cộng lịch định kỳ vào tổng Chi như tiền đã tiêu. */
+  if(txFilters.status === 'pending'){
+    const seen = new Set(txs.map(t=>t.id));
+    const extra = [];
+    /* Lọc trùng id để tổng Thu/Chi không đếm hai lần — id ảo dựng từ (nguồn +
+       ngày) nên ổn định qua mỗi lần vẽ lại. */
+    for(const v of getVirtualPendingItems()){
+      if(seen.has(v.id)) continue;
+      seen.add(v.id);
+      extra.push(v);
+    }
+    txs = txs.concat(extra);
+  }
   if(txFilters.type!=='all'){
     txs = txFilters.type==='transfer' ? txs.filter(t=>t.type.startsWith('transfer')) : txs.filter(t=>t.type===txFilters.type);
   }
@@ -1789,8 +1898,9 @@ function renderTransactionsList(rebuild){
     txFilters.status   = document.getElementById('tx-filter-status').value || 'all';
   }
 
-  /* highlight the promoted wallet filter while it is narrowing the list */
+  /* highlight the promoted filters while they are narrowing the list */
   document.getElementById('tx-wallet-bar').classList.toggle('on', txFilters.walletId!=='all');
+  document.getElementById('tx-status-bar').classList.toggle('on', txFilters.status!=='all');
 
   const txs = filteredTransactions();
   let inc=0, exp=0;
@@ -1950,26 +2060,34 @@ function renderAddForm(){
   if(prevEv) evSel.value = prevEv;
 
   if(!document.getElementById('tx-date').value) document.getElementById('tx-date').value = todayISO();
-  const w = getWallet(txSelectedWalletId);
-  document.getElementById('tx-amount-unit').textContent = w ? (CURRENCIES[w.currency]||{}).name || w.currency : 'VND';
-  document.getElementById('tx-amount-display').textContent = fmtW(txAmount, w);
+  renderTxAmount();
 }
 function selectTxWallet(id){ txSelectedWalletId = id; renderAddForm(); }
 function selectTxCategory(id){ txSelectedCatId = id; txSelectedSubId = null; renderAddForm(); }
 function selectTxSub(id){ txSelectedSubId = id; renderAddForm(); }
-function addQuickAmount(v){
-  txAmount += v;
-  writeMoney('tx-amount-raw', txAmount);
-  document.getElementById('tx-amount-display').textContent = fmtW(txAmount, getWallet(txSelectedWalletId));
+
+/* Con số to trên thẻ + nhãn tiền tệ. Tách riêng vì cả bàn phím lẫn ô text đều
+   phải làm mới nó, còn renderAddForm() thì nặng hơn nhiều. */
+function renderTxAmount(){
+  const w = getWallet(txSelectedWalletId);
+  const unit = document.getElementById('tx-amount-unit');
+  if(unit) unit.textContent = w ? (CURRENCIES[w.currency]||{}).name || w.currency : 'VND';
+  const d = document.getElementById('tx-amount-display');
+  if(d) d.textContent = fmtW(txAmount, w);
 }
-function clearAmount(){
-  txAmount = 0;
-  const el = document.getElementById('tx-amount-raw'); if(el) el.value = '';
-  const d = document.getElementById('tx-amount-display'); if(d) d.textContent = fmtW(0, getWallet(txSelectedWalletId));
+/* Một đường ghi duy nhất cho số tiền: bàn phím và mọi nút đều đi qua đây, nên
+   txAmount, ô input và con số hiển thị không bao giờ lệch nhau. onAmountTyped()
+   thì KHÔNG được gọi hàm này — writeMoney() gán lại .value sẽ ném con trỏ về
+   cuối ngay giữa lúc người dùng đang gõ. */
+function applyTxAmount(v){
+  txAmount = Math.max(0, Number(v) || 0);
+  writeMoney('tx-amount-raw', txAmount || '');
+  renderTxAmount();
 }
+function clearAmount(){ applyTxAmount(0); }
 function onAmountTyped(val){
   txAmount = parseAmount(val);
-  document.getElementById('tx-amount-display').textContent = fmtW(txAmount, getWallet(txSelectedWalletId));
+  renderTxAmount();
 }
 function startEditTx(txId){
   const t = state.transactions.find(x=>x.id===txId);
@@ -1985,7 +2103,7 @@ function startEditTx(txId){
   document.getElementById('form-normal').classList.remove('hidden');
   document.getElementById('tx-note').value = t.note || '';
   document.getElementById('tx-date').value = t.date;
-  writeMoney('tx-amount-raw', t.amount);
+  applyTxAmount(t.amount);
   renderAddForm();
   document.getElementById('tx-event').value = t.eventId || '';
 }
@@ -2064,6 +2182,13 @@ function onTfAmountTyped(val){
   tfAmount = parseAmount(val);
   onTransferWalletChange();
 }
+/* Đối xứng với applyTxAmount(): dùng cho bàn phím số, nơi giá trị đến từ ngoài
+   ô input nên phải ghi ngược vào ô. */
+function applyTfAmount(v){
+  tfAmount = Math.max(0, Number(v) || 0);
+  writeMoney('tf-amount-raw', tfAmount || '');
+  onTransferWalletChange();
+}
 function saveTransfer(){
   const fromId = document.getElementById('tf-from-wallet').value;
   const toId = document.getElementById('tf-to-wallet').value;
@@ -2096,6 +2221,159 @@ function saveTransfer(){
   tfAmount = 0;
   toast(status==='pending' ? 'Đã lên lịch chuyển tiền — chưa trừ ví' : 'Đã chuyển tiền thành công','ok');
   switchTab('dashboard');
+}
+
+/* ---------- MÀN NHẬP SỐ TIỀN (bàn phím riêng) ----------
+   Bàn phím của hệ điều hành không hợp với một ô chỉ nhận chữ số: nó chiếm nửa
+   màn hình, che mất ví nguồn và số dư — đúng hai thứ người dùng cần thấy khi
+   quyết định gõ bao nhiêu. Màn này thay bằng bàn phím riêng và giữ ví nguồn,
+   danh mục đích cùng số dư khả dụng luôn hiển thị phía trên.
+
+   Buffer rời, không ghi thẳng vào txAmount: bấm ‹ để thoát thì số cũ còn
+   nguyên, chỉ "Tiếp tục" mới chốt. */
+const AMT_QUICK_DEFAULT = [50000, 100000, 500000];
+const AMT_MAX_INT_DIGITS = 12;        /* 999.999.999.999 — quá đó là gõ nhầm */
+
+function amtValue(){ return amtBuf ? (parseFloat(amtBuf.replace(',', '.')) || 0) : 0; }
+/* Ví nguồn: form chuyển ví lấy ví "từ", form thường lấy ví đang chọn. */
+function amtWallet(){
+  if(amtKind === 'tf'){
+    const sel = document.getElementById('tf-from-wallet');
+    return sel ? getWallet(sel.value) : null;
+  }
+  return getWallet(txSelectedWalletId);
+}
+function openAmountSheet(kind){
+  amtKind = kind === 'tf' ? 'tf' : 'tx';
+  const cur = amtKind === 'tf' ? tfAmount : txAmount;
+  amtBuf = cur ? String(cur).replace('.', ',') : '';
+  renderAmountSheet();
+  document.getElementById('amount-sheet').classList.remove('hidden');
+  document.addEventListener('keydown', amtKeydown);
+}
+function closeAmountSheet(){
+  document.getElementById('amount-sheet').classList.add('hidden');
+  document.removeEventListener('keydown', amtKeydown);
+  amtKind = null;
+}
+function amtKey(k){
+  const comma = amtBuf.indexOf(',');
+  const int = comma === -1 ? amtBuf : amtBuf.slice(0, comma);
+  const dec = comma === -1 ? null : amtBuf.slice(comma + 1);
+  if(k === 'back'){
+    amtBuf = amtBuf.slice(0, -1);
+  } else if(k === ','){
+    if(comma === -1) amtBuf = (amtBuf || '0') + ',';
+  } else if(k === '000'){
+    /* Nối ba số 0 chứ không nhân — trên bàn phím thì "thêm ký tự" là điều
+       người dùng thấy trước mắt. Có phần thập phân thì phím này vô nghĩa. */
+    if(int && int !== '0' && dec === null && int.length + 3 <= AMT_MAX_INT_DIGITS) amtBuf = int + '000';
+  } else if(dec !== null){
+    if(dec.length < 2) amtBuf += k;
+  } else if(amtBuf === '0'){
+    amtBuf = k;
+  } else if(int.length < AMT_MAX_INT_DIGITS){
+    amtBuf += k;
+  }
+  renderAmountSheet();
+}
+/* Bàn phím vật lý trên desktop — màn này không có ô input nào để gõ vào. */
+function amtKeydown(e){
+  if(e.key >= '0' && e.key <= '9') amtKey(e.key);
+  else if(e.key === ',' || e.key === '.') amtKey(',');
+  else if(e.key === 'Backspace') amtKey('back');
+  else if(e.key === 'Enter') amtCommit();
+  else if(e.key === 'Escape') closeAmountSheet();
+  else return;
+  e.preventDefault();
+}
+function amtQuick(v){ amtBuf = String(v); renderAmountSheet(); }
+function amtCommit(){
+  const v = amtValue();
+  if(v <= 0) return toast('Nhập số tiền lớn hơn 0','err');
+  if(amtKind === 'tf') applyTfAmount(v); else applyTxAmount(v);
+  closeAmountSheet();
+}
+/* Gõ "12" thì gợi ý 12.000 / 120.000 / 1.200.000: nhân mệnh giá lên, đúng cách
+   người ta đọc số tiền ra miệng. Chưa gõ gì thì đưa ba mệnh giá hay dùng. */
+function amtQuickValues(){
+  const int = (amtBuf.split(',')[0] || '').replace(/^0+/, '');
+  const base = Number(int);
+  if(!base) return AMT_QUICK_DEFAULT;
+  return [base * 1000, base * 10000, base * 100000]
+    .filter(v => String(Math.round(v)).length <= AMT_MAX_INT_DIGITS);
+}
+function amtPartyHtml(ic, name, sub, color){
+  return `<div class="amt-party">
+    <div class="amt-party-ic" style="background:${color ? esc(color)+'22' : 'var(--primary-light)'};">${esc(ic)}</div>
+    <div class="flex1">
+      <div class="amt-party-name truncate">${esc(name)}</div>
+      ${sub ? `<div class="amt-party-sub truncate">${esc(sub)}</div>` : ''}
+    </div>
+  </div>`;
+}
+function renderAmountSheet(){
+  const w = amtWallet();
+  const value = amtValue();
+
+  document.getElementById('amt-cur').textContent = w ? w.currency : mainCurrency();
+  const val = document.getElementById('amt-val');
+  /* Con số đang gõ KHÔNG đi qua fmtW(): chế độ riêng tư che số dư là đúng, che
+     chính thứ người dùng vừa bấm thì không. */
+  val.textContent = amtBuf ? formatMoneyText(amtBuf) : '0';
+  val.classList.toggle('is-zero', !value);
+  document.getElementById('amt-next').classList.toggle('is-off', value <= 0);
+
+  /* ai/cái gì nhận số tiền này */
+  const hello = document.getElementById('amt-hello');
+  const target = document.getElementById('amt-target');
+  if(amtKind === 'tf'){
+    const toSel = document.getElementById('tf-to-wallet');
+    const to = toSel ? getWallet(toSel.value) : null;
+    hello.textContent = 'Chuyển tiền tới';
+    target.innerHTML = to
+      ? amtPartyHtml(to.icon, to.name, walletMeta(to).label + ' · ' + to.currency)
+      : amtPartyHtml('🏦', 'Chưa chọn ví đích', '');
+  } else {
+    const type = currentTxType === 'income' ? 'income' : 'expense';
+    const c = findCategory(type, txSelectedCatId);
+    const s2 = findSub(type, txSelectedCatId, txSelectedSubId);
+    hello.textContent = type === 'income' ? 'Ghi nhận khoản thu' : 'Nhập số tiền giao dịch';
+    target.innerHTML = c
+      ? amtPartyHtml(c.icon, c.name, (type === 'income' ? 'Khoản thu' : 'Khoản chi') + (s2 ? ' · ' + s2.name : ''), c.color)
+      : amtPartyHtml('📦', 'Chưa chọn danh mục', '');
+  }
+
+  /* ví nguồn + số dư khả dụng */
+  const from = document.getElementById('amt-from');
+  if(w){
+    const card = isCreditCard(w);
+    from.innerHTML = `<div class="amt-sec-lbl">Trừ vào ví</div>
+      <div class="amt-from-card">
+        <div class="amt-party-ic">${esc(w.icon)}</div>
+        <div class="flex1">
+          <div class="amt-party-name truncate">${esc(w.name)}</div>
+          <div class="amt-party-sub">${esc(walletMeta(w).label)} · ${esc(w.currency)}</div>
+        </div>
+        <div class="amt-from-bal">
+          <div class="amt-from-lbl">${card ? 'Hạn mức còn' : 'Số dư khả dụng'}</div>
+          <div class="amt-from-val tabular">${fmtW(card ? getCardAvailableLimit(w) : getWalletBalance(w.id), w)}</div>
+        </div>
+      </div>`;
+  } else {
+    from.innerHTML = '';
+  }
+
+  /* Cảnh báo thôi, không chặn: app cho phép ví âm (ghi sổ muộn, thẻ tín dụng),
+     nên chặn ở đây sẽ khoá mất những ca hợp lệ. */
+  const spends = amtKind === 'tf' || currentTxType !== 'income';
+  const over = !!w && !isCreditCard(w) && spends && value > getWalletBalance(w.id);
+  const note = document.getElementById('amt-note');
+  note.textContent = over ? 'Số tiền vượt quá số dư khả dụng của ví' : '';
+  note.classList.toggle('is-warn', over);
+
+  document.getElementById('amt-quick').innerHTML = amtQuickValues()
+    .map(v => `<span class="tcb-quick-item" onclick="amtQuick(${v})">${formatMoneyText(String(v))}</span>`).join('');
 }
 
 /* ============================================================
@@ -2358,9 +2636,11 @@ function settleCardPayment(){
     const cardAmount = sourceW.currency === w.currency ? amount
       : toMain(amount, sourceW.currency) / rateOf(w.currency) * rateOf(mainCurrency());
     const transferId = uid('tr'), stamp = new Date().toISOString();
+    /* Cả cặp cùng một status, như mọi lần chuyển ví khác. */
+    const status = statusForDate(date);
     state.transactions.push(
-      {id:uid('t'), userId:state.currentUser, type:'transfer_out', amount, walletId:sourceId, note:`Thanh toán thẻ ${w.name}`, date, transferId, createdAt:stamp},
-      {id:uid('t'), userId:state.currentUser, type:'transfer_in', amount:cardAmount, walletId:w.id, note:`Trả nợ thẻ từ ${sourceW.name}`, date, transferId, createdAt:stamp}
+      {id:uid('t'), userId:state.currentUser, type:'transfer_out', amount, walletId:sourceId, note:`Thanh toán thẻ ${w.name}`, date, transferId, status, createdAt:stamp},
+      {id:uid('t'), userId:state.currentUser, type:'transfer_in', amount:cardAmount, walletId:w.id, note:`Trả nợ thẻ từ ${sourceW.name}`, date, transferId, status, createdAt:stamp}
     );
     saveStorage();
     closeModal('modal-card-payment');
@@ -2632,7 +2912,8 @@ function saveDebtModal(){
         amount, walletId,
         categoryId: mdKind==='borrow' ? 'c_debt_in' : 'c_debt',
         subcategoryId: mdKind==='borrow' ? 's_borrow' : 's_lend',
-        note: (mdKind==='borrow'?'Vay của ':'Cho vay ')+party, date, debtId, createdAt:new Date().toISOString()
+        note: (mdKind==='borrow'?'Vay của ':'Cho vay ')+party, date,
+        debtId, status:statusForDate(date), createdAt:new Date().toISOString()
       });
     }
     toast('Đã thêm khoản nợ','ok');
@@ -2690,7 +2971,8 @@ function saveDebtPayment(){
     amount, walletId,
     categoryId: d.kind==='borrow' ? 'c_debt' : 'c_debt_in',
     subcategoryId: d.kind==='borrow' ? 's_repay' : 's_collect',
-    note: (d.kind==='borrow'?'Trả nợ ':'Thu nợ ')+d.party, date, debtId:d.id, createdAt:new Date().toISOString()
+    note: (d.kind==='borrow'?'Trả nợ ':'Thu nợ ')+d.party, date,
+    debtId:d.id, status:statusForDate(date), createdAt:new Date().toISOString()
   });
   d.payments = d.payments || [];
   d.payments.push({id:uid('p'), amount, date, walletId, txId});
@@ -2717,6 +2999,11 @@ function createRecurringTx(r, dateStr, walletId){
     id:uid('t'), userId:r.userId, type:r.type||'expense', amount:r.amount,
     walletId: walletId || r.walletId,
     categoryId:r.categoryId, subcategoryId:r.subcategoryId, note:r.name, date:dateStr,
+    /* Bấm ✓ ở "Sắp đến hạn" cho phép chọn ngày, và ngày mặc định là hạn kế
+       tiếp — có thể còn ở tương lai. Thiếu dòng này thì bản ghi ra đời với
+       status undefined, tức "đã ghi nhận", và số dư bị trừ trước khi tiền
+       thực sự đi. Xác nhận đúng hôm nay thì statusForDate() trả 'completed'. */
+    status: statusForDate(dateStr),
     recurringId:r.id, createdAt:new Date().toISOString()
   });
 }
@@ -3017,6 +3304,25 @@ function getUpcomingRange(){
   if(upcomingFilter==='6m')       return addDaysISO(today, 180);
   if(upcomingFilter==='nextmonth') return isoOf(new Date(d.getFullYear(), d.getMonth()+2, 0));
   return isoOf(new Date(d.getFullYear(), d.getMonth()+1, 0));
+}
+/* "Xem tất cả ›" — sang tab Giao dịch, lọc đúng cửa sổ thời gian mà thẻ Sắp đến
+   hạn đang mở. Không preset nào của trang Giao dịch dùng được: '7d' / '30d' đếm
+   LÙI về quá khứ, còn ở đây là tới hết cửa sổ. Nên phải là 'custom', đặt trước
+   khi nhảy để lần vẽ đầu đã đúng phạm vi.
+
+   Chỉ chặn đầu TRÊN, để trống "Từ ngày": khoản dự kiến nào cũng nằm từ hôm nay
+   trở đi nên cận dưới chẳng lọc thêm được gì, nhưng nó lại cắt sạch mọi giao
+   dịch đã ghi nhận (vốn luôn ≤ hôm nay). Hậu quả là đổi ô Trạng thái sang "Tất
+   cả" hay "Đã ghi nhận" vẫn ra đúng danh sách cũ — trông y như bộ lọc chết. */
+function viewAllUpcoming(){
+  document.getElementById('tx-from').value = '';
+  document.getElementById('tx-to').value = getUpcomingRange();
+  jumpToTransactions({status:'pending', range:'custom'});
+  /* syncTxFilterChips() vừa gập hai khối lọc lại. Mở ra, không thì danh sách
+     ngắn đi mà chẳng có gì trên màn hình giải thích tại sao. */
+  document.getElementById('tx-custom-range').classList.remove('hidden');
+  document.getElementById('tx-advanced-filters').classList.remove('hidden');
+  renderTransactionsList(true);
 }
 function getUpcomingItems(rangeEnd){
   /* Count every occurrence that lands inside the window, not just the next
@@ -3379,6 +3685,62 @@ function toggleReportPending(){
   renderReportsView();
 }
 function txInRange(r){ return reportSource().filter(t=>t.date>=r.start && t.date<=r.end && inReportScope(t)); }
+
+/* Số dư của một tập ví TRƯỚC ngày `beforeISO`, quy về tiền tệ chính.
+   Phát lại sổ y như getWalletBalance(), chỉ khác là dừng ở một mốc ngày. Không
+   có trường `balance` nào để trừ ngược ra, và cũng đừng thêm — phát lại là thứ
+   duy nhất không thể lệch với lịch sử. */
+function balanceAsOf(walletIds, beforeISO, includePending){
+  let bal = 0;
+  walletIds.forEach(id=>{
+    const w = getWallet(id);
+    if(w) bal += toMain(w.startingBalance||0, w.currency);
+  });
+  for(const t of state.transactions){
+    if(t.userId !== state.currentUser || !walletIds.has(t.walletId)) continue;
+    if(t.date >= beforeISO) continue;
+    if(isPending(t) && !includePending) continue;
+    const v = txMain(t);
+    if(t.type==='income' || t.type==='transfer_in') bal += v;
+    else if(t.type==='expense' || t.type==='transfer_out') bal -= v;
+  }
+  return bal;
+}
+/* Tập ví mà báo cáo đang nói tới. Phải khớp CHÍNH XÁC với inReportScope() —
+   lệch một ví là "đầu kỳ + biến động" không còn ra "cuối kỳ" nữa. */
+function reportBalanceScope(walletId){
+  const id = walletId || reportWalletId;
+  return new Set(id!=='all' && getWallet(id) ? [id] : getUserWallets().map(w=>w.id));
+}
+
+/* Toàn cảnh một kỳ: mở đầu bao nhiêu, trong kỳ thu/chi bao nhiêu, đóng lại còn
+   bao nhiêu.
+
+   `closing` tính bằng cộng dồn chứ không phát lại lần nữa, và cố ý như vậy:
+   opening + thu − chi + chuyển-ví-ròng ĐÚNG BẰNG số dư phát lại tới cuối kỳ,
+   nên con số trên màn hình luôn cộng đúng với ba dòng ngay phía trên nó. Thiếu
+   `transfer` thì lọc theo một ví sẽ lệch — chuyển ví không phải thu, cũng
+   không phải chi, nhưng nó có làm số dư ví đó đổi.
+
+   `reportIncludePending` chi phối cả hai đầu: bật "Gồm dự kiến" mà chỉ cộng
+   khoản dự kiến vào biến động trong kỳ thì cuối kỳ sẽ không khớp đầu kỳ. */
+function calculateReportMetrics(r, walletId){
+  r = r || reportRange();
+  const scope = reportBalanceScope(walletId);
+  const txs = reportSource().filter(t=>t.date>=r.start && t.date<=r.end && scope.has(t.walletId));
+  const catTotals = {expense:{}, income:{}};
+  let inc = 0, exp = 0, transfer = 0;
+  txs.forEach(t=>{
+    const v = txMain(t);
+    if(t.type==='income'){ inc += v; catTotals.income[t.categoryId] = (catTotals.income[t.categoryId]||0)+v; }
+    else if(t.type==='expense'){ exp += v; catTotals.expense[t.categoryId] = (catTotals.expense[t.categoryId]||0)+v; }
+    else if(t.type==='transfer_in')  transfer += v;
+    else if(t.type==='transfer_out') transfer -= v;
+  });
+  const opening = balanceAsOf(scope, r.start, reportIncludePending);
+  const net = inc - exp;
+  return {txs, catTotals, inc, exp, net, transfer, opening, closing: opening + net + transfer};
+}
 function setReportWallet(id){
   reportWalletId = id;
   renderReportsView();
@@ -3406,19 +3768,21 @@ function renderReportsView(){
 
   const r = reportRange();
   document.getElementById('report-period-label').textContent = r.label;
-  const txs = txInRange(r);
-  let inc=0, exp=0;
-  const catTotals = {expense:{}, income:{}};
-  txs.forEach(t=>{
-    const v = txMain(t);
-    if(t.type==='income'){ inc+=v; catTotals.income[t.categoryId] = (catTotals.income[t.categoryId]||0)+v; }
-    else if(t.type==='expense'){ exp+=v; catTotals.expense[t.categoryId] = (catTotals.expense[t.categoryId]||0)+v; }
-  });
+  const m = calculateReportMetrics(r);
+  const {txs, catTotals, inc, exp, net} = m;
+  setAmount('rep-opening', fmt(m.opening));
   setAmount('rep-income', fmt(inc));
   setAmount('rep-expense', fmt(exp));
-  const net = inc-exp;
   setAmount('rep-net', (net>=0?'+':'') + fmt(net));
-  document.getElementById('rep-net-card').className = 'sum-card net ' + (net>=0?'pos':'neg');
+  setAmount('rep-closing', fmt(m.closing));
+  const netRow = document.getElementById('rep-net-card');
+  netRow.classList.toggle('pos', net>=0);
+  netRow.classList.toggle('neg', net<0);
+  /* Làm tròn trước khi so 0: số lẻ do quy đổi tiền tệ sẽ bật dòng này lên với
+     một con số hiển thị ra đúng "0 đ" — trông như lỗi. */
+  const tfRow = document.getElementById('rep-transfer-row');
+  tfRow.classList.toggle('hidden', Math.round(m.transfer) === 0);
+  setAmount('rep-transfer', (m.transfer>=0?'+':'') + fmt(m.transfer));
   /* how much of what came in survived the period */
   document.getElementById('rep-net-sub').textContent = inc > 0
     ? `Giữ lại ${Math.round(net/inc*100)}% thu nhập · ${txs.length} giao dịch`

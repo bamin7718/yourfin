@@ -23,6 +23,14 @@
   --radius:18px; --radius-sm:12px; --radius-xs:10px;
   --safe-b:env(safe-area-inset-bottom,0px);
   --nav-h:64px;
+  /* Màn nhập số tiền mượn bảng màu bàn phím của Techcombank — cố ý KHÔNG dùng
+     --primary: nó là một bề mặt riêng, đứng ngoài app bar và các thẻ, và phải
+     giữ được độ tương phản đó ở cả hai theme. Sửa màu thương hiệu thì không
+     phải đụng vào đây. */
+  --tcb-blue:#007AFF; --tcb-blue-press:#0056B3; --tcb-on-blue:#FFFFFF;
+  --tcb-keypad-bg:#D1D5DB; --tcb-key:#FFFFFF; --tcb-key-press:#E2E8F0; --tcb-key-text:#0F172A;
+  --tcb-back:#94A3B8; --tcb-back-press:#7F8EA3; --tcb-back-text:#1E293B;
+  --tcb-quick-bg:#E2E8F0; --tcb-quick-line:#CBD5E1;
 }
 html[data-theme="dark"]{
   --primary:#4A9EE8; --primary-dark:#7FBDF2; --primary-light:#12325A; --primary-soft:#0C2340;
@@ -40,6 +48,12 @@ html[data-theme="dark"]{
   --text:#E7EEF6; --muted:#8FA3BA; --border:#22364F;
   --shadow:0 2px 8px rgba(0,0,0,.35);
   --shadow-lift:0 8px 24px rgba(0,0,0,.45);
+  /* Bàn phím trắng trên nền tối là một tấm đèn pha giữa đêm — hạ toàn bộ bề
+     mặt xuống, riêng nút xanh giữ nguyên vai trò nút hành động. */
+  --tcb-blue:#0A84FF; --tcb-blue-press:#0060CC;
+  --tcb-keypad-bg:#101A26; --tcb-key:#1E2E42; --tcb-key-press:#2A3E58; --tcb-key-text:#E7EEF6;
+  --tcb-back:#33465F; --tcb-back-press:#3E5474; --tcb-back-text:#E7EEF6;
+  --tcb-quick-bg:#16222F; --tcb-quick-line:#22364F;
 }
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
 html,body{height:100%;}
@@ -135,6 +149,8 @@ header .icon-btn:hover{background:rgba(255,255,255,.26);}
 .section-title{display:flex;justify-content:space-between;align-items:center;margin:16px 0 10px;}
 .section-title h4{font-size:.95rem;font-weight:800;}
 .link{color:var(--primary);font-size:.78rem;font-weight:700;cursor:pointer;}
+/* Nhiều hơn một link ở góc phải tiêu đề khối */
+.st-links{display:flex;align-items:center;gap:14px;flex:0 0 auto;}
 .divider{height:1px;background:var(--border);margin:12px 0;}
 
 /* ---------- BUTTONS ---------- */
@@ -275,6 +291,10 @@ select.input{appearance:none;background-image:linear-gradient(45deg,transparent 
 .tx-row.tx-pending .tx-amt{font-style:italic;}
 .tag-pending{background:var(--warn);color:#3B2900;}
 html[data-theme="dark"] .tag-pending{color:#241C00;}
+/* Mục dự kiến "ảo": lịch định kỳ / thẻ / nợ đến hạn, chưa có bản ghi nào trong
+   sổ. Viền đứt là lời hứa trực quan — dòng này chưa thật, bấm ✓ mới thành. */
+.tag-virtual{background:var(--warn-bg);color:var(--warn);}
+.tx-row.tx-virtual{border-style:dashed;box-shadow:none;}
 
 /* Money fields: the 000 shortcut sits inside the box, so the input reserves
    room for it. The big centred amount boxes pad both sides to stay centred. */
@@ -314,6 +334,10 @@ html[data-theme="dark"] .tag-pending{color:#241C00;}
 .money-field>input.money:disabled ~ .btn-000{opacity:.4;pointer-events:none;}
 
 /* A filter promoted out of the collapsed panel and onto the main view. */
+/* Hai bộ lọc cạnh nhau; flex-wrap để máy hẹp thì xuống dòng thay vì bóp select
+   còn đúng một con chữ. */
+.quick-filter-row{display:flex;gap:10px;flex-wrap:wrap;}
+.quick-filter-row>.quick-filter{flex:1 1 150px;min-width:0;}
 .quick-filter{display:flex;align-items:center;gap:8px;margin-bottom:10px;}
 .quick-filter>label{flex:0 0 auto;font-size:.78rem;font-weight:700;color:var(--muted);}
 .quick-filter>select{flex:1;min-width:0;}
@@ -338,10 +362,86 @@ html[data-theme="dark"] .type-select.active{color:var(--primary);}
 .type-select .ts-ic{font-size:1.25rem;display:block;margin-bottom:3px;}
 
 /* ---------- AMOUNT ---------- */
-.amount-box{text-align:center;padding:14px 12px;}
-.amount-display{font-size:2.45rem;font-weight:800;letter-spacing:-1px;line-height:1.1;}
-.amount-unit{font-size:.85rem;color:var(--muted);font-weight:700;margin-top:2px;}
-.quick-amounts{display:flex;gap:6px;justify-content:center;margin-top:12px;flex-wrap:wrap;}
+.amount-box{text-align:center;padding:16px 12px;}
+.amount-unit{font-size:.7rem;color:var(--muted);font-weight:800;letter-spacing:.6px;text-transform:uppercase;}
+.amount-display{font-size:2.45rem;font-weight:800;letter-spacing:-1px;line-height:1.15;color:var(--tcb-blue);margin-top:2px;}
+.amount-hint{font-size:.7rem;color:var(--muted);font-weight:600;margin-top:6px;}
+.amount-tap{cursor:pointer;position:relative;overflow:hidden;transition:transform .1s ease;}
+.amount-tap:active{transform:scale(.995);}
+/* Ô <input class="money"> vẫn là chỗ giữ giá trị — nó mang cả dấu phân cách
+   lẫn readMoney/writeMoney — nhưng giao diện nhập giờ là #amount-sheet. Để cả
+   hai hiện ra là có hai cách gõ cùng một con số, và cái nhỏ hơn thì luôn thắng
+   khi người dùng lỡ chạm vào. */
+.amount-raw{display:none;}
+
+/* ---------- MÀN NHẬP SỐ TIỀN (bàn phím riêng, kiểu Techcombank) ---------- */
+.amt-sheet{position:fixed;inset:0;z-index:120;display:flex;justify-content:center;
+  background:rgba(15,23,42,.45);animation:fadeIn .16s ease;}
+.amt-panel{width:100%;max-width:520px;background:var(--bg);display:flex;flex-direction:column;
+  animation:slideUp .2s ease;}
+.amt-top{display:flex;align-items:center;gap:8px;background:var(--card);
+  padding:calc(10px + env(safe-area-inset-top,0px)) 14px 10px;border-bottom:1px solid var(--border);}
+.amt-back{flex:0 0 auto;width:34px;height:34px;border:none;border-radius:50%;background:transparent;
+  color:var(--text);font-size:1.7rem;line-height:1;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden;}
+.amt-lead{flex:1;min-width:0;}
+.amt-hello{font-size:.72rem;font-weight:700;color:var(--muted);}
+.amt-target{margin-top:3px;}
+.amt-party{display:flex;align-items:center;gap:10px;}
+.amt-party-ic{flex:0 0 auto;width:34px;height:34px;border-radius:11px;background:var(--primary-light);
+  display:flex;align-items:center;justify-content:center;font-size:1rem;}
+.amt-party-name{font-size:.86rem;font-weight:800;}
+.amt-party-sub{font-size:.68rem;font-weight:600;color:var(--muted);margin-top:1px;}
+
+.amt-body{flex:1;overflow-y:auto;padding:24px 16px 16px;}
+.amt-hero{display:flex;align-items:baseline;justify-content:center;gap:8px;}
+.amt-cur{font-size:.95rem;font-weight:800;color:var(--muted);}
+.amt-val{font-size:36px;font-weight:800;letter-spacing:-1px;line-height:1.1;color:var(--tcb-blue);
+  word-break:break-all;}
+.amt-val.is-zero{color:var(--muted);opacity:.45;}
+/* Chiều cao cố định: dòng cảnh báo hiện/ẩn mà đẩy cả thẻ ví nguồn nhảy lên
+   nhảy xuống theo từng phím thì rất khó chịu. */
+.amt-note{min-height:18px;margin-top:8px;text-align:center;font-size:.7rem;font-weight:700;color:transparent;}
+.amt-note.is-warn{color:var(--warn);}
+.amt-sec-lbl{margin:18px 0 8px;font-size:.66rem;font-weight:800;letter-spacing:.5px;
+  text-transform:uppercase;color:var(--muted);}
+.amt-from-card{display:flex;align-items:center;gap:10px;background:var(--card);
+  border:1px solid var(--border);border-radius:16px;padding:12px;box-shadow:var(--shadow);}
+.amt-from-bal{flex:0 0 auto;text-align:right;}
+.amt-from-lbl{font-size:.64rem;font-weight:700;color:var(--muted);}
+.amt-from-val{font-size:.84rem;font-weight:800;}
+.amt-foot{flex:0 0 auto;padding-bottom:var(--safe-b);background:var(--tcb-keypad-bg);}
+
+/* Thanh gợi ý số tiền, ngay trên bàn phím */
+.tcb-quick-bar{display:flex;justify-content:space-around;align-items:center;
+  background:var(--tcb-quick-bg);color:var(--tcb-key-text);
+  padding:10px 0;font-size:15px;font-weight:700;
+  border-top:1px solid var(--tcb-quick-line);
+  border-top-left-radius:16px;border-top-right-radius:16px;}
+.tcb-quick-item{cursor:pointer;padding:2px 8px;border-radius:4px;
+  user-select:none;-webkit-user-select:none;}
+.tcb-quick-item:active{background:var(--tcb-quick-line);}
+
+/* Bàn phím 4×4: ba cột số, cột thứ tư là ⌫ (2 hàng trên) và Tiếp tục (2 hàng
+   dưới). Hai phím cao đặt hàng TƯỜNG MINH — chỉ `span 2` thì vị trí của chúng
+   phụ thuộc thứ tự thẻ trong HTML, và một lần đổi thứ tự phím là cả lưới trượt. */
+.tcb-keypad-wrapper{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;padding:6px;
+  background:var(--tcb-keypad-bg);border-top-left-radius:16px;border-top-right-radius:16px;}
+.tcb-btn-key{display:flex;align-items:center;justify-content:center;height:52px;
+  background:var(--tcb-key);color:var(--tcb-key-text);border:none;border-radius:8px;
+  font-size:22px;font-weight:600;box-shadow:0 1px 2px rgba(0,0,0,.08);cursor:pointer;
+  user-select:none;-webkit-user-select:none;}
+.tcb-btn-key:active{background:var(--tcb-key-press);}
+.tcb-btn-000{font-size:17px;font-weight:700;letter-spacing:.5px;}
+.tcb-btn-backspace{grid-column:4;grid-row:1 / span 2;font-size:20px;
+  background:var(--tcb-back);color:var(--tcb-back-text);}
+.tcb-btn-backspace:active{background:var(--tcb-back-press);}
+.tcb-btn-next{grid-column:4;grid-row:3 / span 2;font-size:18px;font-weight:700;
+  background:var(--tcb-blue);color:var(--tcb-on-blue);box-shadow:0 2px 8px rgba(0,122,255,.3);}
+.tcb-btn-next:active{background:var(--tcb-blue-press);}
+/* Mờ đi khi chưa có số, nhưng vẫn bấm được: chạm vào thì có toast nói rõ lý do,
+   còn một nút disabled thì im lặng và người dùng tưởng app treo. */
+.tcb-btn-next.is-off{opacity:.45;box-shadow:none;}
 
 /* ---------- NAV ---------- */
 .nav-bar{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:520px;
@@ -436,6 +536,8 @@ html[data-theme="dark"] .nav-bar{background:rgba(19,33,50,.82);border-top-color:
 .tx-row .tx-title{font-size:.85rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .tx-row .tx-sub{font-size:.68rem;color:var(--muted);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .tx-row .tx-amt{font-size:.95rem;font-weight:800;flex:0 0 auto;text-align:right;letter-spacing:-.2px;}
+/* Nút ✓ chỉ mọc ra ở dòng dự kiến, nên số tiền không còn sát mép phải nữa. */
+.tx-row .btn-pay{margin-left:2px;}
 .tag{display:inline-flex;align-items:center;gap:3px;font-size:.6rem;font-weight:700;padding:1px 6px;border-radius:6px;background:var(--primary-light);color:var(--primary-dark);margin-left:4px;}
 html[data-theme="dark"] .tag{color:var(--primary);}
 
@@ -445,31 +547,36 @@ html[data-theme="dark"] .tag{color:var(--primary);}
 .rep-scope{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px;}
 .rep-period{font-size:.82rem;font-weight:800;color:var(--text);}
 
-.sum-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;}
-.sum-card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:13px 14px;
-  box-shadow:var(--shadow);position:relative;overflow:hidden;}
-.sum-card::before{content:'';position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--muted);}
-.sum-card.in::before{background:var(--income);}
-.sum-card.out::before{background:var(--expense);}
-.sum-card.net::before{background:var(--primary);}
-.sum-card .sc-top{display:flex;align-items:center;gap:6px;margin-bottom:6px;}
-.sum-card .sc-ic{display:flex;width:22px;height:22px;border-radius:7px;align-items:center;justify-content:center;}
-.sum-card .sc-ic .ic-svg{width:14px;height:14px;}
-.sum-card.in  .sc-ic{background:var(--income-bg);color:var(--income);}
-.sum-card.out .sc-ic{background:var(--expense-bg);color:var(--expense);}
-.sum-card.net .sc-ic{background:var(--primary-soft);color:var(--primary);}
-.sum-card .sc-lbl{font-size:.68rem;font-weight:700;color:var(--muted);}
-.sum-card .sc-val{font-size:1.22rem;font-weight:800;letter-spacing:-.4px;
-  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.sum-card.in  .sc-val{color:var(--income);}
-.sum-card.out .sc-val{color:var(--expense);}
-.sum-card.net{margin-bottom:12px;}
-.sum-card.net .sc-val{font-size:1.5rem;}
-.sum-card.net.pos .sc-val{color:var(--income);}
-.sum-card.net.pos::before{background:var(--income);}
-.sum-card.net.neg .sc-val{color:var(--expense);}
-.sum-card.net.neg::before{background:var(--expense);}
-.sum-card .sc-sub{font-size:.66rem;color:var(--muted);margin-top:3px;}
+/* ---------- BÁO CÁO: biến động số dư ----------
+   Một thẻ, các dòng ngăn bằng nét đứt. Nét đứt chứ không nét liền: đây là các
+   bước của cùng một phép cộng, không phải các mục rời nhau. */
+.report-balance-card{background:var(--card);border:1px solid var(--border);border-radius:16px;
+  padding:6px 16px 12px;margin-bottom:16px;box-shadow:var(--shadow);}
+.report-balance-row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 0;}
+.report-balance-row.border-bottom,.report-balance-flow.border-bottom{border-bottom:1px dashed var(--border);}
+.report-balance-label{display:flex;align-items:center;gap:6px;flex:0 0 auto;
+  font-size:.82rem;font-weight:600;color:var(--muted);}
+.report-balance-label .ic-svg{width:15px;height:15px;color:var(--muted);}
+.report-balance-value{font-size:.94rem;font-weight:800;letter-spacing:-.2px;
+  min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+/* Con số quan trọng nhất của cả màn hình — nó là câu trả lời, ba dòng trên chỉ
+   là cách đi tới nó. */
+.report-balance-value.highlight{font-size:1.35rem;color:var(--primary);}
+.report-balance-value.rb-in{color:var(--income);}
+.report-balance-value.rb-out{color:var(--expense);}
+#rep-net-card.pos .rb-net{color:var(--income);}
+#rep-net-card.neg .rb-net{color:var(--expense);}
+/* Thu và chi đứng thành hai cột: chúng là một cặp đối nhau, xếp dọc thành hai
+   dòng thì mắt phải nhảy xuống mới so được. */
+.report-balance-flow{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:10px 0;}
+.report-balance-flow .rb-col{min-width:0;}
+.report-balance-flow .report-balance-label{margin-bottom:3px;}
+.report-balance-flow .report-balance-value{font-size:1.12rem;}
+.rb-ic{display:flex;width:20px;height:20px;border-radius:6px;align-items:center;justify-content:center;flex:0 0 auto;}
+.rb-ic .ic-svg{width:13px;height:13px;}
+.rb-ic.in{background:var(--income-bg);color:var(--income);}
+.rb-ic.out{background:var(--expense-bg);color:var(--expense);}
+.rb-note{font-size:.66rem;color:var(--muted);text-align:right;}
 
 /* Tooltip floats over the canvas; the chart itself is never redrawn to move
    it, only this node's text and position change. */
@@ -515,16 +622,20 @@ html[data-theme="dark"] .tag{color:var(--primary);}
    ten-billion net worth never gets cut off on a 360px phone. */
 .amt.amt-sm{font-size:1.68rem;} .amt.amt-xs{font-size:1.38rem;letter-spacing:-.6px;}
 .wbal.amt-sm{font-size:.86rem;} .wbal.amt-xs{font-size:.76rem;}
-.sc-val.amt-sm{font-size:1.04rem;} .sc-val.amt-xs{font-size:.9rem;}
-.sum-card.net .sc-val.amt-sm{font-size:1.26rem;} .sum-card.net .sc-val.amt-xs{font-size:1.06rem;}
+.report-balance-value.amt-sm{font-size:.86rem;} .report-balance-value.amt-xs{font-size:.78rem;}
+.report-balance-flow .report-balance-value.amt-sm{font-size:.98rem;}
+.report-balance-flow .report-balance-value.amt-xs{font-size:.86rem;}
+.report-balance-value.highlight.amt-sm{font-size:1.16rem;}
+.report-balance-value.highlight.amt-xs{font-size:1rem;}
 
 /* Sub-380px (iPhone SE, narrow Android): trim the report chrome rather than
    let it overflow. */
 @media (max-width:380px){
-  .sum-grid{gap:8px;}
-  .sum-card{padding:11px 12px;}
-  .sum-card .sc-val{font-size:1.08rem;}
-  .sum-card.net .sc-val{font-size:1.3rem;}
+  .report-balance-card{padding:4px 12px 10px;}
+  .report-balance-label{font-size:.74rem;}
+  .report-balance-flow{gap:8px;}
+  .report-balance-flow .report-balance-value{font-size:1rem;}
+  .report-balance-value.highlight{font-size:1.2rem;}
   .rank-row{gap:8px;}
   .rank-no{width:16px;font-size:.66rem;}
   .rank-name{font-size:.75rem;}

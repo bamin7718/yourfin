@@ -591,11 +591,8 @@ async function boot(opts) {
     type('tx-amount-raw', '');
     check('000 khi ô trống thì không làm gì', press000('tx-amount-raw') === '');
 
-    // các nút nhanh cũ phải nguyên vẹn
     window.clearAmount();
-    window.addQuickAmount(10000); window.addQuickAmount(50000);
-    check('+10k / +50k vẫn cộng dồn đúng', window.eval('txAmount') === 60000);
-    check('nút nhanh cũng hiển thị có phân cách', $('tx-amount-raw').value === '60.000');
+    check('xoá số tiền thì ô trống lại', $('tx-amount-raw').value === '' && window.eval('txAmount') === 0);
 
     // lưu xuống state phải là number sạch
     const tx0 = S().transactions.length;
@@ -640,6 +637,104 @@ async function boot(opts) {
         !!$(id).parentNode.querySelector('.btn-000') && type(id, '750000') === '750.000');
       window.closeModal(closer);
     }
+  }
+
+  console.log('\n· màn nhập số tiền (bàn phím riêng)');
+  {
+    /* Bàn phím này là đường nhập chính, ô <input class="money"> chỉ còn giữ
+       giá trị phía sau. Nên phải kiểm cả hai đầu: gõ đúng, và số chốt được
+       ghi ngược vào ô cũ để saveTransaction() đọc như trước. */
+    const key = label => {
+      const b = [...d.querySelectorAll('#amount-sheet .tcb-keypad-wrapper button')]
+        .find(x => x.textContent.trim() === label);
+      if (!b) throw new Error('bàn phím không có phím "' + label + '"');
+      b.click();
+    };
+    const hero = () => txt('amt-val');
+    const quick = () => [...d.querySelectorAll('#amt-quick .tcb-quick-item')].map(x => x.textContent.trim());
+
+    window.switchTab('add'); await sleep(20);
+    window.setTxType('expense');
+    const w0 = S().wallets[0];
+    window.selectTxWallet(w0.id);
+    window.selectTxCategory('c_food');
+    window.clearAmount();
+
+    check('ô tiền cũ nằm trong khung bị ẩn', !!$('tx-amount-raw').closest('.amount-raw'));
+    check('CSS thật sự ẩn khung đó',
+      /\.amount-raw\{[^}]*display:none/.test(fs.readFileSync(path.join(PUBLIC, 'css', 'styles.css'), 'utf8')));
+
+    window.openAmountSheet('tx'); await sleep(20);
+    check('chạm thẻ số tiền mở được bàn phím', visible('amount-sheet'));
+    check('nhắc rõ đang nhập cho giao dịch nào', txt('amt-hello').length > 0);
+    check('hiện danh mục đích', txt('amt-target').includes('Ăn uống'), txt('amt-target'));
+    check('hiện ví nguồn', txt('amt-from').includes(w0.name), txt('amt-from'));
+    check('hiện số dư khả dụng của ví đó',
+      txt('amt-from').includes(window.fmtW(window.getWalletBalance(w0.id), w0)), txt('amt-from'));
+    check('mở ra là 0', hero() === '0');
+    check('nút Tiếp tục mờ khi chưa có số', $('amt-next').classList.contains('is-off'));
+    check('gợi ý mặc định là ba mệnh giá quen thuộc',
+      quick().join('|') === '50.000|100.000|500.000', quick().join('|'));
+
+    key('1'); key('2');
+    check('gõ 1 rồi 2 ra 12', hero() === '12', hero());
+    check('gợi ý biến thiên theo số đang gõ',
+      quick().join('|') === '12.000|120.000|1.200.000', quick().join('|'));
+    check('nút Tiếp tục sáng lên', !$('amt-next').classList.contains('is-off'));
+
+    d.querySelectorAll('#amt-quick .tcb-quick-item')[1].click();
+    check('bấm gợi ý thì điền thẳng số đó', hero() === '120.000', hero());
+
+    key('000');
+    check('phím 000 nối thêm ba số 0', hero() === '120.000.000', hero());
+    key('⌫');
+    check('phím ⌫ xoá một chữ số', hero() === '12.000.000', hero());
+
+    check('chưa bấm Tiếp tục thì số cũ còn nguyên', window.eval('txAmount') === 0);
+    $('amt-next').click(); await sleep(20);
+    check('Tiếp tục chốt số vào state', window.eval('txAmount') === 12000000, window.eval('txAmount'));
+    check('và ghi ngược vào ô tiền có phân cách', $('tx-amount-raw').value === '12.000.000',
+      $('tx-amount-raw').value);
+    check('chốt xong thì đóng bàn phím', !visible('amount-sheet'));
+    check('con số to trên thẻ cũng theo kịp', txt('tx-amount-display').includes('12.000.000'));
+
+    /* Thoát giữa chừng KHÔNG được đụng vào số cũ — buffer là bản nháp. */
+    window.openAmountSheet('tx'); await sleep(10);
+    check('mở lại thì thấy đúng số đang có', hero() === '12.000.000', hero());
+    key('⌫'); key('⌫');
+    window.closeAmountSheet();
+    check('bấm ‹ thoát thì số cũ giữ nguyên', window.eval('txAmount') === 12000000);
+
+    /* Phần thập phân: dấu phẩy kiểu vi-VN, tối đa 2 chữ số. */
+    window.clearAmount();
+    window.openAmountSheet('tx'); await sleep(10);
+    key('5'); key(','); key(','); key('2'); key('5'); key('9');
+    check('chỉ một dấu phẩy và tối đa 2 số lẻ', hero() === '5,25', hero());
+
+    $('amt-next').click(); await sleep(10);
+    check('số lẻ chốt đúng', window.eval('txAmount') === 5.25, window.eval('txAmount'));
+
+    window.clearAmount();
+    window.openAmountSheet('tx'); await sleep(10);
+    $('amt-next').click(); await sleep(10);
+    check('Tiếp tục khi chưa nhập gì thì không đóng', visible('amount-sheet'));
+    window.switchTab('dashboard'); await sleep(20);
+    check('đổi màn hình thì bàn phím tự đóng', !visible('amount-sheet'));
+
+    /* Form chuyển ví mượn cùng bàn phím đó. */
+    window.switchTab('add'); await sleep(20);
+    window.setTxType('transfer'); await sleep(20);
+    window.openAmountSheet('tf'); await sleep(10);
+    check('bàn phím phục vụ cả form chuyển ví', visible('amount-sheet'));
+    check('ví nguồn là ví "Từ" của lần chuyển',
+      txt('amt-from').includes(window.getWallet($('tf-from-wallet').value).name));
+    key('7'); key('5'); key('000');
+    $('amt-next').click(); await sleep(10);
+    check('chốt được số tiền chuyển', window.eval('tfAmount') === 75000, window.eval('tfAmount'));
+    check('ô tf-amount-raw cũng được điền', $('tf-amount-raw').value === '75.000', $('tf-amount-raw').value);
+    window.setTxType('expense');
+    window.clearAmount();
+    window.switchTab('dashboard'); await sleep(20);
   }
 
   console.log('\n· giao dịch tương lai = "dự kiến"');
@@ -722,6 +817,93 @@ async function boot(opts) {
     check('lọc "Dự kiến" chỉ còn khoản dự kiến', $('tx-list-container').innerHTML.includes('Vé máy bay')
       && !$('tx-list-container').innerHTML.includes('Cà phê'));
     window.resetTxFilters(); await sleep(20);
+    check('bộ lọc trạng thái nằm ngoài panel lọc ẩn',
+      !$('tx-filter-status').closest('#tx-advanced-filters'));
+
+    // "Xem tất cả ›" ở khối Sắp đến hạn
+    window.switchTab('dashboard'); await sleep(20);
+    /* "Tháng tới" chứ không phải "Trong tháng": mốc +5 ngày rơi sang tháng sau
+       nếu hôm nay gần cuối tháng, và test thì không được phụ thuộc ngày chạy. */
+    window.setUpcomingFilter('nextmonth', d.querySelector('#upcoming-filter .chip[data-val="nextmonth"]'));
+    await sleep(20);
+    window.viewAllUpcoming(); await sleep(30);
+    check('Xem tất cả → sang tab Giao dịch', window.eval('currentTab') === 'transactions');
+    check('lọc trạng thái nhảy sang "Dự kiến"', $('tx-filter-status').value === 'pending');
+    check('mang theo đúng hạn cuối của khối Sắp đến hạn',
+      $('tx-to').value === window.getUpcomingRange(), $('tx-to').value);
+    /* Cận dưới phải để trống. Kẹp từ hôm nay thì mọi giao dịch đã ghi nhận
+       (luôn ≤ hôm nay) biến mất, và ô Trạng thái đổi sang "Đã ghi nhận" hay
+       "Tất cả" vẫn ra đúng danh sách cũ — nhìn như bộ lọc không hoạt động. */
+    check('không kẹp cận dưới, để ô Trạng thái còn đổi được', $('tx-from').value === '',
+      $('tx-from').value);
+    check('mở sẵn khối ngày tùy chọn để thấy phạm vi', visible('tx-custom-range'));
+    check('thanh lọc trạng thái được đánh dấu đang bật', $('tx-status-bar').classList.contains('on'));
+    {
+      const rows = [...d.querySelectorAll('#tx-list-container .tx-row')];
+      check('danh sách chỉ còn khoản dự kiến', rows.length > 0 && rows.every(r => r.classList.contains('tx-pending')),
+        rows.length + ' hàng');
+      check('có cả khoản của tháng sau', $('tx-list-container').innerHTML.includes('Concert'));
+    }
+    /* Lịch định kỳ / thẻ / nợ đến hạn KHÔNG phải giao dịch — chúng chỉ thành
+       giao dịch khi bấm ✓. Lọc "Dự kiến" phải dựng chúng thành dòng ảo, không
+       thì màn Giao dịch hiện ít hơn hẳn thẻ "Sắp đến hạn" mà không ai hiểu vì
+       sao. Chúng chỉ được sống trong danh sách hiển thị. */
+    {
+      const due = window.addDaysISO(today, 4);
+      S().recurring.push({ id: 'r_virt', userId: S().currentUser, type: 'expense', name: 'Tiền mạng',
+        amount: 330000, walletId: w, categoryId: 'c_bill', frequency: 'monthly', interval: 1,
+        dueDate: due, autoProcess: false });
+      window.saveStorage();
+      window.viewAllUpcoming(); await sleep(40);
+
+      const rowOf = name => [...d.querySelectorAll('#tx-list-container .tx-row')]
+        .find(r => r.textContent.includes(name));
+      const vRow = rowOf('Tiền mạng');
+      check('lịch định kỳ hiện ra trong danh sách Dự kiến', !!vRow);
+      check('dòng ảo được đánh dấu để phân biệt', !!vRow && vRow.classList.contains('tx-virtual')
+        && !!vRow.querySelector('.tag-virtual'), vRow && vRow.className);
+      check('dòng ảo có nút ✓', !!vRow && !!vRow.querySelector('.btn-pay'));
+      check('giao dịch dự kiến thật cũng có nút ✓',
+        !!rowOf('Vé máy bay') && !!rowOf('Vé máy bay').querySelector('.btn-pay'));
+      check('dòng ảo KHÔNG lọt vào sổ', !S().transactions.some(t => t.id && t.id.startsWith('v_')));
+      check('… và không đụng vào số dư ví', window.getWalletBalance(w) === balBefore);
+
+      /* Không đếm trùng: xác nhận một kỳ thì kỳ đó thành giao dịch thật và
+         dueDate nhảy sang kỳ sau, nên tổng phải giữ nguyên. */
+      const chiTruoc = window.parseAmount(txt('tx-summary').split('Chi')[1]);
+      /* Qua đúng nút ✓ chứ không gọi thẳng confirmPayRecurring(): sheet xác
+         nhận là nơi #pr-date được dựng lại, gọi tắt thì hàm đọc phải ô ngày
+         còn sót của lần mở trước. */
+      vRow.querySelector('.btn-pay').click(); await sleep(30);
+      check('nút ✓ mở sheet xác nhận', !$('modal-sheet').classList.contains('hidden'));
+      window.confirmPayRecurring('r_virt'); await sleep(40);
+      const real = S().transactions.find(t => t.recurringId === 'r_virt');
+      check('bấm ✓ tạo giao dịch thật', !!real && real.date === due, real && real.date);
+      check('ngày còn ở tương lai nên vẫn là "dự kiến"', !!real && real.status === 'pending');
+      check('lịch nhảy sang kỳ sau', S().recurring.find(r => r.id === 'r_virt').dueDate > due);
+      window.viewAllUpcoming(); await sleep(40);
+      check('tổng Chi dự kiến không đổi sau khi xác nhận — không đếm trùng',
+        window.parseAmount(txt('tx-summary').split('Chi')[1]) === chiTruoc,
+        chiTruoc + ' → ' + window.parseAmount(txt('tx-summary').split('Chi')[1]));
+
+      S().recurring = S().recurring.filter(r => r.id !== 'r_virt');
+      S().transactions = S().transactions.filter(t => t.recurringId !== 'r_virt');
+      window.saveStorage();
+      window.viewAllUpcoming(); await sleep(40);
+    }
+
+    /* Sau cú nhảy, ô Trạng thái vẫn phải sống: đổi sang "Đã ghi nhận" thì thấy
+       giao dịch đã chi, chứ không đứng im ở danh sách dự kiến. */
+    $('tx-filter-status').value = 'completed';
+    $('tx-filter-status').dispatchEvent(new window.Event('change', { bubbles: true }));
+    await sleep(20);
+    {
+      const rows = [...d.querySelectorAll('#tx-list-container .tx-row')];
+      check('đổi sang "Đã ghi nhận" ngay sau cú nhảy thì danh sách đổi theo',
+        rows.length > 0 && rows.every(r => !r.classList.contains('tx-pending')),
+        rows.length + ' hàng');
+    }
+    window.resetTxFilters(); await sleep(20);
 
     // xác nhận thủ công
     window.switchTab('dashboard'); await sleep(20);
@@ -759,7 +941,20 @@ async function boot(opts) {
       S().transactions.find(t => t.id === 'tf_b').status === 'completed');
     check('ví nhận cộng đúng', window.getWalletBalance(w2) === balW2 + 500000);
 
-    S().transactions = S().transactions.filter(t => t.id !== 'tx_far');
+    /* Định kỳ: bấm ✓ mở sheet với ngày mặc định là HẠN KẾ TIẾP, có thể còn ở
+       tương lai. Bản ghi sinh ra phải là "dự kiến", không thì số dư bị trừ
+       trước khi tiền thật sự đi. */
+    const recur = { id: 'r_smoke', userId: S().currentUser, type: 'expense', amount: 150000,
+      walletId: w, categoryId: 'c_food', name: 'Thuê bao thử', dueDate: future };
+    window.createRecurringTx(recur, future, w);
+    window.createRecurringTx(recur, today, w);
+    const rtxs = S().transactions.filter(t => t.recurringId === 'r_smoke');
+    check('định kỳ ghi ở ngày tương lai là "dự kiến"',
+      rtxs.find(t => t.date === future).status === 'pending');
+    check('định kỳ xác nhận hôm nay là "đã ghi nhận"',
+      rtxs.find(t => t.date === today).status === 'completed');
+
+    S().transactions = S().transactions.filter(t => t.id !== 'tx_far' && t.recurringId !== 'r_smoke');
     window.saveStorage();
   }
 
@@ -1310,15 +1505,48 @@ async function boot(opts) {
       txt('report-period-label') === 'Tháng ' + (new Date().getMonth() + 1) + '/' + new Date().getFullYear(),
       txt('report-period-label'));
 
-    // thẻ tổng quan
-    check('có 3 thẻ tổng quan Thu / Chi / Ròng',
-      !!d.querySelector('.sum-card.in') && !!d.querySelector('.sum-card.out') && !!$('rep-net-card'));
+    // thẻ biến động số dư: đầu kỳ → thu/chi → ròng → cuối kỳ
+    check('thẻ biến động số dư có đủ 4 con số',
+      !!d.querySelector('.report-balance-card') && !!$('rep-opening') && !!$('rep-income')
+      && !!$('rep-expense') && !!$('rep-net') && !!$('rep-closing'));
     const incNow = window.parseAmount(txt('rep-income'));
     const expNow = window.parseAmount(txt('rep-expense'));
-    check('thẻ ròng đánh dấu đúng dấu âm/dương',
+    check('dòng ròng đánh dấu đúng dấu âm/dương',
       $('rep-net-card').classList.contains(incNow - expNow >= 0 ? 'pos' : 'neg'),
       $('rep-net-card').className);
     check('thẻ ròng có dòng phụ diễn giải', txt('rep-net-sub').length > 0, txt('rep-net-sub'));
+
+    /* Bốn con số phải CỘNG ĐÚNG với nhau — thẻ này chỉ có giá trị khi người
+       dùng nhẩm lại được: đầu kỳ + thu − chi (+ chuyển ví) = cuối kỳ. */
+    {
+      const m = window.calculateReportMetrics();
+      const shown = id => window.parseAmount(txt(id));
+      check('cuối kỳ = đầu kỳ + thu − chi + chuyển ví ròng',
+        Math.round(m.closing) === Math.round(m.opening + m.inc - m.exp + m.transfer),
+        m.opening + ' + ' + m.inc + ' − ' + m.exp + ' + ' + m.transfer + ' ≠ ' + m.closing);
+      check('số dư đầu kỳ chính là sổ phát lại tới trước ngày đầu kỳ',
+        Math.round(m.opening) === Math.round(window.balanceAsOf(
+          window.reportBalanceScope(), window.reportRange().start, false)));
+      check('con số trên màn hình khớp với phép tính',
+        shown('rep-opening') === Math.round(Math.abs(m.opening))
+        || Math.abs(shown('rep-opening') - Math.abs(m.opening)) < 1,
+        txt('rep-opening') + ' vs ' + m.opening);
+      /* Lọc theo một ví: chuyển ví không phải thu cũng không phải chi, nhưng
+         nó làm số dư ví đổi — dòng "Chuyển ví ròng" là chỗ duy nhất nói ra. */
+      check('dòng "Chuyển ví ròng" chỉ hiện khi thật sự có chuyển ví',
+        visible('rep-transfer-row') === (Math.round(m.transfer) !== 0),
+        'transfer=' + m.transfer);
+    }
+
+    /* "Gồm dự kiến" phải chi phối cả hai đầu. Chỉ cộng khoản dự kiến vào biến
+       động mà không cộng vào số dư thì thẻ tự mâu thuẫn với chính nó. */
+    {
+      window.toggleReportPending(); await sleep(30);
+      const mp = window.calculateReportMetrics();
+      check('bật "Gồm dự kiến" thì thẻ vẫn cộng đúng',
+        Math.round(mp.closing) === Math.round(mp.opening + mp.inc - mp.exp + mp.transfer));
+      window.toggleReportPending(); await sleep(30);
+    }
 
     // đổi mốc thời gian
     window.setReportRange('lastmonth', chips[1]); await sleep(40);

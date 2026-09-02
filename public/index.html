@@ -197,7 +197,11 @@
     <div class="section-title"><h4>Ví của bạn</h4><span class="link" onclick="switchTab('wallets')">Quản lý</span></div>
     <div id="db-wallet-scroll" class="wallet-grid"></div>
 
-    <div class="section-title"><h4><svg class="ic-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.5 17h5"/><path d="M10 20.5h4"/><path d="M12 3a6 6 0 0 1 3.5 10.9V17h-7v-3.1A6 6 0 0 1 12 3z"/></svg>Sắp đến hạn</h4><span class="link" onclick="switchTab('recurring')">Định kỳ</span></div>
+    <div class="section-title"><h4><svg class="ic-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.5 17h5"/><path d="M10 20.5h4"/><path d="M12 3a6 6 0 0 1 3.5 10.9V17h-7v-3.1A6 6 0 0 1 12 3z"/></svg>Sắp đến hạn</h4>
+      <span class="st-links">
+        <span class="link" onclick="switchTab('recurring')">Định kỳ</span>
+        <span class="link" id="btn-view-all-upcoming" onclick="viewAllUpcoming()">Xem tất cả ›</span>
+      </span></div>
     <!-- chip-scroll, not chip-row: five chips wrap onto two lines on a phone,
          and .chip-scroll already carries the flex/overflow-x/hidden-scrollbar
          rules the rest of the app uses for exactly this. -->
@@ -238,9 +242,22 @@
       <div class="chip" data-val="income" onclick="setTxFilter('type','income',this)">Thu</div>
       <div class="chip" data-val="transfer" onclick="setTxFilter('type','transfer',this)">Chuyển ví</div>
     </div>
-    <div class="quick-filter" id="tx-wallet-bar">
-      <label for="tx-filter-wallet">Ví</label>
-      <select id="tx-filter-wallet" class="input" onchange="renderTransactionsList()"></select>
+    <!-- Ví và Trạng thái đứng ngoài panel gập vì cả hai đều lọc *mất* giao dịch
+         khỏi danh sách: "Dự kiến" nằm trong panel ẩn thì người dùng chỉ thấy
+         một danh sách ngắn đi mà không thấy lý do. -->
+    <div class="quick-filter-row">
+      <div class="quick-filter" id="tx-wallet-bar">
+        <label for="tx-filter-wallet">Ví</label>
+        <select id="tx-filter-wallet" class="input" onchange="renderTransactionsList()"></select>
+      </div>
+      <div class="quick-filter" id="tx-status-bar">
+        <label for="tx-filter-status">Trạng thái</label>
+        <select id="tx-filter-status" class="input" onchange="renderTransactionsList()">
+          <option value="all">Tất cả trạng thái</option>
+          <option value="completed">Đã ghi nhận</option>
+          <option value="pending">Dự kiến</option>
+        </select>
+      </div>
     </div>
     <div id="tx-advanced-filters" class="card hidden">
       <div class="form-group">
@@ -263,15 +280,9 @@
         <label>Danh mục</label>
         <select id="tx-filter-cat" class="input" onchange="renderTransactionsList()"></select>
       </div>
-      <div class="form-group field-row">
-        <div><label>Sự kiện / Chuyến đi</label>
-          <select id="tx-filter-event" class="input" onchange="renderTransactionsList()"></select></div>
-        <div><label>Trạng thái</label>
-          <select id="tx-filter-status" class="input" onchange="renderTransactionsList()">
-            <option value="all">Tất cả</option>
-            <option value="completed">Đã ghi nhận</option>
-            <option value="pending">Dự kiến</option>
-          </select></div>
+      <div class="form-group">
+        <label>Sự kiện / Chuyến đi</label>
+        <select id="tx-filter-event" class="input" onchange="renderTransactionsList()"></select>
       </div>
       <button class="btn btn-secondary btn-sm" style="width:100%;" onclick="resetTxFilters()">Xóa bộ lọc</button>
     </div>
@@ -293,18 +304,15 @@
 
     <!-- expense / income -->
     <div id="form-normal">
-      <div class="card amount-box">
-        <div class="amount-display tabular" id="tx-amount-display">0</div>
+      <!-- Chạm vào thẻ này để mở bàn phím số riêng (#amount-sheet). Ô text bên
+           dưới vẫn là nơi giữ giá trị: nó mang class .money nên thừa hưởng cả
+           dấu phân cách lẫn readMoney/writeMoney, còn bàn phím chỉ là giao diện
+           ghi vào nó. Ô bị ẩn bằng .amount-raw, đừng bỏ lớp đó ra. -->
+      <div class="card amount-box amount-tap ripple-host" id="tx-amount-card" onclick="openAmountSheet('tx')">
         <div class="amount-unit" id="tx-amount-unit">VND</div>
-        <input type="text" inputmode="decimal" id="tx-amount-raw" class="input money money-lg mt12" style="text-align:center;font-size:1.1rem;font-weight:700;" placeholder="Nhập số tiền" oninput="onAmountTyped(this.value)">
-        <div class="quick-amounts">
-          <div class="chip chip-sm" onclick="addQuickAmount(10000)">+10k</div>
-          <div class="chip chip-sm" onclick="addQuickAmount(50000)">+50k</div>
-          <div class="chip chip-sm" onclick="addQuickAmount(100000)">+100k</div>
-          <div class="chip chip-sm" onclick="addQuickAmount(500000)">+500k</div>
-          <div class="chip chip-sm" onclick="addQuickAmount(1000000)">+1tr</div>
-          <div class="chip chip-sm" onclick="clearAmount()">Xóa</div>
-        </div>
+        <div class="amount-display tabular" id="tx-amount-display">0</div>
+        <div class="amount-hint">Chạm để nhập số tiền</div>
+        <div class="amount-raw"><input type="text" inputmode="decimal" id="tx-amount-raw" class="input money money-lg mt12" placeholder="Nhập số tiền" oninput="onAmountTyped(this.value)"></div>
       </div>
       <div class="form-group">
         <label>Ghi chú</label>
@@ -331,10 +339,11 @@
 
     <!-- transfer -->
     <div id="form-transfer" class="hidden">
-      <div class="card amount-box">
-        <div class="amount-display tabular" id="tf-amount-display">0</div>
+      <div class="card amount-box amount-tap ripple-host" id="tf-amount-card" onclick="openAmountSheet('tf')">
         <div class="amount-unit" id="tf-amount-unit">VND</div>
-        <input type="text" inputmode="decimal" id="tf-amount-raw" class="input money money-lg mt12" style="text-align:center;font-size:1.1rem;font-weight:700;" placeholder="Nhập số tiền" oninput="onTfAmountTyped(this.value)">
+        <div class="amount-display tabular" id="tf-amount-display">0</div>
+        <div class="amount-hint">Chạm để nhập số tiền</div>
+        <div class="amount-raw"><input type="text" inputmode="decimal" id="tf-amount-raw" class="input money money-lg mt12" placeholder="Nhập số tiền" oninput="onTfAmountTyped(this.value)"></div>
       </div>
       <div class="form-group field-row">
         <div><label>Từ ví</label><select id="tf-from-wallet" class="input" onchange="onTransferWalletChange()"></select></div>
@@ -381,21 +390,46 @@
     </div>
     <div class="chip-scroll" id="report-wallet-filter"></div>
 
-    <!-- summary -->
-    <div class="sum-grid">
-      <div class="sum-card in">
-        <div class="sc-top"><span class="sc-ic"><svg class="ic-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4.5v14"/><path d="m6 13 6 6 6-6"/></svg></span><span class="sc-lbl">Tổng thu</span></div>
-        <div class="sc-val tabular" id="rep-income">0 đ</div>
+    <!-- Biến động số dư của kỳ, đọc một mạch từ trên xuống:
+         đầu kỳ → thu/chi → ròng → cuối kỳ.
+         Một thẻ chứ không phải ba thẻ rời: bốn con số này chỉ có nghĩa khi
+         đứng cạnh nhau — tách ra thì người đọc phải tự cộng trong đầu để biết
+         cuối kỳ còn bao nhiêu, mà đó mới là câu hỏi họ mở Báo cáo để trả lời. -->
+    <div class="report-balance-card">
+      <div class="report-balance-row border-bottom">
+        <span class="report-balance-label"><svg class="ic-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><ellipse cx="9" cy="6.5" rx="6" ry="3"/><path d="M3 6.5v4c0 1.7 2.7 3 6 3s6-1.3 6-3"/><path d="M3 10.5v4c0 1.7 2.7 3 6 3"/><ellipse cx="16" cy="15" rx="5" ry="2.5"/><path d="M11 15v3c0 1.4 2.2 2.5 5 2.5s5-1.1 5-2.5v-3"/></svg>Số dư đầu kỳ</span>
+        <span class="report-balance-value tabular" id="rep-opening">0 đ</span>
       </div>
-      <div class="sum-card out">
-        <div class="sc-top"><span class="sc-ic"><svg class="ic-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19.5v-14"/><path d="m6 11 6-6 6 6"/></svg></span><span class="sc-lbl">Tổng chi</span></div>
-        <div class="sc-val tabular" id="rep-expense">0 đ</div>
+
+      <div class="report-balance-flow border-bottom">
+        <div class="rb-col">
+          <div class="report-balance-label"><span class="rb-ic in"><svg class="ic-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4.5v14"/><path d="m6 13 6 6 6-6"/></svg></span>Tổng thu</div>
+          <div class="report-balance-value rb-in tabular" id="rep-income">0 đ</div>
+        </div>
+        <div class="rb-col">
+          <div class="report-balance-label"><span class="rb-ic out"><svg class="ic-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19.5v-14"/><path d="m6 11 6-6 6 6"/></svg></span>Tổng chi</div>
+          <div class="report-balance-value rb-out tabular" id="rep-expense">0 đ</div>
+        </div>
       </div>
-    </div>
-    <div class="sum-card net" id="rep-net-card">
-      <div class="sc-top"><span class="sc-ic"><svg class="ic-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 4.5 3.5 8 7 11.5"/><path d="M3.5 8h13a4 4 0 0 1 0 8H14"/><path d="M17 19.5 20.5 16 17 12.5"/></svg></span><span class="sc-lbl">Dòng tiền ròng</span></div>
-      <div class="sc-val tabular" id="rep-net">0 đ</div>
-      <div class="sc-sub" id="rep-net-sub"></div>
+
+      <div class="report-balance-row border-bottom" id="rep-net-card">
+        <span class="report-balance-label"><svg class="ic-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 4.5 3.5 8 7 11.5"/><path d="M3.5 8h13a4 4 0 0 1 0 8H14"/><path d="M17 19.5 20.5 16 17 12.5"/></svg>Dòng tiền ròng</span>
+        <span class="report-balance-value rb-net tabular" id="rep-net">0 đ</span>
+      </div>
+
+      <!-- Chỉ hiện khi có tiền đi/đến qua chuyển ví. Không có dòng này thì
+           "đầu kỳ + ròng" không ra "cuối kỳ" khi lọc theo một ví, và người
+           dùng sẽ tưởng app cộng sai. -->
+      <div class="report-balance-row border-bottom hidden" id="rep-transfer-row">
+        <span class="report-balance-label"><svg class="ic-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 8h13l-3.5-3.5"/><path d="M17 16H4l3.5 3.5"/></svg>Chuyển ví ròng</span>
+        <span class="report-balance-value tabular" id="rep-transfer">0 đ</span>
+      </div>
+
+      <div class="report-balance-row">
+        <span class="report-balance-label">Số dư cuối kỳ</span>
+        <span class="report-balance-value highlight tabular" id="rep-closing">0 đ</span>
+      </div>
+      <div class="rb-note" id="rep-net-sub"></div>
     </div>
 
     <!-- category donut -->
@@ -995,6 +1029,52 @@
     <div id="cred-error" class="text-xs c-expense mb8" style="min-height:14px;"></div>
     <button class="btn btn-primary" id="cred-submit" onclick="submitCredentialChange()">Cập nhật</button>
     <button class="btn btn-ghost mt8" onclick="closeModal('modal-credential')">Hủy</button>
+  </div>
+</div>
+
+<!-- ============ MÀN NHẬP SỐ TIỀN (bàn phím riêng, kiểu Techcombank) ============
+     Không dùng uiSheet(): sheet chung đang phục vụ luồng khác và màn này chiếm
+     trọn màn hình với bàn phím riêng, không phải một hộp nội dung. -->
+<div id="amount-sheet" class="amt-sheet hidden" role="dialog" aria-modal="true" aria-label="Nhập số tiền">
+  <div class="amt-panel">
+    <div class="amt-top">
+      <button type="button" class="amt-back ripple-host" onclick="closeAmountSheet()" aria-label="Đóng">‹</button>
+      <div class="amt-lead">
+        <div class="amt-hello" id="amt-hello">Nhập số tiền giao dịch</div>
+        <div class="amt-target" id="amt-target"></div>
+      </div>
+    </div>
+
+    <div class="amt-body">
+      <div class="amt-hero">
+        <span class="amt-cur" id="amt-cur">VND</span>
+        <span class="amt-val tabular" id="amt-val">0</span>
+      </div>
+      <div class="amt-note" id="amt-note"></div>
+      <div class="amt-from" id="amt-from"></div>
+    </div>
+
+    <div class="amt-foot">
+      <div class="tcb-quick-bar" id="amt-quick"></div>
+      <div class="tcb-keypad-wrapper">
+        <button type="button" class="tcb-btn-key ripple-host" onclick="amtKey('1')">1</button>
+        <button type="button" class="tcb-btn-key ripple-host" onclick="amtKey('2')">2</button>
+        <button type="button" class="tcb-btn-key ripple-host" onclick="amtKey('3')">3</button>
+        <button type="button" class="tcb-btn-key ripple-host tcb-btn-backspace" onclick="amtKey('back')" aria-label="Xóa một chữ số">⌫</button>
+        <button type="button" class="tcb-btn-key ripple-host" onclick="amtKey('4')">4</button>
+        <button type="button" class="tcb-btn-key ripple-host" onclick="amtKey('5')">5</button>
+        <button type="button" class="tcb-btn-key ripple-host" onclick="amtKey('6')">6</button>
+        <button type="button" class="tcb-btn-key ripple-host" onclick="amtKey('7')">7</button>
+        <button type="button" class="tcb-btn-key ripple-host" onclick="amtKey('8')">8</button>
+        <button type="button" class="tcb-btn-key ripple-host" onclick="amtKey('9')">9</button>
+        <button type="button" class="tcb-btn-key ripple-host tcb-btn-next" id="amt-next" onclick="amtCommit()">Tiếp tục</button>
+        <button type="button" class="tcb-btn-key ripple-host tcb-btn-000" onclick="amtKey('000')">000</button>
+        <button type="button" class="tcb-btn-key ripple-host" onclick="amtKey('0')">0</button>
+        <!-- Dấu thập phân của vi-VN là dấu phẩy, và formatMoneyText() cũng đọc
+             ',' — để dấu chấm ở đây thì "50.5" sẽ bị hiểu là ngăn nghìn. -->
+        <button type="button" class="tcb-btn-key ripple-host" onclick="amtKey(',')">,</button>
+      </div>
+    </div>
   </div>
 </div>
 

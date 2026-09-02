@@ -17,6 +17,7 @@
 .app{ max-width: var(--shell-w); }
 .nav-bar{ max-width: var(--shell-w); }
 .sheet{ max-width: var(--shell-w); }
+.amt-panel{ max-width: var(--shell-w); }
 #toast-wrap{ max-width: var(--shell-w); }
 
 /* Modals and the lock screen are position:fixed, so on a wide screen they
@@ -64,6 +65,13 @@
     top: 50%; transform: translate(-50%, -50%);
     height: min(880px, calc(100vh - 48px));
     border-radius: var(--shell-frame);
+  }
+  /* Bàn phím số cũng phải nằm gọn trong khung máy, không trải hết màn hình. */
+  .amt-sheet{ align-items: center; }
+  .amt-panel{
+    height: min(880px, calc(100vh - 48px));
+    border-radius: var(--shell-frame);
+    overflow: hidden;
   }
   #toast-wrap{ bottom: 96px; }
 }
