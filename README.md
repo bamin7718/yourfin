@@ -41,6 +41,7 @@ SoFin/
 ├── .github/workflows/
 │   └── build-apk.yml           CI: test → sinh env → dựng android/ → APK → release khi có tag `v*`
 ├── DEPLOY.md                   checklist đưa lên PROD
+├── BUILD-APK.md                công thức build APK trên GitHub Actions, viết để dự án khác chép về
 ├── .env.example
 ├── .gitignore
 ├── vercel.json
@@ -121,13 +122,14 @@ Last-write-wins theo `data.updatedAt` (đồng hồ client, đóng dấu bởi `
 | | |
 |---|---|
 | **Đa ví** | Tiền mặt · Ngân hàng · Ví điện tử · Thẻ tín dụng · Sổ tiết kiệm (lãi suất, ngày đáo hạn). Chuyển tiền có phí, khác tiền tệ. Cờ *không tính vào tổng tài sản*. |
+| **Nhập số tiền** | Bàn phím số riêng thay bàn phím hệ điều hành: nó che mất ví nguồn và số dư khả dụng, đúng hai thứ cần thấy khi quyết định gõ bao nhiêu. Màn nhập giữ danh mục đích, ví nguồn và số dư ở trên; gợi ý nhanh biến thiên theo số đang gõ (`12` → 12.000 / 120.000 / 1.200.000). Số chỉ được chốt khi bấm *Tiếp tục*, thoát giữa chừng không phá số cũ. |
 | **Thẻ tín dụng** | Dư nợ đi chung sổ cái: `startingBalance` âm, mỗi lần quẹt trừ tiếp — hạn mức đã dùng không bao giờ lệch khỏi lịch sử. Có ngày chốt, hạn thanh toán, trả toàn bộ hoặc một phần. |
 | **Danh mục** | CRUD đầy đủ, danh mục con, đổi emoji/màu. Xóa danh mục đang dùng → tự dời giao dịch sang *Khác*. Danh mục hệ thống được bảo vệ. |
 | **Ngân sách** | Tuần/Tháng/Năm, theo danh mục hoặc tổng chi, giới hạn theo ví. Progress bar vàng ở 80%, đỏ khi vượt. Cảnh báo ngay lúc lưu giao dịch. |
 | **Sổ nợ** | Đi vay và cho vay riêng, trả/thu từng phần hoặc tất toán, tự sinh giao dịch, nhắc hạn và đánh dấu quá hạn. |
-| **Sắp đến hạn** | 5 mốc: Trong tháng · 7 ngày tới · Tháng tới · 3 tháng · 6 tháng. Khoản định kỳ được **đếm đủ số kỳ rơi vào cửa sổ** (gộp một dòng kèm nhãn ×N), nên tổng "Dự kiến phải chi" của 6 tháng là sáu lần tiền nhà chứ không phải một. |
+| **Sắp đến hạn** | 5 mốc: Trong tháng · 7 ngày tới · Tháng tới · 3 tháng · 6 tháng. Khoản định kỳ được **đếm đủ số kỳ rơi vào cửa sổ** (gộp một dòng kèm nhãn ×N), nên tổng "Dự kiến phải chi" của 6 tháng là sáu lần tiền nhà chứ không phải một. Nút **Xem tất cả ›** mở tab Giao dịch lọc *Dự kiến* trong đúng cửa sổ đang chọn, và ở đó lịch định kỳ / thẻ / nợ đến hạn hiện thành **dòng ảo** (viền đứt, badge 🕒) có nút ✓ — chúng không nằm trong sổ nên không bao giờ đi vào số dư. |
 | **Định kỳ** | Ngày/Tuần/Tháng/Năm, lặp mỗi N kỳ, tự ghi nhận và bù các kỳ đã lỡ khi mở lại app. Bấm ✓ để ghi tay: sheet xác nhận cho **chọn lại ngày và ví** trước khi tạo giao dịch; lịch vẫn neo theo ngày đến hạn nên trả muộn không làm trôi cả chu kỳ. |
-| **Báo cáo** | Bộ lọc mốc thời gian **Tháng này · Tháng trước · 3 tháng · Năm nay · Tùy chỉnh** (mặc định tháng hiện tại). Thứ tự thị giác: 3 **thẻ tổng quan** Thu / Chi / Dòng tiền ròng → **donut** cơ cấu danh mục (phần trăm ở tâm, đổi theo lát đang chạm) → **cột nhóm** Thu vs Chi 6 tháng → **xếp hạng chi tiêu** có progress bar. Tooltip chạm/hover trên cả donut lẫn cột. Vẽ bằng Canvas thuần, xử lý `devicePixelRatio`, tự đổi màu theo theme. |
+| **Báo cáo** | Bộ lọc mốc thời gian **Tháng này · Tháng trước · 3 tháng · Năm nay · Tùy chỉnh** (mặc định tháng hiện tại). Thứ tự thị giác: **thẻ biến động số dư** đọc một mạch *đầu kỳ → thu/chi → dòng tiền ròng → cuối kỳ* (số dư đầu kỳ phát lại từ sổ, không trừ ngược; có dòng "Chuyển ví ròng" khi lọc theo một ví để phép cộng luôn khớp) → **donut** cơ cấu danh mục (phần trăm ở tâm, đổi theo lát đang chạm) → **cột nhóm** Thu vs Chi 6 tháng → **xếp hạng chi tiêu** có progress bar. Tooltip chạm/hover trên cả donut lẫn cột. Vẽ bằng Canvas thuần, xử lý `devicePixelRatio`, tự đổi màu theo theme. |
 | **Đa tiền tệ** | 10 loại tiền, mỗi ví một tiền tệ, quy đổi về tiền tệ chính (VND). Tỷ giá dùng bảng mặc định `DEFAULT_RATES` — **không còn màn hình chỉnh tay**, khối "Tiền tệ" đã gỡ khỏi Cài đặt. |
 | **Nhập số tiền** | Mọi ô tiền tự chèn dấu phân cách nghìn ngay lúc gõ (`1.250.000`), giữ nguyên vị trí con trỏ. Nút **`000`** trong ô nhân giá trị lên nghìn: `50` → `50.000` → `50.000.000`. Xuống `state`/localStorage luôn là `number` sạch. Chung một cặp `formatMoneyText()` / `readMoney()` cho tất cả form. |
 | **Giao dịch dự kiến** | Chọn ngày trong tương lai → giao dịch vào trạng thái `pending`: **chưa trừ ví, chưa vào tổng tài sản, chưa vào báo cáo/ngân sách**. Nó hiện ở "Dự kiến phải chi" theo đúng tab Trong tháng / 7 ngày tới / Tháng tới, và trong sổ Giao dịch với nhãn *Dự kiến*. Tới ngày thì tự chốt; bấm ✓ để chốt sớm. Báo cáo có chip **🔮 Gồm dự kiến** để xem trước. |
