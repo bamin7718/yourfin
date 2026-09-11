@@ -283,5 +283,10 @@ npm install jsdom --no-save && npm test   # smoke 296 + sync 20 + transfer 23 + 
 
 ## 📄 Phiên bản
 
-**v5.0** · 20/08/2026 · Static web app + Supabase cloud sync
+Lịch sử thay đổi từng bản: [CHANGELOG.md](CHANGELOG.md).
+
+**v5.1.3** · 11/09/2026 · Static web app + Supabase cloud sync
 Tiền thân: v4.0 single-file offline (`legacy/`)
+
+Số ở đây chỉ để đọc; nguồn duy nhất là `package.json`, và tag `v*` phải bằng
+đúng số đó — CI chặn job nếu lệch.
