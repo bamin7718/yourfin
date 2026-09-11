@@ -1418,7 +1418,7 @@ async function boot(opts) {
 
     const src = fs.readFileSync(path.join(PUBLIC, 'js', 'app.js'), 'utf8');
     check('chỉ tự kiểm tra trên bản native, sau 3 giây',
-      /if\(isNativeApp\(\)\) setTimeout\(\(\)=>checkAppUpdate\(\), 3000\)/.test(src));
+      new RegExp('isNativeApp\\(\\)\\){[\\s\\S]{0,300}?setTimeout\\(\\(\\)=>checkAppUpdate\\(\\), 3000\\)').test(src));
   }
 
   console.log('\n· PWA');
@@ -2631,6 +2631,55 @@ async function boot(opts) {
     check('Back sau khi lưu về thẳng màn hình trước đó, không quay lại form',
       !visible('view-add'), 'currentTab=' + window.eval('currentTab'));
 
+    window.switchTab('dashboard'); await sleep(20);
+  }
+
+  console.log('\n· nút Back cứng của Android (@capacitor/app)');
+  {
+    /* Bản đóng gói: nút cứng đi qua tầng native trước. Có listener backButton
+       là Capacitor giao hẳn quyết định cho JS — nên listener phải tự lo cả
+       việc thoát app, không thì người dùng kẹt trong app. */
+    const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
+    check('@capacitor/app nằm trong devDependencies (CI tự wire vào APK)',
+      !!(pkg.devDependencies || {})['@capacitor/app'],
+      Object.keys(pkg.devDependencies || {}).join(','));
+
+    const realCap = window.Capacitor;
+    let handler = null, exited = 0, listened = null;
+    window.Capacitor = {
+      isNativePlatform: () => true,
+      Plugins: { App: {
+        addListener(name, fn){ listened = name; handler = fn; return {remove(){}}; },
+        exitApp(){ exited++; }
+      } }
+    };
+    const bound = window.navBindNativeBack();
+    check('đăng ký được listener backButton', bound === true && listened === 'backButton', String(listened));
+
+    /* Còn entry để lùi ⇒ đi đúng một đường với cú vuốt trên trình duyệt. */
+    window.switchTab('dashboard'); await sleep(20);
+    window.switchTab('settings'); await sleep(20);
+    handler({ canGoBack: true }); await sleep(150);
+    check('còn entry thì nút cứng lùi một bước, KHÔNG thoát app',
+      visible('view-dashboard') && exited === 0, 'currentTab=' + window.eval('currentTab'));
+
+    /* Hết entry nhưng còn overlay mở ⇒ đóng overlay, tuyệt đối không thoát:
+       thoát app trong lúc người dùng đang gõ dở là mất dữ liệu không sửa lại
+       được. */
+    window.openWalletModal(); await sleep(20);
+    handler({ canGoBack: false }); await sleep(20);
+    check('hết entry mà còn modal thì đóng modal, không thoát app',
+      !visible('modal-wallet') && exited === 0, 'exited=' + exited);
+
+    /* Hết entry, không còn gì mở ⇒ mới thoát. */
+    handler({ canGoBack: false }); await sleep(20);
+    check('ở màn gốc, không còn gì mở thì mới gọi exitApp', exited === 1, 'exited=' + exited);
+
+    /* Thiếu plugin thì im lặng nhường cho hành vi mặc định của Capacitor,
+       không ném lỗi. */
+    window.Capacitor = { isNativePlatform: () => true };
+    check('thiếu plugin thì không đăng ký gì và không crash', window.navBindNativeBack() === false);
+    window.Capacitor = realCap;
     window.switchTab('dashboard'); await sleep(20);
   }
 

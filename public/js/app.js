@@ -1766,6 +1766,42 @@ function navApply(s){
   else if(currentTab === 'transactions') renderTransactionsList(true);
   else renderAll();
 }
+/* ---------- NÚT BACK CỨNG CỦA ANDROID ----------
+   Trên web và PWA, cú vuốt lùi đi thẳng vào history nên phần trên là đủ. Bản
+   đóng gói thì không: nút Back cứng (và cú vuốt predictive back của Android
+   13+) đi qua tầng native trước, và mặc định của Capacitor là chuyện của
+   Capacitor — không có gì bảo đảm nó tra history của WebView thay vì đóng
+   luôn activity. Đăng ký listener `backButton` là cách DUY NHẤT để chắc:
+   một khi có listener, Capacitor giao hẳn quyết định cho JS.
+
+   Đổi lại, có listener là mặc định TẮT — nên hàm này phải tự lo cả việc
+   thoát app, và `App.exitApp()` (của @capacitor/app) là thứ duy nhất làm
+   được điều đó. Đó cũng là lý do plugin này có trong devDependencies.
+
+   Không dùng `import` vì dự án không có bundler: plugin native được bridge
+   bơm vào `Capacitor.Plugins.App` lúc chạy. Thiếu plugin thì hàm này lặng lẽ
+   không làm gì và Capacitor giữ hành vi mặc định của nó. */
+function navBindNativeBack(){
+  const cap = window.Capacitor;
+  const App = cap && cap.Plugins && cap.Plugins.App;
+  if(!App || typeof App.addListener !== 'function') return false;
+  App.addListener('backButton', ev=>{
+    /* Còn entry để lùi thì lùi — popstate ở trên lo phần đóng overlay / đổi
+       tab, nên nút cứng và cú vuốt trên trình duyệt đi CÙNG một đường. */
+    if(ev && ev.canGoBack){ history.back(); return; }
+    /* Hết entry. Nhưng nếu vẫn còn overlay mở thì đóng nó trước: thoát app
+       trong lúc người dùng chỉ muốn đóng một modal là mất luôn thứ họ đang
+       gõ, và đó là hành động không sửa lại được. */
+    if(navState.activeModal){
+      navCloseOverlays(null);
+      navState = Object.assign({}, navState, {activeModal:null});
+      return;
+    }
+    if(typeof App.exitApp === 'function') App.exitApp();
+  });
+  return true;
+}
+
 window.addEventListener('popstate', e=>{
   /* Chưa vào phiên (đăng nhập / onboarding / màn cấu hình) thì để trình duyệt
      tự xử — ở đó không có bước nào để lùi. */
@@ -6972,7 +7008,10 @@ registerServiceWorker();
 
 /* Only the packaged app can act on this — a browser updates itself. Three
    seconds in, so the check never competes with the first paint. */
-if(isNativeApp()) setTimeout(()=>checkAppUpdate(), 3000);
+if(isNativeApp()){
+  navBindNativeBack();       /* nút Back cứng đi qua chính history ở trên */
+  setTimeout(()=>checkAppUpdate(), 3000);
+}
 
 /* Crawlers need an absolute og:image, and the app is served from production,
    preview and localhost — so resolve it against wherever we actually are. */
