@@ -909,3 +909,128 @@ html[data-theme="dark"] .alert-info{color:var(--primary);}
    nhật, không phải để đọc mỗi ngày. */
 .app-version-line{display:flex;align-items:center;justify-content:center;gap:7px;margin-top:10px;}
 .app-version-line .dv-name{font-size:.72rem;font-weight:700;color:var(--muted);}
+
+/* ============================================================
+   TRỢ LÝ CHAT & QUÉT BILL
+   ============================================================ */
+/* Thang z-index của app: .view 2 · .nav-bar 30 · .modal 100 · #amount-sheet
+   120 · .lock-screen 200 · #toast-wrap 300. Trợ lý nằm ở 99 — trên nav bar
+   (nó phải che được nav để không ai bấm ra ngoài giữa lúc đang gõ) nhưng
+   DƯỚI mọi lớp phía trên: sheet chọn danh mục, bàn phím số, màn khoá PIN và
+   nhất là toast đều phải hiện được trên nó. Một con số như 1000 sẽ nuốt mất
+   đúng cái toast "Đã lưu giao dịch" mà trợ lý vừa bắn ra. */
+.chat-fab{
+  position:fixed;
+  /* Nav bar cao ~64px cộng safe-area — 80px là vừa qua khỏi nó, và đệm thêm
+     var(--safe-b) để trên iPhone nút không tụt vào vạch home. */
+  bottom:calc(80px + var(--safe-b));right:20px;
+  width:56px;height:56px;border-radius:50%;
+  background:var(--gradient-card);color:var(--on-primary);
+  border:none;font-size:24px;line-height:1;
+  display:flex;align-items:center;justify-content:center;
+  box-shadow:0 4px 12px var(--primary-glow),0 0 0 4px var(--bg);
+  cursor:pointer;z-index:99;overflow:hidden;
+  transition:transform .18s cubic-bezier(.34,1.4,.64,1),box-shadow .18s ease;
+}
+.chat-fab .ic-svg{width:26px;height:26px;stroke-width:2.2;}
+@media (hover:hover){ .chat-fab:hover{transform:translateY(-2px);box-shadow:0 10px 22px var(--primary-glow),0 0 0 4px var(--bg);} }
+.chat-fab:active{transform:scale(.92);}
+
+/* Ngăn chat neo vào CỘT app, không vào mép phải màn hình: trên desktop cột
+   chỉ rộng 480px và nằm giữa, một ngăn dán mép phải viewport sẽ trôi hẳn ra
+   ngoài khung máy (shell.css còn một override nữa cho khung desktop). */
+/* Căn giữa bằng left/right:0 + margin:auto, KHÔNG bằng
+   left:50% + translateX(-50%): keyframe slideUp bên trên animate `transform`,
+   nên nó ghi đè luôn phần translateX và ngăn chat bay vào từ lệch hẳn nửa
+   màn hình rồi mới nhảy về chỗ. Thấy rồi mới tin — cạm bẫy này chỉ lộ ra
+   trong 0,22 giây đầu. */
+.chat-drawer{
+  position:fixed;bottom:0;left:0;right:0;margin:0 auto;
+  width:100%;max-width:420px;height:80vh;max-height:640px;
+  background:var(--card);
+  border-top-left-radius:20px;border-top-right-radius:20px;
+  box-shadow:0 -4px 20px rgba(15,23,42,.15);
+  display:flex;flex-direction:column;z-index:99;overflow:hidden;
+  animation:slideUp .22s ease;
+}
+html[data-theme="dark"] .chat-drawer{box-shadow:0 -4px 20px rgba(0,0,0,.55);}
+
+.chat-head{display:flex;align-items:center;gap:10px;flex:0 0 auto;
+  padding:12px 14px;background:var(--gradient);color:#fff;}
+.chat-head-id{display:flex;align-items:center;gap:10px;flex:1;min-width:0;}
+.chat-avatar{flex:0 0 auto;width:34px;height:34px;border-radius:11px;
+  display:flex;align-items:center;justify-content:center;
+  background:rgba(255,255,255,.18);}
+.chat-avatar .ic-svg{width:19px;height:19px;}
+.chat-title{font-size:.92rem;font-weight:800;letter-spacing:-.2px;}
+.chat-sub{font-size:.66rem;color:rgba(255,255,255,.78);margin-top:1px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.chat-head-tools{display:flex;gap:6px;flex:0 0 auto;}
+.chat-head .chat-icon-btn{background:rgba(255,255,255,.16);color:#fff;border-color:rgba(255,255,255,.22);}
+.chat-icon-btn{width:32px;height:32px;flex:0 0 auto;border-radius:10px;
+  display:flex;align-items:center;justify-content:center;
+  background:var(--card-2);border:1px solid var(--border);color:var(--muted);
+  font-size:1rem;font-weight:700;line-height:1;cursor:pointer;transition:.15s;}
+.chat-icon-btn .ic-svg{width:18px;height:18px;}
+@media (hover:hover){ .chat-icon-btn:hover{color:var(--primary);border-color:var(--primary);} }
+.chat-icon-btn:active{transform:scale(.94);}
+
+.chat-body{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:12px;
+  background:var(--bg);overscroll-behavior:contain;}
+.chat-bubble{max-width:80%;padding:10px 14px;border-radius:16px;font-size:14px;line-height:1.45;
+  word-break:break-word;}
+.chat-bubble.bot{background:var(--card);color:var(--text);align-self:flex-start;
+  border:1px solid var(--border);border-bottom-left-radius:4px;}
+.chat-bubble.user{background:var(--primary);color:var(--on-primary);align-self:flex-end;
+  border-bottom-right-radius:4px;}
+/* Thẻ hành động rộng hơn bong bóng chữ: nó có 5 dòng nhãn–giá trị và hai nút,
+   bó vào 80% là chữ "Tùy chỉnh thêm" xuống dòng. */
+.chat-bubble.has-card{max-width:92%;}
+.chat-hint{display:inline-block;margin-top:4px;font-size:.72rem;color:var(--muted);line-height:1.45;}
+.chat-bubble.user .chat-hint{color:rgba(255,255,255,.8);}
+.chat-img{display:block;max-width:100%;max-height:180px;border-radius:12px;margin:-2px 0 0;}
+.chat-cap{margin-top:6px;font-size:.78rem;}
+
+/* Ba dấu chấm trong lúc chờ OCR. Ảnh bill mất vài giây, và một ngăn chat đứng
+   im thì không phân biệt được với một ngăn chat đã chết. */
+.chat-typing{display:inline-flex;gap:4px;align-items:center;height:14px;}
+.chat-typing i{width:6px;height:6px;border-radius:50%;background:var(--muted);
+  animation:chatBlink 1.1s infinite ease-in-out;}
+.chat-typing i:nth-child(2){animation-delay:.16s;}
+.chat-typing i:nth-child(3){animation-delay:.32s;}
+@keyframes chatBlink{0%,80%,100%{opacity:.25;transform:translateY(0);}40%{opacity:1;transform:translateY(-2px);}}
+@media (prefers-reduced-motion:reduce){ .chat-typing i{animation:none;opacity:.6;} }
+
+/* Thẻ kết quả bóc tách */
+.bot-card-action{background:var(--card);border:1px solid var(--border);border-radius:12px;
+  padding:10px;margin-top:8px;}
+.bca-row{display:flex;align-items:center;justify-content:space-between;gap:10px;
+  padding:6px 2px;font-size:.8rem;border-bottom:1px dashed var(--border);}
+.bca-row:last-of-type{border-bottom:none;}
+.bca-lbl{color:var(--muted);font-weight:600;flex:0 0 auto;}
+.bca-val{font-weight:700;text-align:right;min-width:0;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.bca-val.is-missing{color:var(--warn);font-weight:600;}
+.bca-amt{font-size:.95rem;font-weight:800;letter-spacing:-.2px;}
+/* Dòng "chưa nhận diện được": nhắc mà không hét — người dùng vẫn lưu được. */
+.bca-note{margin:4px 2px 0;font-size:.68rem;line-height:1.4;color:var(--warn);}
+.bca-btns{display:flex;gap:8px;margin-top:10px;}
+.bca-btns .btn{margin:0;min-height:40px;font-size:.8rem;}
+.bca-saved{display:flex;align-items:center;gap:6px;font-size:.8rem;font-weight:700;
+  color:var(--income);padding:2px;}
+
+/* Chân ngăn chat: 📎 · ô nhập · Gửi. padding-bottom cộng safe-area để bàn phím
+   ảo và vạch home không liếm mất ô nhập. */
+.chat-foot{flex:0 0 auto;display:flex;align-items:center;gap:8px;
+  padding:10px 12px calc(10px + var(--safe-b));
+  background:var(--card);border-top:1px solid var(--border);}
+.chat-input{flex:1;min-width:0;height:40px;padding:0 14px;
+  background:var(--bg);border:1px solid var(--border);border-radius:20px;
+  font-size:.88rem;color:var(--text);outline:none;transition:.15s;}
+.chat-input:focus{border-color:var(--primary);background:var(--card);}
+.chat-input::placeholder{color:var(--muted);}
+.btn-chat-send{flex:0 0 auto;height:40px;padding:0 16px;border:none;border-radius:20px;
+  background:var(--primary);color:var(--on-primary);
+  font-size:.84rem;font-weight:800;cursor:pointer;transition:.15s;}
+.btn-chat-send:active{transform:scale(.96);}
+.btn-chat-send:disabled{opacity:.5;cursor:default;}

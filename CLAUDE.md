@@ -74,9 +74,9 @@ Một bảng duy nhất: `public.user_state(user_id pk, data jsonb, device_id, u
 
 Anon key **cố ý** đi vào trình duyệt — RLS (`auth.uid() = user_id` trên cả 4 policy) mới là thứ bảo vệ dữ liệu.
 
-### Bố cục `app.js` (~4.900 dòng)
+### Bố cục `app.js` (~5.500 dòng)
 
-Chia bằng banner `/* ===== TÊN SECTION ===== */`, theo thứ tự: STATE · STORAGE · SEED DATA · HELPERS (dates / money / data access) · UI PRIMITIVES · THEME · PIN LOCK · AUTH · ONBOARDING · NAVIGATION · DASHBOARD · TRANSACTIONS · WALLETS · BUDGETS · DEBTS · RECURRING · EVENTS · CATEGORY MANAGEMENT · REPORTS · MORE · SETTINGS · IMPORT/EXPORT · BOOTSTRAP. Thêm code vào đúng section, giữ banner.
+Chia bằng banner `/* ===== TÊN SECTION ===== */`, theo thứ tự: STATE · STORAGE · SEED DATA · HELPERS (dates / money / data access) · UI PRIMITIVES · THEME · PIN LOCK · AUTH · ONBOARDING · NAVIGATION · LỊCH SỬ ĐIỀU HƯỚNG · DASHBOARD · TRANSACTIONS · WALLETS · BUDGETS · DEBTS · RECURRING · EVENTS · CATEGORY MANAGEMENT · REPORTS · MORE · TRỢ LÝ CHAT & QUÉT BILL · SETTINGS · IMPORT/EXPORT · BOOTSTRAP. Thêm code vào đúng section, giữ banner.
 
 ## Tên thương hiệu vs khoá lưu trữ
 
@@ -96,6 +96,7 @@ App tên **SoFin**, nhưng bốn khoá `localStorage` (`FINYOURTIN_STATE_V4`, `F
 - **Không có trường `balance` trên ví.** `getWalletBalance()` phát lại sổ cái mỗi lần gọi, nên chuyển ví làm đổi số dư ngay khi hai bản ghi tồn tại — không có bước "cập nhật số dư" nào để quên. Đừng thêm trường `balance`; nó sẽ là nguồn sự thật thứ hai để lệch.
 - **Test không được phụ thuộc ngày chạy.** Dùng mốc cố định (ngày 15 tháng sau) thay vì `+40 ngày` — kiểu sau chạy cuối tháng là rơi sang tháng kế nữa và đỏ ngẫu nhiên.
 - **Số dư không lưu trữ** — `getWalletBalance()` cộng lại từ lịch sử mỗi lần gọi. Đừng cache nó vào state.
+- **`openModal()` / `closeModal()` là cửa duy nhất ẩn/hiện một `.modal`** — chúng cũng ghi lịch sử điều hướng. Gọi `classList.add('hidden')` thẳng lên một modal sẽ để lại entry mồ côi và cú Back ngay sau đó trông như không làm gì cả. Xem mục *Lịch sử điều hướng*.
 - **`switchTab()` là nơi duy nhất bật nav bar.** Mọi màn hình đi qua nó đều là màn hình trong phiên, nên nó tự `remove('hidden')` cho `#main-nav`. Login/onboarding tự ẩn thanh này và tự trả lại khi xong. Đừng bắt từng caller nhớ — đã có một caller quên và người dùng kẹt cứng ở Tổng quan không có nav.
 - **Loại ví đọc từ `WALLET_TYPE_META`**, không chép tay `['cash','bank',…]` ở chỗ khác: màn hình Ví gom nhóm theo `Object.keys()` của bảng đó, thiếu một loại trong vòng lặp là ví thuộc loại ấy **biến mất khỏi chính màn quản lý nó**. Nhãn lấy qua `walletMeta(w)`, loại lấy qua `walletTypeOf(w)` (loại lạ/thiếu quy về `cash` để không có thẻ nào trống nhãn).
 - **Vẽ lại sau khi ghi**: dùng `renderAll()` (vẽ tab đang mở), **không** gọi cứng `renderDebtsView()` / `renderRecurringView()` — nhiều thao tác gọi được từ cả màn hình gốc lẫn thẻ "Dự kiến phải chi" trên Dashboard, gọi cứng sẽ vẽ vào view đang ẩn và màn hình thật đứng yên.
@@ -103,6 +104,25 @@ App tên **SoFin**, nhưng bốn khoá `localStorage` (`FINYOURTIN_STATE_V4`, `F
 - **Bộ lọc là UI state, không phải dữ liệu**: `txFilters`, `reportWalletId`, `debtFilter`… là `let` ở top-level, không nằm trong `state` nên không bao giờ đi vào localStorage hay snapshot Supabase. Đổi lại chúng sống qua lần đăng xuất — thêm biến lọc mới thì nhớ khai báo trong `resetSessionFilters()`. Điều hướng chéo tab thì dùng `jumpToTransactions({...})`, đừng gán thẳng `txFilters`: `renderTransactionsList()` **không** tham số sẽ đọc ngược giá trị từ các `<select>` đè lên bộ lọc vừa đặt (chỉ `renderTransactionsList(true)` mới vẽ select *từ* `txFilters`). Cú nhảy phải mang theo **cả phạm vi của khối vừa bấm**, không chỉ mỗi id: `jumpToCategoryThisMonth()` đặt thêm `type/range/status` để tổng Chi bên Giao dịch bằng đúng con số trên thẻ danh mục ở Tổng quan — lọc mỗi `catId` thì ra một tổng khác và trông như tính sai. Và **chỉ gắn onclick khi id còn tồn tại**: `renderTransactionsList()` hạ bộ lọc treo về `'all'`, nên một hàng trỏ vào danh mục/ví đã xoá sẽ trả về *toàn bộ* giao dịch — ngược hẳn điều nó hứa.
 - **`walletId` phải luôn trỏ vào ví có thật** trước khi push giao dịch. Ví bị xóa nhưng `recurring`/`debts` vẫn giữ id cũ; ghi vào đó thì giao dịch tồn tại mà không số dư nào đọc — tiền biến mất không dấu vết. Mọi đường tạo giao dịch đều phải `getWallet(id)` trước.
 - `migrateState()` chạy mỗi lần load, phải **idempotent**: thêm field mới thì thêm default ở đây, không viết migration một chiều. Nếu buộc phải sửa dữ liệu cũ (ví dụ gán lại `type` cho ví tạo ra trước khi loại đó tồn tại) thì **kẹp sau một cờ trong `state.app`** như `walletTypeFixV1` — chạy đúng một lần rồi thôi. Không có cờ thì mỗi lần load lại đè lên lựa chọn người dùng vừa sửa tay.
+
+## Lịch sử điều hướng (nút Back cứng / vuốt lùi)
+
+Section `LỊCH SỬ ĐIỀU HƯỚNG TOÀN CỤC` trong `app.js`. Mỗi bước điều hướng là một entry `history` mang `stateSchema` = `{activeTab, activeModal, filterState, subView}`. Trước đây app không đẩy entry nào, nên một cú Back ở bất kỳ đâu là **thoát thẳng app**, kể cả khi đang mở modal.
+
+- **Không đụng vào URL.** `pushState(state, '')` — path và hash giữ nguyên. Hash là của Supabase Auth (`#access_token=…`, `#error=…`, `readAuthLinkError()` đọc nó lúc boot); đổi path thì reload rơi vào fallback của service worker và link chia sẻ trỏ tới một đường không có thật.
+- **`activeTab` dùng đúng tên tab của app** (`switchTab` nhận chính chuỗi đó). Đừng thêm một bộ tên song song (`home`/`report`/…) rồi dịch qua lại — đó là một chỗ nữa để lệch.
+- **Ba cửa duy nhất**: `navPush()` (bước mới), `navReplace()` (ghi đè bước đang đứng), `navDropOverlay(id)` (đóng overlay). Tất cả đều **no-op khi `navBusy > 0`** — đang khôi phục từ popstate mà lại ghi tiếp thì mỗi cú Back đẻ ra một entry và người dùng không bao giờ thoát được app.
+- **`switchTab()` là nơi duy nhất ghi entry cho màn hình**, đúng như nó cũng là nơi duy nhất bật nav bar. Lần gọi đầu của phiên dựng **mốc gốc** bằng `replaceState` (`navInit`) chứ không push: push thì Back ở Tổng quan chỉ quay về chính Tổng quan.
+- **`switchTab(tab, true)` = "bước cũ đã xong"** — dùng sau khi lưu giao dịch / chuyển ví / huỷ form, và cho các lần chuyển hướng bắt buộc (chưa có ví → màn Ví). Không có cờ này thì Back sau khi lưu sẽ mở lại đúng cái form vừa gửi, giờ đã trống.
+- **Đóng overlay bằng `replaceState`, KHÔNG bằng `history.back()`.** `back()` là bất đồng bộ: đóng overlay rồi điều hướng tiếp trong cùng một lượt (`chatCustomize()` làm đúng thế) thì popstate nổ **sau** và kéo người dùng ngược lại màn hình cũ. Cái giá phải trả: mở-đóng một modal để lại một entry trùng với entry đang đứng, nên `popstate` **gộp entry trùng** — thấy `activeTab` và `activeModal` y hệt thì `history.back()` thêm một nhịp nữa. Không có bước gộp đó thì bấm Back ba lần mà màn hình đứng im.
+- **`openModal()` / `closeModal()` là cửa duy nhất để ẩn/hiện `.modal`.** Ẩn thẳng bằng `classList.add('hidden')` sẽ để lại một entry mồ côi và cú Back kế tiếp trông như không làm gì cả. Handler Esc và cú chạm nền đã được nối lại qua `closeModal(id)` vì đúng lý do này.
+- **`uiConfirm()` trả lời bằng Promise**, nên nó đăng ký `navConfirmDismiss` — Back/Esc/chạm nền đóng hộp thì promise resolve `false`. Thiếu móc này, luồng gọi (xoá ví, nhập CSV) đứng chờ mãi mãi mà không ai thấy.
+- **Forward không mở lại overlay** (`navApply` đặt `activeModal = null`). Từ một cái id không dựng lại được nội dung bên trong — bản ghi đang sửa, handler của `uiConfirm` — mà một modal rỗng còn tệ hơn không có modal.
+- **`filterState` được chốt vào entry đang đứng ngay trước khi rời nó** (`navPush` gọi `replaceState` một nhịp trước khi `pushState`). Đổi bộ lọc **không** phải một bước Back: mười lần đổi mốc báo cáo mà thành mười bước thì Back mất hết ý nghĩa. Khôi phục phải đi kèm `navSyncFilterChips()` — chip và segment là HTML tĩnh, không tự vẽ lại theo biến. Vì thế mọi segment lọc (`#debt-seg`, `#budget-period-seg`, `#cat-type-seg`) đều mang `data-val`; **giữ thuộc tính đó**, không thì chỗ này phải đọc chuỗi `onclick` mà đoán.
+- **Panel lọc gập ở tab Giao dịch cũng là một bước** (`NAV_SHEETS['tx-advanced-filters']`). Nó nằm trong `.view` chứ không nổi lên trên, nhưng dưới mắt người dùng thì mở panel là một bước và Back phải gấp nó lại. App này **không có màn hình "mục tiêu" (goal)**, và "tạo giao dịch" là một tab thật (`add`) chứ không phải modal — nên hai giá trị đó không xuất hiện trong `activeModal`.
+- **Ngoài phiên thì không ghi gì** (`navArmed`): màn đăng nhập, onboarding và màn cấu hình để trình duyệt tự xử — ở đó không có bước nào để lùi. `showLogin()` gọi `navReset()`.
+- **Bản Android**: không cần `@capacitor/app`. Capacitor mặc định cho nút Back cứng đi qua `webView.goBack()` khi còn entry để lùi, và các entry pushState này nằm trong chính danh sách đó; hết entry thì nó đóng activity. **Đừng đăng ký listener `backButton`** chỉ để lặp lại hành vi mặc định — có listener là tắt mặc định, và từ đó mọi thứ phải tự lo.
+- **iOS**: Safari/PWA vuốt mép chạy qua history nên có sẵn. WKWebView trong bản đóng gói cần `allowsBackForwardNavigationGestures`, mà `ios/` thì không commit — nếu sau này build iOS thì đặt trong `capacitor.config.json`.
 
 ## Màn nhập số tiền (bàn phím riêng)
 
@@ -116,6 +136,24 @@ App tên **SoFin**, nhưng bốn khoá `localStorage` (`FINYOURTIN_STATE_V4`, `F
 - Bàn phím có `keydown` trên `document` (số, `,`, Backspace, Enter, Esc) vì màn này không còn ô input nào để gõ trên desktop. Listener được gỡ trong `closeAmountSheet()` — đừng để nó sống sót.
 - Hai phím cao (`⌫`, `Tiếp tục`) đặt hàng **tường minh** (`grid-row: 1 / span 2` và `3 / span 2`). Chỉ `span 2` thì vị trí của chúng phụ thuộc thứ tự thẻ trong HTML, và một lần đổi thứ tự phím là cả lưới trượt.
 - Bảng màu bàn phím nằm trong token riêng `--tcb-*` (xanh `#007AFF`), **cố ý đứng ngoài `--primary`**: đây là một bề mặt riêng theo ngôn ngữ Techcombank, không phải app bar hay thẻ. Có bộ override dark mode — bàn phím trắng trên nền tối là một tấm đèn pha. Đổi màu thương hiệu thì không phải đụng vào đây.
+
+## Trợ lý chat & quét bill
+
+`#chat-fab` (nút nổi) + `#chat-drawer` (ngăn chat), section `TRỢ LÝ CHAT & QUÉT BILL` trong `app.js`. Gõ "cà phê 35k" hoặc gửi ảnh hoá đơn → bot dựng một **draft** rồi chờ bấm **[Tự động lưu]** / **[Tùy chỉnh thêm]**.
+
+- **Draft không bao giờ vào `state`.** `chatDrafts` là `Map` trong RAM. Giao dịch chỉ ra đời khi người dùng bấm, và khi đó đi đúng đường ghi cũ: `state.transactions.push({... status: statusForDate(date)})` + `saveStorage()`. Cùng lý do với mục dự kiến "ảo" (`isVirtual`) — một bot tự ghi vào sổ là một khoản chi ma không thao tác nào của người dùng sinh ra.
+- **Toàn bộ trạng thái trợ lý là UI state** (`chatDrafts`, `chatKwIndex`, `chatBusy`, cờ OCR): `let` ở top-level, không nằm trong `state`, nên không vào localStorage và không ride theo snapshot Supabase. `resetSessionFilters()` gọi `resetChatAssistant()` — hội thoại của người vừa đăng xuất không được nằm lại chờ người sau đọc.
+- **Ma trận từ khoá tự học.** `buildCategoryKeywordIndex()` quét `getAllUserTransactions()`, tách unigram + bigram từ `note` rồi cộng điểm về `(type, categoryId, subcategoryId)`. Trọng số: lịch sử 3 > tên danh mục con 2 > tên danh mục 1; bigram nhân đôi. Tên danh mục có mặt trong ma trận **cố ý** — tài khoản mới chưa có lịch sử nào mà "ăn uống" thì vẫn phải ra Ăn uống. Cache đọc theo `state.updatedAt` + `currentUser`; đổi cách vô hiệu cache thì nhớ cả hai.
+- **Từ khoá học từ chi tiêu không được trả về cho khoản thu** (và ngược lại) — `matchCategoryFromInput()` lọc theo `type`. Không có ràng buộc đó thì "lương" sẽ ra Ăn uống chỉ vì hai chữ từng nằm chung một câu.
+- **Không khớp từ nào ⇒ "Khác", và phải NÓI RA.** `matched:false` là thứ bật dòng "Chưa nhận diện được, bấm để đổi" trên thẻ. Im lặng nhận bừa thì người dùng không bao giờ sửa, và ma trận học luôn cái sai đó.
+- **Ghi chú giữ nguyên câu người dùng gõ, cả dấu.** Đừng "dọn" số tiền ra khỏi nó: chính chuỗi đó là dữ liệu học cho lần sau, và nó cũng là thứ hiện trong sổ giao dịch.
+- **Ngày bị bóc ra TRƯỚC số tiền** (`chatExtractDate()` trả cả `rest`). Để nguyên "12/03/2026" thì 2026 là con số lớn nhất trong câu và nó thắng "35k". Ngày dựng bằng `isoOf()`, ngày trong tháng bị kẹp theo độ dài tháng — `new Date(2026,1,31)` âm thầm nhảy sang tháng 3.
+- **Dấu `.` và `,` trong số tiền**: nhóm cuối đúng 3 chữ số ⇒ ngăn nghìn (`50.000`), còn lại ⇒ thập phân (`1.2tr`). Đoán sai là lệch một nghìn lần. Đơn vị phải đứng cuối token (`(?![a-z0-9])`), không thì "35 khách" thành 35k.
+- **OCR là ngoại lệ duy nhất của luật "không CDN"** — và chỉ là ngoại lệ vì nằm **ngoài đường boot**: `chatOcrImage()` xin phép rồi mới nạp `tesseract.js` từ jsDelivr, thất bại thì bot nói thẳng và người dùng gõ tay số tiền. Đừng chuyển nó lên `<script>` trong `index.html` và đừng vendor nó: ~2MB JS + wasm + gói tiếng Việt vài MB sẽ nhân đôi APK và phá câu chuyện offline-first. `sw.js` bỏ qua mọi origin khác nên gói đó không rơi vào cache của shell. Phần bóc tách văn bản (`parseBillText()`) tách riêng khỏi OCR để test chạy được mà không cần engine.
+- **Ngăn chat là overlay ngoài `.view`**, đúng cạm bẫy của `#amount-sheet`: `switchTab()` và `showLogin()` phải tự đóng nó. `switchTab()` cũng là nơi duy nhất bật `#chat-fab`, cùng luật với nav bar; login / onboarding / màn cấu hình tự ẩn.
+- **Căn giữa ngăn chat bằng `left:0;right:0;margin:0 auto`, KHÔNG bằng `left:50% + translateX(-50%)`** — keyframe `slideUp` animate `transform`, nó ghi đè luôn phần `translateX` và ngăn chat bay vào từ lệch nửa màn hình rồi mới nhảy về chỗ. Đã thấy tận mắt.
+- **`z-index: 99`** cho cả nút nổi lẫn ngăn chat: trên nav bar (30), dưới modal (100), bàn phím số (120), màn khoá (200) và **toast (300)**. Nâng lên 1000 là nuốt mất đúng cái toast "Đã lưu giao dịch" mà chính trợ lý vừa bắn ra.
+- Con số vừa bóc tách **không** đi qua `fmt()` (`chatAmountText()` tự format): chế độ riêng tư che *số dư*, che chính con số người dùng vừa gõ thì vô nghĩa. Số dư ví trong bộ chọn ví thì vẫn qua `fmtW()` và vẫn bị che.
 
 ## Báo cáo — biến động số dư
 
@@ -215,11 +253,12 @@ Hai cái bẫy trong workflow đã cắn thật, đừng nới:
 
 ## PWA
 
-`public/manifest.json` + `public/sw.js`, đăng ký ở `registerServiceWorker()`. Ba luật của service worker, đừng nới:
+`public/manifest.json` + `public/sw.js`, đăng ký ở `registerServiceWorker()`. Bốn luật của service worker, đừng nới:
 
 1. **Không đụng vào Supabase** (`isSupabase(url)` → `return`) và bỏ qua mọi request không phải `GET`. Cache lại auth/REST là đường thẳng tới việc phục vụ session của người khác.
 2. **`js/env.js` đi network-first** — nó chứa URL và anon key; ghim một key đã bị xoay vòng sẽ khoá người dùng ra ngoài.
-3. Phần còn lại cache-first + revalidate ngầm.
+3. **Chỉ tài nguyên cùng origin** (`url.origin !== self.location.origin` → `return`). Thứ duy nhất đi ra ngoài là engine OCR của trợ lý chat, tải theo yêu cầu và nặng hàng chục MB — để nó rơi vào cache của shell thì mỗi lần deploy là xoá đi tải lại, mà quota thì dùng chung với dữ liệu thật của người dùng.
+4. Phần còn lại cache-first + revalidate ngầm.
 
 Tên cache lấy từ `?v=` trên chính URL của `sw.js`, do `generate-env.js` đóng dấu (`__ENV__.BUILD`). Mỗi lần deploy là một script mới → cài lại → `activate` xoá cache cũ. **Đừng bỏ query đó**, không thì người dùng kẹt ở bundle cũ vĩnh viễn.
 

@@ -83,6 +83,12 @@ self.addEventListener('fetch', event => {
   const url = new URL(req.url);
   if (isSupabase(url)) return;                       // rule 1
   if (url.protocol !== 'http:' && url.protocol !== 'https:') return;
+  /* Chỉ phục vụ tài nguyên cùng origin. Vỏ app vốn không nạp gì từ bên thứ
+     ba; thứ duy nhất đi ra ngoài là engine OCR của trợ lý chat, tải theo yêu
+     cầu và nặng hàng chục MB (js + wasm + gói ngôn ngữ). Nhét nó vào cache
+     của shell thì mỗi lần deploy là xoá đi tải lại, mà quota thì dùng chung
+     với dữ liệu thật của người dùng. Để HTTP cache của trình duyệt lo. */
+  if (url.origin !== self.location.origin) return;
 
   if (isEnv(url)) {                                  // rule 2
     event.respondWith(networkFirst(req));

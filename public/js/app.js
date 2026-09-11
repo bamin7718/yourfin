@@ -65,7 +65,9 @@ const ICON_PATHS = {
   arrowDown:   '<path d="M12 4.5v14"/><path d="m6 13 6 6 6-6"/>',
   arrowUp:     '<path d="M12 19.5v-14"/><path d="m6 11 6-6 6 6"/>',
   swap:        '<path d="M7 4.5 3.5 8 7 11.5"/><path d="M3.5 8h13a4 4 0 0 1 0 8H14"/><path d="M17 19.5 20.5 16 17 12.5"/>',
-  coins:       '<ellipse cx="9" cy="6.5" rx="6" ry="3"/><path d="M3 6.5v4c0 1.7 2.7 3 6 3s6-1.3 6-3"/><path d="M3 10.5v4c0 1.7 2.7 3 6 3"/><ellipse cx="16" cy="15" rx="5" ry="2.5"/><path d="M11 15v3c0 1.4 2.2 2.5 5 2.5s5-1.1 5-2.5v-3"/>'
+  coins:       '<ellipse cx="9" cy="6.5" rx="6" ry="3"/><path d="M3 6.5v4c0 1.7 2.7 3 6 3s6-1.3 6-3"/><path d="M3 10.5v4c0 1.7 2.7 3 6 3"/><ellipse cx="16" cy="15" rx="5" ry="2.5"/><path d="M11 15v3c0 1.4 2.2 2.5 5 2.5s5-1.1 5-2.5v-3"/>',
+  chat:        '<path d="M20.5 11.8a8 8 0 0 1-11.7 7.1L4 20.5l1.7-4.7A8 8 0 1 1 20.5 11.8z"/><path d="M8.6 11.8h.01M12 11.8h.01M15.4 11.8h.01"/>',
+  clip:        '<path d="M20 11.5 12.6 19a4.5 4.5 0 0 1-6.4-6.4l7.7-7.6a3 3 0 0 1 4.2 4.2l-7.6 7.7a1.5 1.5 0 0 1-2.1-2.1l6.8-6.9"/>'
 };
 
 /* `icon('home')` → an inline <svg>. Size and colour come from CSS. */
@@ -886,8 +888,17 @@ document.addEventListener('pointerdown', e=>{
 /* ============================================================
    UI PRIMITIVES — modal, toast, confirm
    ============================================================ */
-function openModal(id){ document.getElementById(id).classList.remove('hidden'); }
-function closeModal(id){ document.getElementById(id).classList.add('hidden'); }
+/* Mỗi overlay là một bước điều hướng: mở thì đẩy entry, đóng thì ghi đè lại
+   entry đó. Nhờ vậy nút Back cứng của Android đóng modal thay vì thoát app —
+   xem section LỊCH SỬ ĐIỀU HƯỚNG TOÀN CỤC. */
+function openModal(id){
+  document.getElementById(id).classList.remove('hidden');
+  navPush({activeModal:id});
+}
+function closeModal(id){
+  document.getElementById(id).classList.add('hidden');
+  navDropOverlay(id);
+}
 function toast(msg, type){
   const wrap = document.getElementById('toast-wrap');
   const el = document.createElement('div');
@@ -902,8 +913,11 @@ function uiConfirm(title, msg, okText){
     document.getElementById('confirm-msg').textContent = msg;
     const yes = document.getElementById('confirm-yes'), no = document.getElementById('confirm-no');
     yes.textContent = okText || 'Đồng ý';
-    const done = v =>{ closeModal('modal-confirm'); yes.onclick=null; no.onclick=null; resolve(v); };
+    const done = v =>{ navConfirmDismiss = null; closeModal('modal-confirm'); yes.onclick=null; no.onclick=null; resolve(v); };
     yes.onclick = ()=>done(true); no.onclick = ()=>done(false);
+    /* Back / Esc / chạm nền cũng là một câu trả lời — "không". Thiếu móc này
+       thì hộp biến mất mà luồng gọi (xoá ví, nhập CSV…) đứng chờ mãi mãi. */
+    navConfirmDismiss = ()=>done(false);
     openModal('modal-confirm');
   });
 }
@@ -1356,6 +1370,11 @@ function showLogin(){
   /* Overlay toàn màn hình, không phải một .view — đăng xuất mà quên đóng thì nó
      nằm nguyên trên màn đăng nhập của người tiếp theo. */
   if(amtKind) closeAmountSheet();
+  /* Hội thoại bị xoá, không chỉ ẩn: ghi chú chi tiêu của người vừa đăng xuất
+     không được nằm lại chờ người tiếp theo đọc. */
+  closeChatDrawer(true);
+  showChatFab(false);
+  navReset();          /* ngoài phiên thì không còn bước nào để lùi */
   document.querySelectorAll('.view').forEach(v=>v.classList.add('hidden'));
   document.getElementById('view-login').classList.remove('hidden');
   document.getElementById('main-header').classList.add('hidden');
@@ -1416,6 +1435,10 @@ function initUserSession(){
    ============================================================ */
 function startOnboarding(){
   document.getElementById('view-onboarding').classList.remove('hidden');
+  /* Chưa có ví nào thì trợ lý không có chỗ ghi tiền vào — nút nổi ở đây chỉ
+     là một ngõ cụt nằm đè lên bước đang làm. switchTab() bật lại nó khi xong. */
+  closeChatDrawer(false);
+  showChatFab(false);
   renderObStep1();
 }
 function renderObStep1(){
@@ -1497,10 +1520,17 @@ function syncHeaderHeight(){
   if(h) document.documentElement.style.setProperty('--hd-h', h + 'px');
 }
 
-function switchTab(tab){
+/* `replaceStep` = "bước cũ đã xong, đừng để Back quay lại nó": lưu giao dịch
+   xong mà Back lại mở ra đúng cái form vừa gửi (giờ đã trống) thì đó là một
+   bước chết. Điều hướng thường thì bỏ trống. */
+function switchTab(tab, replaceStep){
   /* Bàn phím số là overlay toàn màn hình: bỏ mở mà đổi màn hình thì nó che mất
      màn mới, và nút "Tiếp tục" của nó lại ghi vào một form không còn hiện. */
   if(amtKind) closeAmountSheet();
+  /* Ngăn chat cũng là overlay ngoài .view, cùng cạm bẫy: để nó mở thì nó nằm
+     đè lên màn hình vừa mở, còn thẻ xác nhận bên trong thì ghi vào một form
+     không còn hiện. */
+  closeChatDrawer(false);
   if(tab==='add' && getUserWallets().length===0){ toast('Bạn cần tạo ít nhất 1 ví trước','err'); tab='wallets'; }
   currentTab = tab;
   document.querySelectorAll('.view').forEach(v=>v.classList.add('hidden'));
@@ -1514,6 +1544,9 @@ function switchTab(tab){
      was still on onboarding swapped the view underneath them and left no bar
      to navigate with. */
   document.getElementById('main-nav').classList.remove('hidden');
+  /* Nút nổi của trợ lý đi theo cùng một luật với nav bar, và vì đúng một lý
+     do: mọi màn hình đi qua đây là màn hình trong phiên. */
+  showChatFab(true);
   /* Screens with no slot of their own are reached from the dashboard's
      "Truy cập nhanh" grid, so that is the nav item that stays lit. */
   const SUB_SCREENS = ['wallets','budget','debts','recurring','events','categories'];
@@ -1529,11 +1562,209 @@ function switchTab(tab){
   if(fn) fn();
   syncHeaderHeight();
   window.scrollTo({top:0});
+  /* Lần switchTab đầu của phiên dựng MỐC GỐC thay vì đẩy entry: đẩy thì một
+     cú Back ở Tổng quan chỉ quay về chính Tổng quan, và người dùng không bao
+     giờ thoát được app bằng nút Back. */
+  if(!navArmed) navInit(tab);
+  else if(replaceStep) navReplace({activeTab:tab, activeModal:null});
+  else navPush({activeTab:tab, activeModal:null});
 }
 function renderAll(){
   const fn = VIEW_RENDERERS[currentTab];
   if(fn) fn();
 }
+/* ============================================================
+   LỊCH SỬ ĐIỀU HƯỚNG TOÀN CỤC (nút Back cứng / vuốt lùi)
+
+   Nút Back của Android và cú vuốt mép của iOS/trình duyệt chỉ biết đúng một
+   thứ: history. App này trước đây không đẩy entry nào, nên một cú Back ở màn
+   hình bất kỳ là thoát thẳng — kể cả khi đang mở modal, đang ở màn hình Ví,
+   hay đang gõ dở trong bàn phím số. Giờ mỗi bước điều hướng là một entry và
+   Back lùi đúng một bước nhìn thấy được.
+
+   KHÔNG đụng vào URL. pushState chỉ mang state object, path và hash giữ
+   nguyên:
+   · hash là của Supabase Auth (`#access_token=…`, `#error=…`) — readAuthLinkError()
+     đọc nó lúc boot, ghi đè là hỏng luồng đặt lại mật khẩu;
+   · đổi path thì reload rơi vào fallback của service worker, và link chia sẻ
+     trỏ tới một đường không tồn tại.
+
+   Ba luật:
+   1. Mọi thay đổi UI ghi lịch sử qua navPush() / navReplace() — TRỪ lúc đang
+      khôi phục từ popstate (`navBusy`), không thì mỗi cú Back lại đẻ thêm một
+      entry và người dùng không bao giờ ra được khỏi app.
+   2. Đóng overlay thì navReplace({activeModal:null}) — GHI ĐÈ entry của
+      overlay chứ không đẩy entry mới. Đẩy thì mở-đóng một modal năm lần là
+      năm cú Back "không làm gì cả".
+   3. Đổi màn hình KHÔNG dùng history.back(). back() là bất đồng bộ: đóng
+      overlay rồi điều hướng tiếp ngay trong cùng một lượt thì popstate nổ SAU
+      và kéo người dùng ngược lại màn hình cũ.
+   ============================================================ */
+/* Hợp đồng của một entry. `activeTab` dùng đúng tên tab của app (switchTab
+   nhận chính chuỗi này) chứ không phải một bộ tên song song — thêm một lớp
+   dịch là thêm một chỗ để lệch. */
+const stateSchema = {
+  activeTab: 'dashboard',   /* dashboard | transactions | add | reports | wallets | budget | debts | recurring | events | categories | settings */
+  activeModal: null,        /* id overlay đang mở: 'modal-*' | 'amount-sheet' | 'chat-drawer' */
+  filterState: {},          /* bộ lọc của tab tại thời điểm rời nó */
+  subView: null             /* tên màn hình con của Tổng quan, nếu đang ở trong đó */
+};
+/* Các màn hình vào từ lưới "Truy cập nhanh": vẫn là tab thật, nhưng subView
+   nói rõ đây là một nhánh con của Tổng quan chứ không phải một tab gốc. */
+const NAV_SUB_SCREENS = ['wallets','budget','debts','recurring','events','categories'];
+/* Những thứ "đang mở" nhưng không phải .modal: hai overlay tự quản lý việc
+   ẩn/hiện, và panel lọc gập ở tab Giao dịch — nó nằm trong .view chứ không
+   nổi lên trên, nhưng dưới mắt người dùng thì mở panel vẫn là một bước và
+   Back phải gấp nó lại. */
+const NAV_SHEETS = {
+  'amount-sheet': closeAmountSheet,
+  'chat-drawer': ()=>closeChatDrawer(false),
+  'tx-advanced-filters': ()=>{
+    const el = document.getElementById('tx-advanced-filters');
+    if(el) el.classList.add('hidden');
+  }
+};
+
+let navState = Object.assign({}, stateSchema, {filterState:{}});
+let navBusy = 0;              /* >0: đang khôi phục từ popstate, cấm ghi lịch sử */
+let navArmed = false;         /* chỉ ghi lịch sử khi đã vào phiên */
+let navConfirmDismiss = null; /* uiConfirm đang mở → cách trả lời nếu bị Back đóng */
+
+function navSupported(){ return typeof history !== 'undefined' && typeof history.pushState === 'function'; }
+
+/* Bộ lọc sống trong các `let` top-level, không nằm trong `state` — chép chúng
+   vào entry để quay lại một tab là thấy đúng thứ mình đã lọc lúc rời đi. */
+function navFilters(){
+  return {
+    tx: Object.assign({}, txFilters),
+    reportRangeKey, reportWalletId, reportIncludePending, donutMode,
+    upcomingFilter, debtFilter, budgetPeriodView, catManageType
+  };
+}
+function navRestoreFilters(f){
+  if(!f) return;
+  if(f.tx) txFilters = Object.assign({}, txFilters, f.tx);
+  if(f.reportRangeKey) reportRangeKey = f.reportRangeKey;
+  if(f.reportWalletId) reportWalletId = f.reportWalletId;
+  if(f.donutMode) donutMode = f.donutMode;
+  if(f.upcomingFilter) upcomingFilter = f.upcomingFilter;
+  if(f.debtFilter) debtFilter = f.debtFilter;
+  if(f.budgetPeriodView) budgetPeriodView = f.budgetPeriodView;
+  if(f.catManageType) catManageType = f.catManageType;
+  reportIncludePending = !!f.reportIncludePending;
+  navSyncFilterChips();
+}
+/* Chip và segment là HTML tĩnh: chúng không tự vẽ lại theo biến, nên khôi
+   phục bộ lọc mà quên bước này thì danh sách lọc một đằng, chip sáng một nẻo.
+   Mọi segment ở đây đều mang data-val — cố ý, để chỗ này không phải đọc
+   thuộc tính onclick rồi đoán. */
+function navSyncFilterChips(){
+  syncTxFilterChips();
+  const mark = (sel, val)=>document.querySelectorAll(sel).forEach(c=>c.classList.toggle('active', c.dataset.val === val));
+  mark('#report-range-seg .chip', reportRangeKey);
+  mark('#upcoming-filter .chip', upcomingFilter);
+  mark('#debt-seg .seg', debtFilter);
+  mark('#budget-period-seg .seg', budgetPeriodView);
+  mark('#cat-type-seg .seg', catManageType);
+  const de = document.getElementById('seg-donut-expense'), di = document.getElementById('seg-donut-income');
+  if(de) de.classList.toggle('active', donutMode === 'expense');
+  if(di) di.classList.toggle('active', donutMode === 'income');
+}
+
+function navEntry(patch){
+  const next = Object.assign({}, navState, patch || {});
+  next.subView = NAV_SUB_SCREENS.includes(next.activeTab) ? next.activeTab : null;
+  next.filterState = navFilters();
+  return next;
+}
+function navWrite(entry, mode){
+  navState = entry;
+  if(!navSupported()) return;
+  try{ history[mode === 'push' ? 'pushState' : 'replaceState'](entry, ''); }
+  catch(e){ /* Safari riêng tư giới hạn số lần pushState — mất Back còn hơn mất app */ }
+}
+function navPush(patch){
+  if(navBusy || !navArmed) return;
+  const next = navEntry(patch);
+  /* Cùng màn hình, cùng overlay thì không phải một bước mới: bấm lại đúng tab
+     đang mở mà cũng đẩy entry là người dùng phải Back hai lần cho một bước. */
+  if(next.activeTab === navState.activeTab && next.activeModal === navState.activeModal){
+    navWrite(next, 'replace');
+    return;
+  }
+  navWrite(navEntry({}), 'replace');     /* chốt bộ lọc vào entry đang đứng trước khi rời nó */
+  navWrite(next, 'push');
+}
+function navReplace(patch){
+  if(navBusy || !navArmed) return;
+  navWrite(navEntry(patch), 'replace');
+}
+/* Đóng overlay: ghi đè entry của nó chứ không đẩy entry mới (luật 2). */
+function navDropOverlay(id){
+  if(navBusy || !navArmed) return;
+  if(navState.activeModal !== id) return;
+  navReplace({activeModal:null});
+}
+/* Mốc gốc của phiên. replaceState chứ không push: entry đầu tiên phải LÀ
+   entry hiện có của trình duyệt, đẩy thêm thì một cú Back ở Tổng quan chỉ
+   quay về chính Tổng quan. */
+function navInit(tab){
+  navArmed = true;
+  navWrite(navEntry({activeTab: tab || 'dashboard', activeModal:null}), 'replace');
+}
+function navReset(){
+  navArmed = false;
+  navConfirmDismiss = null;
+  navState = Object.assign({}, stateSchema, {filterState:{}});
+}
+function navNormalize(s){
+  return (s && s.activeTab) ? s : Object.assign({}, stateSchema, {filterState:{}});
+}
+/* Ẩn mọi overlay trừ cái được giữ lại. Overlay nằm ngoài .view nên phải đóng
+   TRƯỚC khi đổi tab, không thì nó che mất màn hình vừa mở. */
+function navCloseOverlays(keep){
+  document.querySelectorAll('.modal:not(.hidden)').forEach(m=>{
+    if(m.id === keep) return;
+    m.classList.add('hidden');
+    /* uiConfirm trả lời bằng một Promise. Đóng nó bằng Back mà không resolve
+       thì luồng gọi đứng lại mãi mãi — và đó là những luồng như xoá ví. */
+    if(m.id === 'modal-confirm' && navConfirmDismiss){
+      const done = navConfirmDismiss; navConfirmDismiss = null; done();
+    }
+  });
+  Object.keys(NAV_SHEETS).forEach(id=>{ if(id !== keep) NAV_SHEETS[id](); });
+}
+function navApply(s){
+  navCloseOverlays(null);
+  /* Cố ý KHÔNG mở lại overlay khi bấm Forward: từ một cái id không dựng lại
+     được nội dung bên trong (bản ghi đang sửa, handler của uiConfirm), mà một
+     modal rỗng thì còn tệ hơn là không có modal. */
+  s.activeModal = null;
+  navRestoreFilters(s.filterState);
+  if(s.activeTab && s.activeTab !== currentTab) switchTab(s.activeTab);
+  /* renderTransactionsList() KHÔNG tham số sẽ đọc ngược từ các <select> và đè
+     lên bộ lọc vừa khôi phục — phải là (true). */
+  else if(currentTab === 'transactions') renderTransactionsList(true);
+  else renderAll();
+}
+window.addEventListener('popstate', e=>{
+  /* Chưa vào phiên (đăng nhập / onboarding / màn cấu hình) thì để trình duyệt
+     tự xử — ở đó không có bước nào để lùi. */
+  if(!navArmed) return;
+  const prev = navNormalize(e.state);
+  /* Trùng hệt entry đang đứng: đó là dấu vết của một overlay đã đóng bằng
+     replaceState. Lùi tiếp một nhịp để một cú Back vẫn ra đúng một bước NHÌN
+     THẤY được. Ở đáy ngăn xếp back() không làm gì và lần bấm sau sẽ thoát
+     app — mất đúng một lần bấm, đổi lấy việc không bao giờ có cú Back câm. */
+  const same = prev.activeTab === navState.activeTab && prev.activeModal === navState.activeModal;
+  navState = prev;
+  if(same){ if(navSupported()) history.back(); return; }
+  navBusy++;
+  try{ navApply(prev); }
+  catch(err){ console.error('popstate failed', err); }
+  finally{ navBusy--; }
+});
+
 /* ============================================================
    DASHBOARD
    ============================================================ */
@@ -1711,7 +1942,13 @@ function renderTxRows(txs){
 /* ============================================================
    TRANSACTIONS VIEW
    ============================================================ */
-function toggleTxFilters(){ document.getElementById('tx-advanced-filters').classList.toggle('hidden'); }
+function toggleTxFilters(){
+  const el = document.getElementById('tx-advanced-filters');
+  /* classList.toggle() trả về true khi lớp ĐƯỢC THÊM, tức panel vừa bị đóng. */
+  const closed = el.classList.toggle('hidden');
+  if(closed) navDropOverlay('tx-advanced-filters');
+  else navPush({activeModal:'tx-advanced-filters'});
+}
 function setTxFilter(key, val, el){
   txFilters[key] = val;
   if(el){ el.parentNode.querySelectorAll('.chip').forEach(c=>c.classList.remove('active')); el.classList.add('active'); }
@@ -1734,6 +1971,7 @@ function resetSessionFilters(){
   reportIncludePending = false;
   upcomingFilter = 'thismonth';
   debtFilter = 'all';
+  resetChatAssistant();
   syncTxFilterChips();
   document.getElementById('tx-advanced-filters').classList.add('hidden');
   document.querySelectorAll('#upcoming-filter .chip').forEach(c=>c.classList.toggle('active', c.dataset.val==='thismonth'));
@@ -2019,11 +2257,11 @@ function setTxType(type){
 function cancelAddTx(){
   editingTxId = null; clearAmount();
   document.getElementById('tx-note').value = '';
-  switchTab('dashboard');
+  switchTab('dashboard', true);
 }
 function renderAddForm(){
   const wallets = getUserWallets();
-  if(!wallets.length){ toast('Bạn cần tạo ít nhất 1 ví trước','err'); switchTab('wallets'); return; }
+  if(!wallets.length){ toast('Bạn cần tạo ít nhất 1 ví trước','err'); switchTab('wallets', true); return; }
   document.getElementById('add-title').textContent = editingTxId ? 'Sửa giao dịch' : 'Thêm giao dịch';
   document.getElementById('tx-save-btn').textContent = editingTxId ? 'Cập nhật giao dịch' : 'Lưu giao dịch';
   if(currentTxType==='transfer'){ renderTransferForm(); return; }
@@ -2139,7 +2377,7 @@ function saveTransaction(){
   document.getElementById('tx-note').value = '';
   document.getElementById('tx-date').value = todayISO();
   checkBudgetWarning(txSelectedCatId);
-  switchTab('dashboard');
+  switchTab('dashboard', true);
 }
 function checkBudgetWarning(catId){
   const bs = getUserBudgets().filter(b=>effectivePeriodKey(b)===currentPeriodKey(b.period) && (b.categoryId===catId || b.categoryId==='__all__'));
@@ -2153,7 +2391,7 @@ function checkBudgetWarning(catId){
 /* ---------- TRANSFER ---------- */
 function renderTransferForm(){
   const wallets = getUserWallets();
-  if(wallets.length < 2){ toast('Cần ít nhất 2 ví để chuyển tiền','err'); switchTab('wallets'); return; }
+  if(wallets.length < 2){ toast('Cần ít nhất 2 ví để chuyển tiền','err'); switchTab('wallets', true); return; }
   const opts = wallets.map(w=>`<option value="${w.id}">${w.icon} ${esc(w.name)} (${w.currency})</option>`).join('');
   const from = document.getElementById('tf-from-wallet'), to = document.getElementById('tf-to-wallet');
   const prevFrom = from.value, prevTo = to.value;
@@ -2220,7 +2458,7 @@ function saveTransfer(){
   document.getElementById('tf-note').value=''; document.getElementById('tf-fee').value='';
   tfAmount = 0;
   toast(status==='pending' ? 'Đã lên lịch chuyển tiền — chưa trừ ví' : 'Đã chuyển tiền thành công','ok');
-  switchTab('dashboard');
+  switchTab('dashboard', true);
 }
 
 /* ---------- MÀN NHẬP SỐ TIỀN (bàn phím riêng) ----------
@@ -2250,11 +2488,13 @@ function openAmountSheet(kind){
   renderAmountSheet();
   document.getElementById('amount-sheet').classList.remove('hidden');
   document.addEventListener('keydown', amtKeydown);
+  navPush({activeModal:'amount-sheet'});
 }
 function closeAmountSheet(){
   document.getElementById('amount-sheet').classList.add('hidden');
   document.removeEventListener('keydown', amtKeydown);
   amtKind = null;
+  navDropOverlay('amount-sheet');
 }
 function amtKey(k){
   const comma = amtBuf.indexOf(',');
@@ -4249,6 +4489,10 @@ const FEATURE_TILES = [
 const MORE_FEATURES = [
   {action:"openAddTransaction('transfer')", icon:'swap', name:'Chuyển tiền giữa ví',
    sub:'Rút quỹ, nạp ví, trả thẻ'},
+  /* Nút nổi 💬 là đường vào chính; dòng này để ai chưa để ý nút đó vẫn tìm ra
+     tính năng — lưới Tiện ích thì cố định 5 ô, không nhồi thêm được. */
+  {action:'openChatDrawer()', icon:'chat', name:'Trợ lý chat & quét bill',
+   sub:'Nhắn "cà phê 35k" hoặc gửi ảnh hoá đơn'},
   {tab:'events',       icon:'plane', name:'Sự kiện / Chuyến đi', sub:'Gom chi tiêu theo chuyến đi'},
   {tab:'categories',   icon:'tag',   name:'Danh mục',            sub:'Sửa danh mục và danh mục con'},
   {tab:'transactions', icon:'list',  name:'Sổ giao dịch',        sub:'Tìm và lọc toàn bộ giao dịch'},
@@ -4301,6 +4545,812 @@ function renderAccountSummary(){
     <div class="divider"></div>
     <div class="between text-sm"><span class="muted">Tổng tài sản ròng</span><span class="font-x c-primary">${fmt(getUserTotalAssets())}</span></div>`;
 }
+
+/* ============================================================
+   TRỢ LÝ CHAT & QUÉT BILL
+
+   Một ngăn chat: gõ "cà phê 35k" hoặc gửi ảnh hoá đơn, trợ lý dựng ra một
+   giao dịch nháp rồi chờ xác nhận. Ba tầng:
+
+   1. MA TRẬN TỪ KHOÁ TỰ HỌC — buildCategoryKeywordIndex() quét ghi chú của
+      chính người dùng trong sổ và học từ nào hay đi với danh mục nào. Đó là
+      lý do tính năng này càng dùng càng đúng: nguồn học là dữ liệu thật của
+      họ, không phải một bảng từ khoá cứng do app đoán hộ.
+   2. BÓC TÁCH — số tiền / ngày / loại thu-chi từ câu chữ (regex), hoặc từ
+      ảnh (OCR, nạp muộn và tuỳ chọn — xem chatOcrImage()).
+   3. THẺ XÁC NHẬN — bot KHÔNG tự ghi vào sổ. Nó giữ một draft trong RAM và
+      chờ "Tự động lưu" hoặc "Tùy chỉnh thêm"; nút thứ hai chỉ nạp sẵn form
+      thêm giao dịch có sẵn, không dựng thêm một đường lưu thứ hai.
+
+   Mọi trạng thái của trợ lý là UI state (module-level `let`), nên nó không đi
+   vào localStorage và không ride theo snapshot Supabase — hội thoại là việc
+   của phiên này, trên máy này. resetSessionFilters() dọn nó khi đổi tài khoản.
+   ============================================================ */
+
+/* ---------- CHUẨN HOÁ CHUỖI ----------
+   Hai mức, cố ý khác nhau:
+   · deaccent() bỏ dấu tiếng Việt để "cà phê" == "ca phe" == "CÀ PHÊ". 'đ' là
+     ca riêng: nó KHÔNG tách ra khi normalize('NFD'), phải thay tay.
+   · normText() bỏ hết dấu câu — dùng cho từ khoá.
+   · normNum() GIỮ '.' ',' ':' '/' '-' — số tiền và ngày sống nhờ mấy ký tự
+     đó, bóc mất dấu chấm là "1.2tr" thành "1 2tr" và mất luôn con số. */
+function deaccent(s){
+  return String(s==null?'':s).toLowerCase()
+    .normalize('NFD').replace(new RegExp('[\\u0300-\\u036f]', 'g'), '')
+    .replace(/đ/g,'d');
+}
+function normText(s){ return deaccent(s).replace(/[^a-z0-9\s]/g,' ').replace(/\s+/g,' ').trim(); }
+function normNum(s){ return deaccent(s).replace(/[^a-z0-9\s.,:/-]/g,' ').replace(/\s+/g,' ').trim(); }
+
+/* Từ chức năng và từ đo lường: chúng đứng cạnh MỌI danh mục nên không phân
+   biệt được gì, mà lại át hết các từ thật vì tần suất quá cao. */
+const CHAT_STOPWORDS = new Set(('va voi cho cua tai den di roi thi la nay do cai con da dang se vao ra len ' +
+  'xuong tu qua rat nhieu it mot hai ba ma nen neu vi nhung tuy cung chi toi ban em anh minh nha oi nhe nhi ' +
+  'hom ngay thang nam gio phut sang trua chieu het so tien dong vnd tong cong thanh toan tra no moi them lai ' +
+  'duoc bi luc khoang gan tam vua cai khi tren duoi truoc sau').split(' '));
+
+/* Bigram dựng từ chuỗi token GỐC, trước khi lọc stopword: lọc trước thì
+   "mua sắm" biến mất cùng với "mua", mà cụm hai từ mới là thứ phân biệt được
+   "trà sữa" với "trả tiền". */
+function chatTokens(text){
+  const words = normText(text).split(' ').filter(Boolean);
+  const uni = [], bi = [];
+  words.forEach((w, i)=>{
+    if(i+1 < words.length){
+      const pair = w + ' ' + words[i+1];
+      if(!/\d/.test(pair)) bi.push(pair);
+    }
+    if(w.length < 2) return;
+    if(/^\d/.test(w)) return;                 /* "35k", "2026" là số tiền/ngày, không phải từ khoá */
+    if(CHAT_STOPWORDS.has(w)) return;
+    uni.push(w);
+  });
+  return {uni, bi};
+}
+
+/* ---------- MA TRẬN TỪ KHOÁ → DANH MỤC ----------
+   Trọng số: một lần người dùng tự tay chọn danh mục cho một ghi chú đáng tin
+   hơn nhiều so với tên danh mục mặc định của app. Tên danh mục con nằm giữa —
+   nó cụ thể ("Cà phê/Nước") nhưng vẫn chỉ là chữ app tự đặt. */
+const KW_W_HISTORY = 3;
+const KW_W_SUBNAME = 2;
+const KW_W_CATNAME = 1;
+const KW_BIGRAM_BOOST = 2;
+
+function buildCategoryKeywordIndex(){
+  const idx = new Map();          /* token -> Map('type/catId' -> {type, catId, score, subs:Map}) */
+  const bump = (token, type, catId, subId, w)=>{
+    if(!token || token.length < 2 || !catId) return;
+    let byCat = idx.get(token);
+    if(!byCat){ byCat = new Map(); idx.set(token, byCat); }
+    const key = type + '/' + catId;
+    let rec = byCat.get(key);
+    if(!rec){ rec = {type, catId, score:0, subs:new Map()}; byCat.set(key, rec); }
+    rec.score += w;
+    if(subId) rec.subs.set(subId, (rec.subs.get(subId)||0) + w);
+  };
+  const feed = (text, type, catId, subId, w)=>{
+    if(!text) return;
+    const {uni, bi} = chatTokens(text);
+    uni.forEach(t=>bump(t, type, catId, subId, w));
+    bi.forEach(t=>bump(t, type, catId, subId, w * KW_BIGRAM_BOOST));
+  };
+  /* 1. Lịch sử — tín hiệu thật. getAllUserTransactions() chứ không phải
+     getUserTransactions(): một khoản dự kiến người dùng đã chọn danh mục cho
+     nó thì cũng là một lần dạy, dù tiền chưa đi. */
+  getAllUserTransactions().forEach(t=>{
+    if(t.type !== 'expense' && t.type !== 'income') return;   /* chuyển ví không có danh mục để học */
+    feed(t.note, t.type, t.categoryId, t.subcategoryId, KW_W_HISTORY);
+  });
+  /* 2. Tên danh mục và danh mục con — để tin nhắn ĐẦU TIÊN cũng có chỗ đậu:
+     tài khoản mới chưa có lịch sử nào, mà "ăn uống" thì vẫn phải ra Ăn uống. */
+  ['expense','income'].forEach(type=>{
+    getCats(type).forEach(c=>{
+      feed(c.name, type, c.id, null, KW_W_CATNAME);
+      (c.subs||[]).forEach(s=>feed(s.name, type, c.id, s.id, KW_W_SUBNAME));
+    });
+  });
+  return idx;
+}
+
+/* Dựng lại chỉ khi sổ đã đổi: state.updatedAt nhích sau mỗi saveStorage(), nên
+   nó vừa đủ làm dấu vân tay. Nhớ cả currentUser — hai tài khoản trên cùng máy
+   không được dùng lẫn ma trận của nhau. */
+let chatKwIndex = null, chatKwStamp = -1, chatKwUser = null;
+function categoryKeywordIndex(){
+  if(chatKwIndex && chatKwStamp === state.updatedAt && chatKwUser === state.currentUser) return chatKwIndex;
+  chatKwIndex = buildCategoryKeywordIndex();
+  chatKwStamp = state.updatedAt;
+  chatKwUser = state.currentUser;
+  return chatKwIndex;
+}
+
+/* "Khác" của đúng loại. Người dùng có thể đã đổi tên nó, nên thử theo tên
+   trước rồi mới tới id mặc định — và cuối cùng là danh mục đầu tiên, để hàm
+   này không bao giờ trả về null khi tài khoản còn danh mục nào. */
+function fallbackCategory(type){
+  const cats = getCats(type);
+  return cats.find(c=>/^(khac|chi khac|thu khac|chi phi khac|khoan khac)$/.test(normText(c.name)))
+      || cats.find(c=>normText(c.name).includes('khac'))
+      || cats.find(c=>c.id === (type==='income' ? 'c_other_inc' : 'c_other_exp'))
+      || cats[0] || null;
+}
+
+/* Trả về {catId, subId, subName?, score, via, matched}. `matched:false` nghĩa
+   là KHÔNG một từ nào khớp — khi đó catId là "Khác" và UI phải nói ra điều đó
+   chứ không được im lặng nhận là đã đoán đúng. */
+function matchCategoryFromInput(userText, type){
+  type = type === 'income' ? 'income' : 'expense';
+  const cats = getCats(type);
+  const idx = categoryKeywordIndex();
+  const {uni, bi} = chatTokens(userText);
+  const tally = new Map();
+  const scan = (token, mult)=>{
+    const byCat = idx.get(token);
+    if(!byCat) return;
+    byCat.forEach(rec=>{
+      /* Từ khoá học được từ chi tiêu không được trả về cho một khoản thu, và
+         ngược lại — "lương" hay đi với Ăn uống chỉ vì cùng nằm trong một câu. */
+      if(rec.type !== type) return;
+      if(!cats.some(c=>c.id === rec.catId)) return;        /* danh mục đã bị xoá */
+      let t = tally.get(rec.catId);
+      if(!t){ t = {catId:rec.catId, score:0, best:0, via:token, subs:new Map()}; tally.set(rec.catId, t); }
+      const w = rec.score * mult;
+      t.score += w;
+      if(w > t.best){ t.best = w; t.via = token; }
+      rec.subs.forEach((sw, sid)=>t.subs.set(sid, (t.subs.get(sid)||0) + sw*mult));
+    });
+  };
+  uni.forEach(t=>scan(t, 1));
+  bi.forEach(t=>scan(t, KW_BIGRAM_BOOST));
+
+  let winner = null;
+  tally.forEach(t=>{ if(!winner || t.score > winner.score) winner = t; });
+  if(winner){
+    let subId = null, bestSub = 0;
+    winner.subs.forEach((w, sid)=>{ if(w > bestSub){ bestSub = w; subId = sid; } });
+    const cat = findCategory(type, winner.catId);
+    if(subId && cat && !(cat.subs||[]).some(s=>s.id === subId)) subId = null;
+    return {catId:winner.catId, subId, score:winner.score, via:winner.via, matched:true};
+  }
+  /* Không khớp từ nào: về "Khác". Một danh mục sai dễ sửa hơn là một giao dịch
+     không có danh mục — chỗ nào cộng tiền theo danh mục cũng sẽ bỏ sót nó. */
+  const other = fallbackCategory(type);
+  return {
+    catId: other ? other.id : null,
+    subId: other && other.subs && other.subs.length ? other.subs[0].id : null,
+    score: 0, via: null, matched: false
+  };
+}
+
+/* ---------- BÓC TÁCH SỐ TIỀN ----------
+   "35k" → 35.000 · "1.2tr" / "1.2m" → 1.200.000 · "50000" → 50.000 */
+const CHAT_MULT = {ty:1e9, trieu:1e6, tr:1e6, m:1e6, nghin:1e3, ngan:1e3, ng:1e3, k:1e3, d:1, dong:1, vnd:1};
+
+/* Dấu '.' và ',' trong một con số tiếng Việt có thể là ngăn nghìn HAY thập
+   phân, và đoán sai là lệch một nghìn lần. Quy tắc: nhóm cuối đúng 3 chữ số
+   ⇒ ngăn nghìn ("50.000"), còn lại ⇒ thập phân ("1.2tr"). */
+function chatNumFromRaw(raw, unit){
+  let s = String(raw==null?'':raw);
+  const hasDot = s.includes('.'), hasComma = s.includes(',');
+  if(hasDot && hasComma){
+    s = s.replace(/\./g,'').replace(',', '.');            /* "1.234,56" kiểu vi-VN */
+  } else if(hasComma){
+    const p = s.split(',');
+    s = (p.length === 2 && p[1].length <= 2) ? p[0] + '.' + p[1] : p.join('');
+  } else if(hasDot){
+    const p = s.split('.');
+    s = (p.length === 2 && p[1].length !== 3) ? p[0] + '.' + p[1] : p.join('');
+  }
+  const v = parseFloat(s);
+  if(!isFinite(v) || v <= 0) return 0;
+  return v * (CHAT_MULT[unit] || 1);
+}
+
+/* Mọi con số + đơn vị trong một chuỗi ĐÃ normNum() và đã bóc ngày.
+   `(?![a-z0-9])` là thứ chặn "35 khach" bị đọc thành 35k: đơn vị phải đứng
+   cuối token, không được là chữ đầu của một từ khác. Thứ tự trong nhóm phải
+   dài-trước-ngắn, không thì 'tr' ăn mất 'trieu'. */
+function chatAmountCandidates(s){
+  const out = [];
+  for(const m of String(s==null?'':s).matchAll(/(\d[\d.,]*)\s*(ty|trieu|tr|nghin|ngan|ng|vnd|dong|k|m|d)?(?![a-z0-9])/g)){
+    const unit = m[2] || '';
+    const value = chatNumFromRaw(m[1], unit);
+    if(value > 0) out.push({value, unit, guess:false});
+  }
+  return out;
+}
+/* Con số nào là "số tiền": ưu tiên con có đơn vị nhân ("35k" thắng "2 người"),
+   rồi tới con lớn nhất ≥ 1.000. Số trần dưới 1.000 được hiểu là gõ tắt
+   ("cafe 35" = 35k) nhưng đánh dấu guess để bot NÓI RA, chứ không âm thầm
+   nhân lên nghìn lần. */
+function chatPickAmount(s){
+  const cands = chatAmountCandidates(s);
+  const scaled = cands.filter(c=>CHAT_MULT[c.unit] > 1);
+  if(scaled.length) return scaled[0];
+  const big = cands.filter(c=>c.value >= 1000);
+  if(big.length) return big.reduce((a, b)=>b.value > a.value ? b : a);
+  const small = cands.filter(c=>c.value >= 1 && c.value < 1000);
+  if(small.length) return {value: small[0].value * 1000, unit:'', guess:true};
+  return null;
+}
+function parseChatAmount(text){
+  const pick = chatPickAmount(chatExtractDate(text).rest);
+  return pick ? pick.value : 0;
+}
+
+/* ---------- BÓC TÁCH NGÀY ----------
+   Ngày bị bóc ra TRƯỚC khi tìm số tiền: để nguyên "12/03/2026" thì 2026 là
+   một con số hoàn toàn hợp lệ và nó sẽ thắng "35k". Trả về cả phần còn lại
+   để hàm gọi đừng phải chuẩn hoá hai lần.
+   `date: null` = không thấy ngày nào, KHÁC với "thấy và nó là hôm nay". */
+const CHAT_ISO_RE  = /\b(\d{4})-(\d{1,2})-(\d{1,2})\b/;
+const CHAT_DATE_RE = /\b(\d{1,2})[/\-.](\d{1,2})(?:[/\-.](\d{2,4}))?\b/;
+function chatExtractDate(text){
+  let s = normNum(text).replace(/\b\d{1,2}\s*[:h]\s*\d{2}\b/g, ' ');     /* giờ: "19:30", "19h30" */
+  let date = null, m = null;
+  if((m = CHAT_ISO_RE.exec(s))){
+    date = chatISO(m[1], m[2], m[3]);
+    s = s.replace(CHAT_ISO_RE, ' ');
+  } else if((m = CHAT_DATE_RE.exec(s))){
+    /* vi-VN viết ngày trước, tháng sau. Hai chữ số cuối là thế kỷ này. */
+    const y = m[3] ? (m[3].length <= 2 ? 2000 + Number(m[3]) : Number(m[3])) : Number(yearKey(todayISO()));
+    date = chatISO(y, m[2], m[1]);
+    s = s.replace(CHAT_DATE_RE, ' ');
+  }
+  if(!date){
+    if(/\bhom qua\b/.test(s)) date = addDaysISO(todayISO(), -1);
+    else if(/\bhom kia\b/.test(s)) date = addDaysISO(todayISO(), -2);
+    /* Chỉ "ngày mai", KHÔNG nhận "mai" trơn: Mai là tên người rất phổ biến,
+       mà "chuyển cho Mai 500k" thành giao dịch ngày mai thì nó rơi vào trạng
+       thái dự kiến, chưa trừ ví — sai một cách khó thấy. */
+    else if(/\bngay mai\b/.test(s)) date = addDaysISO(todayISO(), 1);
+    else if(/\bhom nay\b|\bhnay\b/.test(s)) date = todayISO();
+  }
+  return {date, rest: s.replace(/\s+/g,' ').trim()};
+}
+/* isoOf() chứ không bao giờ toISOString(): ở UTC+7 mọi mốc trước 07:00 sẽ lùi
+   một ngày. Ngày bị kẹp theo đúng số ngày của tháng đó — new Date(2026,1,31)
+   âm thầm nhảy sang tháng 3. */
+function chatISO(y, mo, d){
+  const yy = Number(y), mm = Math.min(Math.max(Number(mo), 1), 12);
+  if(!yy || yy < 2000 || yy > 2100) return null;
+  const last = new Date(yy, mm, 0).getDate();
+  const dd = Math.min(Math.max(Number(d), 1), last);
+  return isoOf(new Date(yy, mm-1, dd));
+}
+function parseChatDate(text){ return chatExtractDate(text).date || todayISO(); }
+
+/* ---------- THU HAY CHI ----------
+   Mặc định là chi — đó là đa số tuyệt đối các câu người ta nhắn. Chỉ những
+   từ thu nhập rõ ràng mới lật chiều; nhóm "yếu" ('thu', 'lãi', 'bán') còn
+   phải không có động từ chi nào trong câu, vì "thứ 5 trả tiền" hay "bán kính
+   500k" thì vẫn là tiêu tiền. */
+const CHAT_INCOME_STRONG = /\b(luong|thuong|hoan tien|nhan duoc|nhan tien|thu nhap|co tuc|tro cap|tien lai|thu no|duoc tang|ban hang|hoa hong)\b/;
+const CHAT_INCOME_WEAK   = /\b(thu|nhan|lai|ban)\b/;
+/* Cố ý KHÔNG có 'dong' và 've': bỏ dấu xong thì "đóng tiền" trùng với
+   "đồng" (đơn vị tiền) và "mua vé" trùng với "về" — một câu thu nhập có chữ
+   "đồng" trong đó sẽ bị lật ngược chiều tiền. Còn "mua vé" thì 'mua' đã bắt. */
+const CHAT_EXPENSE_HINT  = /\b(chi|tra|mua|tieu|thanh toan|nap|an|uong|di|phi)\b/;
+function detectChatType(text){
+  const s = normText(text);
+  if(CHAT_INCOME_STRONG.test(s)) return 'income';
+  if(CHAT_INCOME_WEAK.test(s) && !CHAT_EXPENSE_HINT.test(s)) return 'income';
+  return 'expense';
+}
+
+/* ---------- ẢNH BILL ----------
+   Nhãn tổng tiền là tín hiệu đáng tin nhất trên một tờ hoá đơn; không có nhãn
+   nào đọc được thì lấy con số lớn nhất, vì tổng thanh toán gần như luôn là số
+   lớn nhất trên tờ giấy đó. */
+const BILL_TOTAL_RE = /(tong cong|tong tien|tong thanh toan|tong so tien|thanh tien|so tien|tong|amount|total|grand total)/;
+function parseBillText(raw){
+  const out = {amount:0, date:null, note:''};
+  if(!raw) return out;
+  const lines = String(raw).split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
+  const pickIn = str => chatPickAmount(chatExtractDate(str).rest);
+
+  let best = null;
+  lines.forEach((line, i)=>{
+    if(!BILL_TOTAL_RE.test(normNum(line))) return;
+    /* Nhãn và con số hay nằm hai dòng khác nhau khi OCR cắt cột. */
+    const pick = pickIn(line) || (lines[i+1] ? pickIn(lines[i+1]) : null);
+    if(pick && (!best || pick.value > best.value)) best = pick;
+  });
+  if(!best){
+    lines.forEach(line=>{
+      const pick = pickIn(line);
+      if(pick && (!best || pick.value > best.value)) best = pick;
+    });
+  }
+  out.amount = best ? best.value : 0;
+  out.date = chatExtractDate(raw).date;
+  /* Ghi chú: dòng đầu tiên có chữ thật — trên hầu hết hoá đơn đó là tên cửa
+     hàng, và chính nó là thứ ma trận từ khoá sẽ học được cho lần sau. */
+  const nameLine = lines.find(l=>/[a-zà-ỹ]{3,}/i.test(l) && !BILL_TOTAL_RE.test(normNum(l)));
+  out.note = nameLine ? nameLine.replace(/\s+/g,' ').slice(0, 60) : '';
+  return out;
+}
+
+/* ---------- OCR: tuỳ chọn, nạp muộn ----------
+   Tesseract.js là ~2MB JS cộng wasm cộng gói dữ liệu tiếng Việt vài MB nữa.
+   Vendor sẵn số đó là phá đúng hai thứ app này đang giữ: kích thước APK và
+   việc khởi động được khi tắt mạng. Nên: boot KHÔNG nạp gì, và lần quét bill
+   đầu tiên mới xin phép rồi tải engine. Mất mạng thì lần tải đó thất bại và
+   bot nói thẳng ra chứ không treo — thẻ xác nhận vẫn hiện, người dùng gõ số
+   tiền vào là xong. Đây là ngoại lệ DUY NHẤT của luật "không CDN", và nó chỉ
+   là ngoại lệ vì nằm ngoài đường boot: không có nó app vẫn chạy đủ. */
+const OCR_CDN = 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js';
+const OCR_LANG = 'vie';
+let ocrScript = null;        /* promise nạp script, chỉ một lần */
+let ocrConsent = false;      /* đã đồng ý tải engine */
+let ocrDeclined = false;     /* đã từ chối — đừng hỏi lại mỗi tấm ảnh */
+
+function ocrAvailable(){ return !!window.Tesseract; }
+function loadOcrEngine(){
+  if(window.Tesseract) return Promise.resolve(window.Tesseract);
+  if(ocrScript) return ocrScript;
+  ocrScript = new Promise((resolve, reject)=>{
+    const s = document.createElement('script');
+    s.src = OCR_CDN;
+    s.async = true;
+    s.onload = ()=> window.Tesseract ? resolve(window.Tesseract) : reject(new Error('ocr-missing'));
+    s.onerror = ()=>{ ocrScript = null; reject(new Error('ocr-offline')); };
+    document.head.appendChild(s);
+  });
+  return ocrScript;
+}
+async function chatOcrImage(file){
+  if(ocrDeclined) return '';
+  if(!ocrAvailable() && !ocrConsent){
+    const ok = await uiConfirm('Bật đọc ảnh hoá đơn?',
+      'Lần đầu cần tải công cụ nhận chữ (~2MB) từ mạng. Sau đó trình duyệt sẽ nhớ nó. Không tải thì bạn vẫn nhập tay số tiền được.',
+      'Tải');
+    if(!ok){ ocrDeclined = true; return ''; }
+    ocrConsent = true;
+  }
+  let T = null;
+  try{ T = await loadOcrEngine(); }
+  catch(e){ return ''; }
+  const read = async lang =>{
+    const res = await T.recognize(file, lang);
+    return (res && res.data && res.data.text) || '';
+  };
+  try{ return await read(OCR_LANG); }
+  catch(e){
+    /* Gói tiếng Việt không tải được thì thử tiếng Anh: chữ sẽ sai dấu nhưng
+       chữ số thì giống nhau, mà số tiền mới là thứ ta cần. */
+    try{ return await read('eng'); }catch(e2){ return ''; }
+  }
+}
+
+/* ---------- DRAFT ----------
+   Draft sống trong RAM. KHÔNG đẩy vào state.transactions: một giao dịch chỉ
+   ra đời khi người dùng bấm, cùng lý do với các mục dự kiến "ảo". */
+let chatDrafts = new Map();
+let chatBusy = false;
+
+/* Ví mặc định: ví người dùng vừa ghi vào gần đây nhất, không thì ví đầu danh
+   sách (getUserWallets() đã sắp theo displayOrder). */
+function chatDefaultWallet(){
+  const ws = getUserWallets();
+  if(!ws.length) return null;
+  const last = getAllUserTransactions().reduce((a, t)=>{
+    if(!t.walletId || !ws.some(w=>w.id === t.walletId)) return a;
+    if(!a) return t;
+    const ka = (a.date||'') + (a.createdAt||''), kt = (t.date||'') + (t.createdAt||'');
+    return kt > ka ? t : a;
+  }, null);
+  return (last && ws.find(w=>w.id === last.walletId)) || ws[0];
+}
+
+async function processChatMessage(userInput, imageFile){
+  const draft = {
+    id: uid('cd'), source: imageFile ? 'bill' : 'text',
+    type: 'expense', amount: 0, amountGuess: false,
+    catId: null, subId: null, walletId: null, date: todayISO(),
+    note: '', matched: false, via: null, ocr: '', ocrFailed: false
+  };
+  let text = String(userInput==null?'':userInput).trim();
+
+  if(imageFile){
+    const ocr = await chatOcrImage(imageFile);
+    draft.ocr = ocr;
+    draft.ocrFailed = !ocr;
+    const bill = parseBillText(ocr);
+    draft.amount = bill.amount;
+    draft.date = bill.date || draft.date;
+    draft.note = [text, bill.note].filter(Boolean).join(' — ') || 'Hoá đơn';
+    /* Từ khoá học và loại thu/chi đọc cả chú thích người dùng gõ kèm ảnh. */
+    text = [text, ocr].filter(Boolean).join(' ');
+  } else {
+    const {date, rest} = chatExtractDate(text);
+    const pick = chatPickAmount(rest);
+    draft.date = date || todayISO();
+    draft.amount = pick ? pick.value : 0;
+    draft.amountGuess = !!(pick && pick.guess);
+    /* Ghi chú giữ nguyên câu người dùng gõ, cả dấu: chính nó là dữ liệu học
+       cho lần sau, và nó cũng là thứ hiện trong sổ giao dịch. */
+    draft.note = text;
+  }
+
+  draft.type = detectChatType(text);
+  const m = matchCategoryFromInput(text, draft.type);
+  draft.catId = m.catId; draft.subId = m.subId;
+  draft.matched = m.matched; draft.via = m.via;
+  const w = chatDefaultWallet();
+  draft.walletId = w ? w.id : null;
+
+  chatDrafts.set(draft.id, draft);
+  return draft;
+}
+
+/* ---------- NGĂN CHAT ---------- */
+function renderChatChrome(){
+  const fab = document.getElementById('chat-fab');
+  if(fab) fab.innerHTML = icon('chat');
+  const av = document.getElementById('chat-avatar');
+  if(av) av.innerHTML = icon('chat');
+  const clip = document.getElementById('chat-attach');
+  if(clip) clip.innerHTML = icon('clip');
+}
+function showChatFab(show){
+  const el = document.getElementById('chat-fab');
+  if(el) el.classList.toggle('hidden', !show);
+}
+function openChatDrawer(){
+  const dr = document.getElementById('chat-drawer');
+  if(!dr) return;
+  if(!state.currentUser) return;
+  dr.classList.remove('hidden');
+  showChatFab(false);                       /* nút nổi nằm ngay dưới ngăn — để cả hai là chồng nhau */
+  const body = document.getElementById('chat-body');
+  if(body && !body.childElementCount) chatGreet();
+  chatScrollBottom();
+  const inp = document.getElementById('chat-input');
+  if(inp && !isNativeApp()) inp.focus();    /* trên máy thật, focus là bật bàn phím ảo che mất hội thoại */
+  navPush({activeModal:'chat-drawer'});
+}
+/* `clear` = bấm ✕ (đóng hẳn, xoá hội thoại). Thu nhỏ thì giữ nguyên. */
+function closeChatDrawer(clear){
+  const dr = document.getElementById('chat-drawer');
+  if(!dr) return;
+  dr.classList.add('hidden');
+  navDropOverlay('chat-drawer');
+  if(clear) resetChatAssistant();
+  const nav = document.getElementById('main-nav');
+  if(state.currentUser && nav && !nav.classList.contains('hidden')) showChatFab(true);
+}
+function minimizeChatDrawer(){ closeChatDrawer(false); }
+function toggleChatDrawer(){
+  const dr = document.getElementById('chat-drawer');
+  if(dr && dr.classList.contains('hidden')) openChatDrawer();
+  else closeChatDrawer(false);
+}
+/* Gọi từ resetSessionFilters(): hội thoại và ma trận từ khoá đều thuộc về một
+   tài khoản cụ thể, để nó sống qua lần đăng xuất là đưa ghi chú của người
+   trước cho người sau đọc. */
+function resetChatAssistant(){
+  chatDrafts = new Map();
+  chatKwIndex = null; chatKwStamp = -1; chatKwUser = null;
+  chatBusy = false;
+  const body = document.getElementById('chat-body');
+  if(body) body.innerHTML = '';
+  const inp = document.getElementById('chat-input');
+  if(inp) inp.value = '';
+  const send = document.getElementById('chat-send');
+  if(send) send.disabled = false;
+}
+function chatScrollBottom(){
+  const body = document.getElementById('chat-body');
+  if(body) body.scrollTop = body.scrollHeight;
+}
+function chatAppend(role, html, cls){
+  const body = document.getElementById('chat-body');
+  if(!body) return null;
+  const el = document.createElement('div');
+  el.className = 'chat-bubble ' + role + (cls ? ' ' + cls : '');
+  el.innerHTML = html;
+  body.appendChild(el);
+  chatScrollBottom();
+  return el;
+}
+function chatGreet(){
+  chatAppend('bot', `Chào ${esc(displayName())}! Nhắn cho mình một câu như <b>“cà phê 35k”</b>, `
+    + `hoặc gửi ảnh hoá đơn — mình sẽ điền sẵn giao dịch để bạn xác nhận.`
+    + `<span class="chat-hint">Danh mục thì mình học từ ghi chú của chính bạn trong sổ, nên càng dùng càng đoán đúng.</span>`);
+}
+
+function chatSend(){
+  const inp = document.getElementById('chat-input');
+  const text = inp ? inp.value.trim() : '';
+  if(!text) return;
+  inp.value = '';
+  chatHandle(text, null);
+}
+function chatKeydown(e){
+  if(e && e.key === 'Enter'){ e.preventDefault(); chatSend(); }
+}
+function chatPickImage(){
+  const f = document.getElementById('chat-file');
+  if(f) f.click();
+}
+function chatFileChange(el){
+  const file = el && el.files && el.files[0];
+  /* Dọn ngay: chọn lại ĐÚNG tấm ảnh đó lần nữa sẽ không kích hoạt onchange
+     nếu value còn nguyên tên file cũ. */
+  if(el) el.value = '';
+  if(file) chatHandle('', file);
+}
+function chatAppendImage(file, caption){
+  let url = '';
+  try{ if(typeof URL !== 'undefined' && URL.createObjectURL) url = URL.createObjectURL(file); }
+  catch(e){ url = ''; }
+  const name = esc((file && file.name) || 'bill.jpg');
+  chatAppend('user', (url ? `<img class="chat-img" src="${url}" alt="${name}">` : `📎 ${name}`)
+    + (caption ? `<div class="chat-cap">${esc(caption)}</div>` : ''));
+}
+async function chatHandle(text, file){
+  if(chatBusy){ toast('Đang xử lý tin nhắn trước…'); return; }
+  if(!getUserWallets().length){
+    chatAppend('bot', 'Bạn cần tạo ít nhất 1 ví trước đã — mình chưa biết ghi tiền vào đâu.');
+    return;
+  }
+  if(file) chatAppendImage(file, text);
+  else chatAppend('user', esc(text));
+
+  chatBusy = true;
+  const send = document.getElementById('chat-send');
+  if(send) send.disabled = true;
+  const wait = chatAppend('bot', '<span class="chat-typing"><i></i><i></i><i></i></span>');
+  try{
+    const draft = await processChatMessage(text, file);
+    if(wait) wait.remove();
+    chatReply(draft);
+  }catch(e){
+    if(wait) wait.remove();
+    console.error('Chat assistant failed', e);
+    chatAppend('bot', 'Mình chưa xử lý được tin này. Bạn thử lại, hoặc mở form thêm giao dịch nhé.');
+  }finally{
+    chatBusy = false;
+    if(send) send.disabled = false;
+  }
+}
+function chatReply(draft){
+  const cat = findCategory(draft.type, draft.catId);
+  let lead;
+  if(draft.source === 'bill'){
+    lead = draft.ocrFailed
+      ? (ocrDeclined
+          ? 'Chưa bật đọc ảnh, nên mình chỉ tạo khung trống — bạn điền giúp số tiền nhé:'
+          : 'Mình không đọc được chữ trên ảnh này (mờ, hoặc đang mất mạng). Bạn điền giúp số tiền nhé:')
+      : 'Mình đọc được hoá đơn này:';
+  } else if(draft.matched){
+    lead = `“${esc(draft.via)}” trước giờ bạn ghi vào <b>${esc(cat ? cat.name : '')}</b>, mình dùng lại nhé:`;
+  } else {
+    lead = 'Mình chưa nhận ra khoản này thuộc đâu, tạm để vào “Khác”:';
+  }
+  if(draft.amountGuess) lead += `<span class="chat-hint">Mình hiểu con số bạn gõ là hàng nghìn.</span>`;
+  chatAppend('bot', lead + `<div class="bot-card-action" id="chat-card-${draft.id}"></div>`, 'has-card');
+  renderChatCard(draft.id);
+}
+
+/* Thẻ kết quả. Vẽ lại tại chỗ sau mỗi lần đổi danh mục / ví / số tiền — không
+   đẩy thêm bong bóng mới, không thì hội thoại đầy những bản nháp cũ. */
+function renderChatCard(id){
+  const d = chatDrafts.get(id);
+  const box = document.getElementById('chat-card-' + id);
+  if(!box) return;
+  if(!d){ box.innerHTML = ''; return; }
+  const w = getWallet(d.walletId);
+  const cat = findCategory(d.type, d.catId);
+  const sub = cat && d.subId ? (cat.subs||[]).find(s=>s.id === d.subId) : null;
+  const pending = d.date > todayISO();
+  box.innerHTML = `
+    <div class="bca-row pointer" onclick="chatEditAmount('${id}')">
+      <span class="bca-lbl">📌 Số tiền</span>
+      <span class="bca-val bca-amt ${d.amount ? (d.type==='income'?'c-income':'c-expense') : 'is-missing'}">${
+        d.amount ? esc((d.type==='income'?'+':'-') + chatAmountText(d.amount, w)) : 'chưa rõ — bấm để nhập'
+      }</span>
+    </div>
+    <div class="bca-row pointer" onclick="chatToggleType('${id}')">
+      <span class="bca-lbl">↕️ Loại</span>
+      <span class="bca-val">${d.type==='income' ? 'Thu nhập' : 'Chi tiêu'}</span>
+    </div>
+    <div class="bca-row pointer" onclick="chatPickCategory('${id}')">
+      <span class="bca-lbl">🏷️ Danh mục</span>
+      <span class="bca-val">${cat ? esc(cat.icon) + ' ' + esc(cat.name) + (sub ? ' · ' + esc(sub.name) : '') : '—'}</span>
+    </div>
+    <div class="bca-row pointer" onclick="chatPickWallet('${id}')">
+      <span class="bca-lbl">💳 Ví</span>
+      <span class="bca-val">${w ? esc(w.icon) + ' ' + esc(w.name) : '—'}</span>
+    </div>
+    <div class="bca-row">
+      <span class="bca-lbl">🗓️ Ngày</span>
+      <span class="bca-val">${fmtDate(d.date)}${pending ? ' · dự kiến' : ''}</span>
+    </div>
+    ${d.matched ? '' : '<div class="bca-note">Chưa nhận diện được, bấm để đổi</div>'}
+    <div class="bca-btns">
+      <button type="button" class="btn btn-primary" onclick="chatAutoSave('${id}')">Tự động lưu</button>
+      <button type="button" class="btn btn-secondary" onclick="chatCustomize('${id}')">Tùy chỉnh thêm</button>
+    </div>`;
+  chatScrollBottom();
+}
+/* Con số vừa bóc tách KHÔNG đi qua fmt(): chế độ riêng tư để che SỐ DƯ, còn
+   che chính con số người dùng vừa gõ thì vô nghĩa — cùng lý do với bàn phím
+   nhập tiền. Số dư ví trong bộ chọn ví bên dưới thì vẫn qua fmtW() và vẫn bị
+   che. */
+function chatAmountText(v, wallet){
+  const cur = wallet ? wallet.currency : mainCurrency();
+  const meta = CURRENCIES[cur] || {symbol:cur, decimals:0, suffix:true};
+  const txt = new Intl.NumberFormat('vi-VN',
+    {minimumFractionDigits:meta.decimals, maximumFractionDigits:meta.decimals}).format(Math.abs(Number(v)||0));
+  return meta.suffix ? txt + ' ' + meta.symbol : meta.symbol + txt;
+}
+function chatToggleType(id){
+  const d = chatDrafts.get(id);
+  if(!d) return;
+  d.type = d.type === 'income' ? 'expense' : 'income';
+  /* catId cũ thuộc bảng danh mục của loại kia — phải khớp lại, không thì thẻ
+     hiện "—" và saveStorage nhận một categoryId không tồn tại. */
+  const m = matchCategoryFromInput([d.note, d.ocr].filter(Boolean).join(' '), d.type);
+  d.catId = m.catId; d.subId = m.subId; d.matched = m.matched; d.via = m.via;
+  renderChatCard(id);
+}
+function chatPickCategory(id){
+  const d = chatDrafts.get(id);
+  if(!d) return;
+  const cats = getCats(d.type);
+  uiSheet(d.type === 'income' ? 'Danh mục thu nhập' : 'Danh mục chi tiêu',
+    `<div class="pick-list">` + cats.map(c=>
+      `<div class="pick-item" onclick="chatSetCategory('${id}','${c.id}')">
+         <span class="pi-ic">${esc(c.icon)}</span>
+         <span class="flex1">${esc(c.name)}</span>
+         ${c.id === d.catId ? '<span class="c-primary">✓</span>' : ''}
+       </div>`).join('')
+    + `</div><button class="btn btn-ghost mt12" onclick="closeSheet()">Đóng</button>`);
+}
+function chatSetCategory(id, catId){
+  const d = chatDrafts.get(id);
+  if(!d) return;
+  d.catId = catId;
+  const cat = findCategory(d.type, catId);
+  d.subId = cat && cat.subs && cat.subs.length ? cat.subs[0].id : null;
+  d.matched = true;            /* người dùng đã tự chọn — đừng nhắc "chưa nhận diện được" nữa */
+  closeSheet();
+  renderChatCard(id);
+}
+function chatPickWallet(id){
+  const d = chatDrafts.get(id);
+  if(!d) return;
+  uiSheet('Chọn ví',
+    `<div class="pick-list">` + getUserWallets().map(w=>
+      `<div class="pick-item" onclick="chatSetWallet('${id}','${w.id}')">
+         <span class="pi-ic">${esc(w.icon)}</span>
+         <span class="flex1">${esc(w.name)}<div class="text-xs muted">${fmtW(getWalletBalance(w.id), w)}</div></span>
+         ${w.id === d.walletId ? '<span class="c-primary">✓</span>' : ''}
+       </div>`).join('')
+    + `</div><button class="btn btn-ghost mt12" onclick="closeSheet()">Đóng</button>`);
+}
+function chatSetWallet(id, walletId){
+  const d = chatDrafts.get(id);
+  if(!d) return;
+  d.walletId = walletId;
+  closeSheet();
+  renderChatCard(id);
+}
+function chatEditAmount(id){
+  const d = chatDrafts.get(id);
+  if(!d) return;
+  const w = getWallet(d.walletId);
+  uiSheet('Số tiền', `
+    <div class="form-group">
+      <label>Số tiền (${esc(w ? w.currency : mainCurrency())})</label>
+      <input type="text" inputmode="decimal" class="input money" id="chat-amt-input" placeholder="0">
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-secondary" onclick="closeSheet()">Hủy</button>
+      <button class="btn btn-primary" onclick="chatSaveAmount('${id}')">Xong</button>
+    </div>`);
+  attachMoneyButtons(document.getElementById('sheet-body'));
+  writeMoney('chat-amt-input', d.amount || '');
+  const el = document.getElementById('chat-amt-input');
+  if(el) el.focus();
+}
+function chatSaveAmount(id){
+  const d = chatDrafts.get(id);
+  if(!d) return;
+  const v = readMoney('chat-amt-input');
+  if(!v || v <= 0) return toast('Nhập số tiền hợp lệ','err');
+  d.amount = v;
+  d.amountGuess = false;
+  closeSheet();
+  renderChatCard(id);
+}
+
+/* [ Tự động lưu ] — đường ghi vẫn là state.transactions.push() + saveStorage(),
+   y như saveTransaction(). Bản ghi mang `status: statusForDate(date)`: thiếu
+   nó thì isPending() trả false và tiền bị trừ trước khi nó thật sự đi. */
+function chatAutoSave(id){
+  const d = chatDrafts.get(id);
+  if(!d) return;
+  if(!d.amount || d.amount <= 0) return toast('Chưa có số tiền — bấm dòng "Số tiền" để nhập','err');
+  /* Ví phải còn tồn tại: ghi vào một walletId đã bị xoá thì giao dịch có mà
+     không số dư nào đọc được nó — tiền biến mất không dấu vết. */
+  const w = getWallet(d.walletId);
+  if(!w) return toast('Chọn ví trước khi lưu','err');
+  if(!d.catId) return toast('Chọn danh mục trước khi lưu','err');
+
+  const status = statusForDate(d.date);
+  state.transactions.push({
+    id: uid('t'), userId: state.currentUser, type: d.type, amount: d.amount,
+    walletId: d.walletId, categoryId: d.catId, subcategoryId: d.subId,
+    note: d.note, date: d.date, eventId: null, status,
+    createdAt: new Date().toISOString()
+  });
+  saveStorage();
+  chatDrafts.delete(id);
+  const box = document.getElementById('chat-card-' + id);
+  if(box) box.innerHTML = `<div class="bca-saved">✓ Đã lưu ${esc(chatAmountText(d.amount, w))} · ${esc(w.name)}</div>`;
+  chatAppend('bot', status === 'pending'
+    ? 'Đã lên lịch — chưa trừ tiền, xem ở “Sắp đến hạn”.'
+    : 'Đã ghi vào sổ. Lần sau gặp lại mấy chữ này mình sẽ nhớ danh mục.');
+  toast(status === 'pending' ? 'Đã lên lịch giao dịch' : 'Đã lưu giao dịch', 'ok');
+  /* renderAll() chứ không gọi cứng một renderer: trợ lý mở được từ mọi tab. */
+  renderAll();
+  checkBudgetWarning(d.catId);
+}
+
+/* [ Tùy chỉnh thêm ] — nạp draft vào form thêm giao dịch rồi mở nó. Cùng công
+   thức với startEditTx(): đặt biến trước, switchTab, rồi mới vẽ. */
+function chatCustomize(id){
+  const d = chatDrafts.get(id);
+  if(!d) return;
+  editingTxId = null;
+  currentTxType = d.type === 'income' ? 'income' : 'expense';
+  txSelectedWalletId = d.walletId;
+  txSelectedCatId = d.catId;
+  txSelectedSubId = d.subId;
+  closeChatDrawer(false);
+  switchTab('add');
+  document.querySelectorAll('#view-add .segment .seg').forEach(s=>s.classList.remove('active'));
+  const tab = document.getElementById('tab-' + currentTxType);
+  if(tab) tab.classList.add('active');
+  document.getElementById('form-transfer').classList.add('hidden');
+  document.getElementById('form-normal').classList.remove('hidden');
+  document.getElementById('tx-note').value = d.note || '';
+  document.getElementById('tx-date').value = d.date || todayISO();
+  applyTxAmount(d.amount || 0);
+  renderAddForm();
+  chatDrafts.delete(id);
+}
+
+/* Esc đóng ngăn chat — nhưng chỉ khi không còn modal nào mở, vì sheet chọn
+   danh mục / ví nằm TRÊN ngăn chat và phải được đóng trước. Listener này đăng
+   ký sớm hơn listener Esc ở cuối file, nên lúc nó chạy thì modal vẫn còn đó
+   để nhìn thấy. */
+document.addEventListener('keydown', e=>{
+  if(e.key !== 'Escape') return;
+  if(document.querySelector('.modal:not(.hidden)')) return;
+  const dr = document.getElementById('chat-drawer');
+  if(dr && !dr.classList.contains('hidden')) closeChatDrawer(false);
+});
+
+/* Dán ảnh (Ctrl+V) là đường gửi bill thứ hai — nhưng CHỈ khi ngăn chat đang
+   mở, không thì mỗi lần dán ảnh ở bất kỳ đâu trong app cũng dựng ra một giao
+   dịch nháp mà người dùng không hề yêu cầu. */
+document.addEventListener('paste', e=>{
+  const dr = document.getElementById('chat-drawer');
+  if(!dr || dr.classList.contains('hidden')) return;
+  const items = (e.clipboardData && e.clipboardData.items) || [];
+  for(const it of items){
+    if(it.kind === 'file' && /^image\//.test(it.type || '')){
+      const f = it.getAsFile();
+      if(f){ e.preventDefault(); chatHandle('', f); }
+      return;
+    }
+  }
+});
 
 /* ============================================================
    SETTINGS
@@ -4761,8 +5811,9 @@ function importCSV(ev){
   reader.onload = e=>{
     const rows = parseCSV(e.target.result);
     if(rows.length < 2) return toast('File CSV rỗng hoặc sai định dạng','err');
-    const deaccent = s => s.normalize('NFD').replace(new RegExp('[\\u0300-\\u036f]','g'),'').replace(/đ/g,'d');
-    const head = rows[0].map(h=>deaccent(h.trim().toLowerCase()));
+    /* deaccent() là hàm chung ở section trợ lý chat — cùng một phép bỏ dấu,
+       giữ hai bản sao thì sớm muộn chúng lệch nhau. */
+    const head = rows[0].map(h=>deaccent(h.trim()));
     const idx = names => head.findIndex(h=>names.some(n=>h.includes(n)));
     const iDate = idx(['ngay','date']), iType = idx(['loai','type']), iAmt = idx(['sotien','amount','so tien']),
           iCur = idx(['tiente','currency']), iWallet = idx(['vi','wallet']), iCat = idx(['danhmuc','category','danh muc']),
@@ -4828,6 +5879,7 @@ function showConfigScreen(reason){
   document.getElementById('main-header').classList.add('hidden');
   document.getElementById('main-nav').classList.add('hidden');
   document.getElementById('view-config').classList.remove('hidden');
+  showChatFab(false);
   document.getElementById('config-reason').textContent = reason || '';
 }
 
@@ -4891,12 +5943,14 @@ window.addEventListener('resize', ()=>{
 document.addEventListener('keydown', e=>{
   if(e.key === 'Escape'){
     const open = [...document.querySelectorAll('.modal:not(.hidden)')].pop();
-    if(open) open.classList.add('hidden');
+    /* closeModal() chứ không classList: ẩn thẳng sẽ để lại entry lịch sử mồ
+       côi, và cú Back ngay sau đó trông như không làm gì cả. */
+    if(open) closeModal(open.id);
   }
 });
 /* close bottom-sheet when tapping the dimmed backdrop */
 document.querySelectorAll('.modal').forEach(m=>{
-  m.addEventListener('click', e=>{ if(e.target === m) m.classList.add('hidden'); });
+  m.addEventListener('click', e=>{ if(e.target === m) closeModal(m.id); });
 });
 document.getElementById('login-password').addEventListener('keydown', e=>{ if(e.key==='Enter') handleAuthSubmit(); });
 document.getElementById('login-email').addEventListener('keydown', e=>{ if(e.key==='Enter') document.getElementById('login-password').focus(); });
@@ -4907,6 +5961,7 @@ document.getElementById('mc-sub-name').addEventListener('keydown', e=>{ if(e.key
 /* Wrap every static input.money with its 000 shortcut. Dynamically rendered
    fields call attachMoneyButtons(container) themselves. */
 attachMoneyButtons();
+renderChatChrome();            /* icon SVG cho nút nổi, avatar và nút 📎 */
 renderVersionLine('login-version');
 registerServiceWorker();
 

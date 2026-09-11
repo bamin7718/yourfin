@@ -493,9 +493,9 @@
       <button class="btn btn-primary btn-sm" onclick="openBudgetModal()">+ Thêm</button>
     </div>
     <div class="segment" id="budget-period-seg">
-      <div class="seg" onclick="setBudgetPeriod('weekly',this)">Tuần</div>
-      <div class="seg active" onclick="setBudgetPeriod('monthly',this)">Tháng</div>
-      <div class="seg" onclick="setBudgetPeriod('yearly',this)">Năm</div>
+      <div class="seg" data-val="weekly" onclick="setBudgetPeriod('weekly',this)">Tuần</div>
+      <div class="seg active" data-val="monthly" onclick="setBudgetPeriod('monthly',this)">Tháng</div>
+      <div class="seg" data-val="yearly" onclick="setBudgetPeriod('yearly',this)">Năm</div>
     </div>
     <div class="card" id="budget-summary"></div>
     <div class="section-title"><h4>Chi tiết hạn mức</h4></div>
@@ -514,10 +514,10 @@
       <div class="stat-box"><div class="sb-lbl">🔺 Đang cho vay</div><div class="sb-val c-income tabular" id="debt-lend-total">0 đ</div></div>
     </div>
     <div class="segment" id="debt-seg">
-      <div class="seg active" onclick="setDebtFilter('all',this)">Tất cả</div>
-      <div class="seg" onclick="setDebtFilter('borrow',this)">Đi vay</div>
-      <div class="seg" onclick="setDebtFilter('lend',this)">Cho vay</div>
-      <div class="seg" onclick="setDebtFilter('settled',this)">Đã tất toán</div>
+      <div class="seg active" data-val="all" onclick="setDebtFilter('all',this)">Tất cả</div>
+      <div class="seg" data-val="borrow" onclick="setDebtFilter('borrow',this)">Đi vay</div>
+      <div class="seg" data-val="lend" onclick="setDebtFilter('lend',this)">Cho vay</div>
+      <div class="seg" data-val="settled" onclick="setDebtFilter('settled',this)">Đã tất toán</div>
     </div>
     <div id="debts-list"></div>
   </div>
@@ -551,8 +551,8 @@
       <button class="btn btn-primary btn-sm" onclick="openCategoryModal()">+ Thêm</button>
     </div>
     <div class="segment" id="cat-type-seg">
-      <div class="seg expense active" onclick="setCatManageType('expense',this)">Khoản chi</div>
-      <div class="seg income" onclick="setCatManageType('income',this)">Khoản thu</div>
+      <div class="seg expense active" data-val="expense" onclick="setCatManageType('expense',this)">Khoản chi</div>
+      <div class="seg income" data-val="income" onclick="setCatManageType('income',this)">Khoản thu</div>
     </div>
     <div id="categories-list"></div>
   </div>
@@ -1075,6 +1075,45 @@
         <button type="button" class="tcb-btn-key ripple-host" onclick="amtKey(',')">,</button>
       </div>
     </div>
+  </div>
+</div>
+
+<!-- ============ TRỢ LÝ CHAT & QUÉT BILL ============
+     Nút nổi + ngăn chat, cả hai là position:fixed nên đặt NGOÀI .app: chúng
+     không thuộc luồng của màn hình nào cả. Cùng lý do với #amount-sheet, và
+     cùng cạm bẫy — switchTab() / showLogin() phải tự đóng ngăn này, không thì
+     nó nằm đè lên màn hình tiếp theo.
+
+     Nút nổi mặc định ẩn: chỉ có phiên đã đăng nhập mới có ví và lịch sử để
+     trợ lý nói về. switchTab() là nơi bật nó, đúng như với nav bar. -->
+<button type="button" id="chat-fab" class="chat-fab ripple-host hidden"
+        onclick="toggleChatDrawer()" title="Trợ lý SoFin" aria-label="Mở trợ lý SoFin"></button>
+
+<div id="chat-drawer" class="chat-drawer hidden" role="dialog" aria-label="Trợ lý SoFin">
+  <div class="chat-head">
+    <div class="chat-head-id">
+      <span class="chat-avatar" id="chat-avatar"></span>
+      <div class="flex1">
+        <div class="chat-title">Trợ lý SoFin</div>
+        <div class="chat-sub">Nhắn “cà phê 35k” hoặc gửi ảnh bill</div>
+      </div>
+    </div>
+    <div class="chat-head-tools">
+      <!-- Thu nhỏ giữ nguyên hội thoại, Đóng thì xoá — hai việc khác nhau, nên
+           là hai nút, không phải một nút đoán ý. -->
+      <button type="button" class="chat-icon-btn" onclick="minimizeChatDrawer()" title="Thu nhỏ" aria-label="Thu nhỏ">–</button>
+      <button type="button" class="chat-icon-btn" onclick="closeChatDrawer(true)" title="Đóng và xoá hội thoại" aria-label="Đóng">✕</button>
+    </div>
+  </div>
+
+  <div class="chat-body" id="chat-body"></div>
+
+  <div class="chat-foot">
+    <input type="file" id="chat-file" class="hidden" accept="image/*" onchange="chatFileChange(this)">
+    <button type="button" class="chat-icon-btn" id="chat-attach" onclick="chatPickImage()" title="Gửi ảnh hoá đơn" aria-label="Gửi ảnh hoá đơn"></button>
+    <input type="text" id="chat-input" class="chat-input" placeholder="VD: cà phê 35k"
+           autocomplete="off" enterkeyhint="send" onkeydown="chatKeydown(event)">
+    <button type="button" class="btn-chat-send" id="chat-send" onclick="chatSend()">Gửi</button>
   </div>
 </div>
 

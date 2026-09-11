@@ -1452,6 +1452,10 @@ async function boot(opts) {
     check('sw: không đụng vào Supabase', /isSupabase\(url\)\) return;/.test(sw));
     check('sw: env.js đi network-first', /isEnv\(url\)[\s\S]{0,80}networkFirst/.test(sw));
     check('sw: activate xoá cache cũ', /caches\.delete/.test(sw) && /n !== CACHE/.test(sw));
+    /* Engine OCR nặng hàng chục MB và tải theo yêu cầu — để nó rơi vào cache
+       của shell là mỗi deploy xoá đi tải lại, và ăn chung quota với dữ liệu. */
+    check('sw: không cache tài nguyên khác origin',
+      /url\.origin !== self\.location\.origin\) return;/.test(sw));
     check('sw: precache đủ shell để chạy offline',
       ['/index.html', '/css/styles.css', '/js/app.js', '/js/sync.js'].every(f => sw.includes(`'${f}'`)));
     check('sw: precache bundle Supabase đã vendor tại chỗ',
@@ -2093,6 +2097,292 @@ async function boot(opts) {
     check('mật khẩu cũ hết hiệu lực',
       (await fake.auth.signInWithPassword({ email: 'demo@finyourtin.test', password: 'brandnew456' })).error != null);
     await sleep(20);
+  }
+
+  console.log('\n· trợ lý chat: bóc tách số tiền, ngày, loại');
+  {
+    const amt = window.parseChatAmount;
+    check('“35k” = 35.000', amt('cà phê 35k') === 35000, String(amt('cà phê 35k')));
+    check('“1.2tr” = 1.200.000', amt('tiền nhà 1.2tr') === 1200000, String(amt('tiền nhà 1.2tr')));
+    check('“1.2m” = 1.200.000', amt('thưởng 1.2m') === 1200000, String(amt('thưởng 1.2m')));
+    check('“50000” = 50.000', amt('ăn trưa 50000') === 50000);
+    check('“50.000đ” = 50.000 (dấu chấm là ngăn nghìn)', amt('ăn trưa 50.000đ') === 50000, String(amt('ăn trưa 50.000đ')));
+    check('“1.200.000” = 1.200.000', amt('học phí 1.200.000') === 1200000, String(amt('học phí 1.200.000')));
+    check('“2 triệu” = 2.000.000', amt('mua điện thoại 2 triệu') === 2000000, String(amt('mua điện thoại 2 triệu')));
+    /* Ngày phải bị bóc ra TRƯỚC số tiền, không thì 2026 là con số lớn nhất
+       trong câu và nó thắng "35k". */
+    check('năm trong ngày không bị đọc thành số tiền', amt('cà phê 35k ngày 12/03/2026') === 35000,
+      String(amt('cà phê 35k ngày 12/03/2026')));
+    check('“35 khách” không bị đọc thành đơn vị nghìn của chữ k', amt('đặt bàn cho 8 khách 35k') === 35000,
+      String(amt('đặt bàn cho 8 khách 35k')));
+
+    const today = window.todayISO();
+    check('không nói ngày thì lấy hôm nay', window.parseChatDate('cà phê 35k') === today);
+    check('“hôm qua” lùi một ngày', window.parseChatDate('cà phê 35k hôm qua') === window.addDaysISO(today, -1));
+    /* Mốc cố định, không phụ thuộc ngày chạy test. */
+    check('“12/03/2026” → 2026-03-12 (ngày trước, tháng sau)',
+      window.parseChatDate('chi 500k ngày 12/03/2026') === '2026-03-12', window.parseChatDate('chi 500k ngày 12/03/2026'));
+    check('ngày 31/02 bị kẹp trong tháng, không nhảy sang tháng 3',
+      window.parseChatDate('chi 500k 31/02/2026') === '2026-02-28', window.parseChatDate('chi 500k 31/02/2026'));
+
+    check('mặc định là chi tiêu', window.detectChatType('cà phê 35k') === 'expense');
+    check('“nhận lương” là thu nhập', window.detectChatType('nhận lương tháng 9 15tr') === 'income');
+    check('“thu tiền nhà” là thu nhập', window.detectChatType('thu tiền nhà 3tr') === 'income');
+    check('“trả tiền điện” vẫn là chi', window.detectChatType('trả tiền điện 500k') === 'expense');
+  }
+
+  console.log('\n· trợ lý chat: tự học từ khoá từ lịch sử');
+  {
+    /* Dạy đúng một lần, qua chính form thêm giao dịch — đây là toàn bộ bài học. */
+    window.switchTab('add'); await sleep(20);
+    window.setTxType('expense');
+    window.selectTxWallet(S().wallets[0].id);
+    window.selectTxCategory('c_food');
+    window.selectTxSub('s_lunch');
+    window.applyTxAmount(45000);
+    $('tx-note').value = 'Bún bò Huế';
+    $('tx-date').value = window.todayISO();
+    window.saveTransaction(); await sleep(30);
+
+    const idx = window.buildCategoryKeywordIndex();
+    check('ma trận học được cả từ đơn lẫn cụm từ trong ghi chú', idx.has('bun') && idx.has('bun bo'));
+
+    const m1 = window.matchCategoryFromInput('bún bò 40k', 'expense');
+    check('khớp từ khoá → danh mục đã dùng trong quá khứ', m1.catId === 'c_food' && m1.matched === true, m1.catId);
+    check('… nhớ luôn cả danh mục con đã chọn lần trước', m1.subId === 's_lunch', String(m1.subId));
+    check('… bỏ dấu vẫn khớp', window.matchCategoryFromInput('bun bo 40k', 'expense').catId === 'c_food');
+
+    const m2 = window.matchCategoryFromInput('zzz qwerty 40k', 'expense');
+    check('không khớp từ nào → về "Khác", và nói rõ là chưa nhận diện được',
+      m2.catId === 'c_other_exp' && m2.matched === false, m2.catId + '/' + m2.matched);
+    /* Một từ học từ chi tiêu mà trả về cho khoản thu là sai hẳn chiều tiền. */
+    check('từ khoá chi tiêu không rò sang thu nhập',
+      window.matchCategoryFromInput('bún bò 40k', 'income').matched === false);
+    check('tài khoản chưa có lịch sử vẫn khớp được theo tên danh mục',
+      window.matchCategoryFromInput('tiền điện 500k', 'expense').catId === 'c_bill',
+      window.matchCategoryFromInput('tiền điện 500k', 'expense').catId);
+  }
+
+  console.log('\n· trợ lý chat: ngăn chat và thẻ xác nhận');
+  {
+    window.switchTab('dashboard'); await sleep(20);
+    check('nút nổi hiện trong phiên', visible('chat-fab'));
+    check('nút nổi dùng icon SVG thừa kế màu, không phải emoji', !!$('chat-fab').querySelector('svg'));
+
+    window.openChatDrawer(); await sleep(20);
+    check('mở được ngăn chat', visible('chat-drawer'));
+    check('nút nổi ẩn đi khi ngăn chat mở', !visible('chat-fab'));
+    check('ngăn chat đủ ba tầng: header · body · footer',
+      !!$('chat-drawer').querySelector('.chat-head') && !!$('chat-body') && !!$('chat-drawer').querySelector('.chat-foot'));
+    check('footer có nút đính kèm, ô nhập và nút Gửi',
+      !!$('chat-attach') && !!$('chat-input') && txt('chat-send') === 'Gửi');
+    check('bot chào trước khi người dùng gõ gì', $('chat-body').children.length === 1);
+
+    $('chat-input').value = 'bún bò 40k';
+    window.chatSend(); await sleep(80);
+    const bubbles = [...$('chat-body').children];
+    check('tin nhắn người dùng là bong bóng .user',
+      bubbles.some(b => b.classList.contains('user') && /bún bò 40k/.test(b.textContent)));
+    check('ô nhập được dọn sau khi gửi', $('chat-input').value === '');
+
+    const card = [...$('chat-body').querySelectorAll('.bot-card-action')].pop();
+    check('bot trả về thẻ hành động', !!card);
+    check('thẻ nêu số tiền đã bóc tách', /40\.000/.test(card.textContent), card.textContent.slice(0, 80));
+    check('thẻ nêu danh mục học được từ lịch sử', /Ăn uống/.test(card.textContent));
+    check('thẻ nêu một ví có thật', S().wallets.some(w => card.textContent.includes(w.name)));
+    const labels = [...card.querySelectorAll('button')].map(b => b.textContent.trim());
+    check('đủ hai nút hành động', labels.includes('Tự động lưu') && labels.includes('Tùy chỉnh thêm'), labels.join(' | '));
+
+    const before = S().transactions.length;
+    card.querySelector('.btn-primary').click(); await sleep(40);
+    const t = S().transactions[S().transactions.length - 1];
+    check('“Tự động lưu” ghi thẳng vào sổ', S().transactions.length === before + 1);
+    check('… đúng số tiền', t.amount === 40000, String(t.amount));
+    check('… đúng danh mục đã học', t.categoryId === 'c_food', t.categoryId);
+    check('… status suy ra từ ngày, không đặt tay', t.status === 'completed' && t.date === window.todayISO());
+    check('… walletId trỏ vào ví có thật', !!S().wallets.find(w => w.id === t.walletId));
+    check('… ghi chú giữ nguyên câu người dùng gõ (chính nó là dữ liệu học lần sau)',
+      t.note === 'bún bò 40k', t.note);
+    check('thẻ đổi thành dòng đã lưu, không lưu được hai lần', !!$('chat-body').querySelector('.bca-saved'));
+
+    /* Ca "Khác": phải NÓI RA là chưa nhận diện được, không im lặng nhận bừa. */
+    $('chat-input').value = 'zzz qwerty 88k';
+    window.chatSend(); await sleep(80);
+    const card2 = [...$('chat-body').querySelectorAll('.bot-card-action')].pop();
+    check('không khớp thì thẻ ghi rõ "Chưa nhận diện được, bấm để đổi"',
+      /Chưa nhận diện được, bấm để đổi/.test(card2.textContent));
+    check('… và tạm gán danh mục Khác', /Khác/.test(card2.textContent));
+
+    card2.querySelector('.btn-secondary').click(); await sleep(40);
+    check('“Tùy chỉnh thêm” mở form thêm giao dịch đầy đủ', visible('view-add'));
+    check('… và tự đóng ngăn chat lại', !visible('chat-drawer'));
+    check('… nạp sẵn số tiền', window.eval('txAmount') === 88000, String(window.eval('txAmount')));
+    check('… nạp sẵn ghi chú', $('tx-note').value === 'zzz qwerty 88k');
+
+    window.openChatDrawer(); await sleep(10);
+    check('thu nhỏ rồi mở lại thì hội thoại còn nguyên', $('chat-body').children.length > 1);
+    window.closeChatDrawer(true); await sleep(10);
+    check('bấm ✕ thì xoá hội thoại', $('chat-body').children.length === 0);
+    check('… và trả lại nút nổi', visible('chat-fab'));
+    window.cancelAddTx(); await sleep(20);
+  }
+
+  console.log('\n· trợ lý chat: đọc hoá đơn');
+  {
+    /* Phần bóc tách văn bản chạy được mà không cần engine OCR — đó cũng chính
+       là lý do nó tách riêng khỏi chatOcrImage(). */
+    const bill = window.parseBillText(
+      'CƠM TẤM PHÚC LỘC\n123 Lê Lợi, Q1\nNgày: 05/09/2026  19:30\n'
+      + 'Cơm tấm  2 x 55.000\nNước ngọt  15.000\nTỔNG CỘNG: 125.000\nTiền khách đưa 200.000');
+    check('bill: lấy số ở dòng có nhãn TỔNG CỘNG, không phải số lớn nhất',
+      bill.amount === 125000, String(bill.amount));
+    check('bill: đọc được ngày trên hoá đơn', bill.date === '2026-09-05', String(bill.date));
+    check('bill: ghi chú lấy tên cửa hàng', /CƠM TẤM PHÚC LỘC/.test(bill.note), bill.note);
+
+    const noLabel = window.parseBillText('QUÁN NƯỚC\nTrà đào 45.000\nBánh 30.000\n75.000');
+    check('bill không nhãn: lấy con số lớn nhất', noLabel.amount === 75000, String(noLabel.amount));
+    check('bill trống: không đoán bừa', window.parseBillText('').amount === 0);
+
+    /* Boot không được kéo theo engine OCR nào — offline-first là ràng buộc
+       cứng của app, Tesseract chỉ được nạp khi người dùng gửi ảnh và đồng ý. */
+    check('boot không nạp engine OCR', !window.Tesseract);
+  }
+
+  console.log('\n· trợ lý chat: CSS theo biến theme');
+  {
+    const css = fs.readFileSync(path.join(PUBLIC, 'css', 'styles.css'), 'utf8');
+    check('bong bóng và ngăn chat lấy màu từ biến theme (dark mode)',
+      /\.chat-bubble\.bot\{[^}]*background:var\(--card\)/.test(css)
+      && /\.chat-drawer\{[^}]*background:var\(--card\)/.test(css));
+    /* 99 nằm trên nav (30) nhưng dưới modal (100), bàn phím số (120), màn khoá
+       (200) và toast (300) — một con số như 1000 sẽ nuốt mất chính cái toast
+       "Đã lưu giao dịch" mà trợ lý vừa bắn ra. */
+    check('ngăn chat xếp dưới modal và toast', /\.chat-drawer\{[^}]*z-index:99;/.test(css));
+    check('nút nổi xếp dưới modal', /\.chat-fab\{[^}]*z-index:99;/.test(css));
+  }
+
+  console.log('\n· lịch sử điều hướng: Back cứng / vuốt lùi');
+  {
+    /* jsdom có session history thật, kể cả pushState và popstate — nên đây là
+       cùng một đường mà nút Back của Android đi qua (Capacitor gọi
+       webView.goBack() khi canGoBack()). */
+    const hist = () => window.history;
+    /* 150ms: một cú Back có thể phải nhảy nhiều nhịp khi gộp các entry trùng
+       (xem bên dưới), mỗi nhịp là một task. */
+    const back = async () => { hist().back(); await sleep(150); };
+    const navS = () => window.eval('navState');
+
+    window.switchTab('dashboard'); await sleep(20);
+    check('vào phiên là có mốc gốc trong history', !!hist().state && hist().state.activeTab === 'dashboard',
+      JSON.stringify(hist().state && hist().state.activeTab));
+    check('schema đủ bốn trường', (() => {
+      const s = hist().state || {};
+      return 'activeTab' in s && 'activeModal' in s && 'filterState' in s && 'subView' in s;
+    })(), Object.keys(hist().state || {}).join(','));
+
+    const len0 = hist().length;
+    window.switchTab('transactions'); await sleep(20);
+    check('đổi tab là một bước lịch sử', hist().state.activeTab === 'transactions' && hist().length === len0 + 1,
+      hist().state.activeTab + ' len=' + hist().length + '/' + len0);
+    /* Bấm lại đúng tab đang mở mà cũng đẩy entry thì người dùng phải Back hai
+       lần cho một bước. */
+    window.switchTab('transactions'); await sleep(20);
+    check('bấm lại đúng tab đang mở thì không đẻ thêm entry', hist().length === len0 + 1, String(hist().length));
+
+    await back();
+    check('Back đưa về tab trước', visible('view-dashboard') && !visible('view-transactions'));
+    check('… và navState đi theo', navS().activeTab === 'dashboard', navS().activeTab);
+
+    /* Màn hình con của Tổng quan: Back phải về Tổng quan, không phải thoát. */
+    window.switchTab('wallets'); await sleep(20);
+    check('màn hình con được đánh dấu subView', hist().state.subView === 'wallets', String(hist().state.subView));
+    await back();
+    check('Back từ màn hình con về Tổng quan', visible('view-dashboard'));
+
+    /* Modal: một cú Back đóng modal, KHÔNG thoát màn hình. */
+    window.switchTab('wallets'); await sleep(20);
+    window.openWalletModal(); await sleep(20);
+    check('mở modal thì lịch sử biết', visible('modal-wallet') && navS().activeModal === 'modal-wallet', navS().activeModal);
+    await back();
+    check('Back đóng modal', !visible('modal-wallet'));
+    check('… và vẫn đứng nguyên màn hình đang xem', visible('view-wallets'), 'currentTab=' + window.eval('currentTab'));
+
+    /* Mở rồi đóng modal bằng tay để lại một entry trùng với entry đang đứng.
+       Đó là cái giá của việc đóng bằng replaceState (đồng bộ, không có bẫy
+       thứ tự như history.back()); bù lại popstate phải GỘP các entry trùng,
+       không thì người dùng bấm Back ba lần mà màn hình đứng im. */
+    for (let i = 0; i < 3; i++) { window.openWalletModal(); await sleep(5); window.closeModal('modal-wallet'); await sleep(5); }
+    await back();
+    check('mở/đóng modal ba lần rồi Back vẫn ra đúng một bước nhìn thấy được',
+      visible('view-dashboard'), 'currentTab=' + window.eval('currentTab'));
+
+    /* Bàn phím số và ngăn chat là overlay ngoài .view — cũng phải lùi được. */
+    window.switchTab('add'); await sleep(20);
+    window.openAmountSheet('tx'); await sleep(20);
+    check('bàn phím số là một bước lịch sử', visible('amount-sheet') && navS().activeModal === 'amount-sheet');
+    await back();
+    check('Back đóng bàn phím số, giữ nguyên form', !visible('amount-sheet') && visible('view-add'));
+    check('… và gỡ luôn trạng thái bàn phím', window.eval('amtKind') === null);
+
+    window.switchTab('dashboard'); await sleep(20);
+    window.openChatDrawer(); await sleep(20);
+    check('ngăn chat là một bước lịch sử', visible('chat-drawer') && navS().activeModal === 'chat-drawer');
+    await back();
+    check('Back đóng ngăn chat', !visible('chat-drawer'));
+    check('… và trả lại nút nổi', visible('chat-fab'));
+
+    /* uiConfirm trả lời bằng Promise: đóng bằng Back mà không resolve thì
+       luồng gọi (xoá ví, nhập CSV…) đứng chờ mãi mãi. */
+    let answered = 'chưa';
+    window.uiConfirm('Thử', 'Bấm Back thay vì trả lời', 'OK').then(v => { answered = v; });
+    await sleep(20);
+    check('uiConfirm mở được', visible('modal-confirm'));
+    await back();
+    check('Back đóng hộp xác nhận', !visible('modal-confirm'));
+    check('… và promise được trả lời "không", không treo', answered === false, String(answered));
+
+    /* filterState: quay lại một tab là thấy đúng bộ lọc lúc rời đi. */
+    window.switchTab('transactions'); await sleep(20);
+    window.setTxFilter('type', 'expense', d.querySelector('#tx-filter-type .chip[data-val="expense"]'));
+    await sleep(20);
+    window.switchTab('settings'); await sleep(20);
+    check('bộ lọc được chốt vào entry trước khi rời tab', hist().state.activeTab === 'settings');
+    await back();
+    check('Back về đúng tab Giao dịch', visible('view-transactions'));
+    check('… và bộ lọc được khôi phục', window.eval('txFilters.type') === 'expense', window.eval('txFilters.type'));
+    check('… chip cũng sáng đúng chỗ, không lệch với danh sách',
+      d.querySelector('#tx-filter-type .chip[data-val="expense"]').classList.contains('active'));
+    window.resetTxFilters(); await sleep(20);
+
+    /* Panel lọc gập: không nổi lên trên nhưng vẫn là một bước "đang mở". */
+    window.switchTab('transactions'); await sleep(20);
+    window.toggleTxFilters(); await sleep(10);
+    check('mở panel lọc là một bước lịch sử',
+      !$('tx-advanced-filters').classList.contains('hidden') && navS().activeModal === 'tx-advanced-filters',
+      String(navS().activeModal));
+    await back();
+    check('Back gấp panel lọc lại, không rời tab',
+      $('tx-advanced-filters').classList.contains('hidden') && visible('view-transactions'));
+
+    /* Luồng đã hoàn tất thì không để lại bước chết: lưu giao dịch xong mà
+       Back lại mở đúng cái form vừa gửi (giờ đã trống) là vô nghĩa. */
+    window.switchTab('dashboard'); await sleep(20);
+    const lenBefore = hist().length;
+    window.openAddTransaction('expense'); await sleep(20);
+    window.selectTxWallet(S().wallets[0].id);
+    window.selectTxCategory('c_food');
+    window.applyTxAmount(12000);
+    $('tx-date').value = window.todayISO();
+    window.saveTransaction(); await sleep(30);
+    check('lưu xong thì về Tổng quan', visible('view-dashboard'));
+    check('… và không đẻ thêm bước (form đã gửi không được Back về)',
+      hist().length === lenBefore + 1 && hist().state.activeTab === 'dashboard',
+      hist().length + '/' + lenBefore + ' ' + hist().state.activeTab);
+    await back();
+    check('Back sau khi lưu về thẳng màn hình trước đó, không quay lại form',
+      !visible('view-add'), 'currentTab=' + window.eval('currentTab'));
+
+    window.switchTab('dashboard'); await sleep(20);
   }
 
   console.log('\n· realtime từ thiết bị khác');

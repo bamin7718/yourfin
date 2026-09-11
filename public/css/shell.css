@@ -74,6 +74,23 @@
     overflow: hidden;
   }
   #toast-wrap{ bottom: 96px; }
+  /* Trợ lý cũng phải nằm trong khung máy. Nút nổi là position:fixed nên
+     right:20px là 20px so với VIEWPORT — trên màn rộng nó bay ra giữa nền
+     desktop, cách cột app cả gang tay. Kéo nó về mép phải của cột. */
+  /* Đáy khung máy trên desktop: .app cao min(880px, 100vh-48px) và được căn
+     giữa, nên mép dưới của nó cách đáy viewport đúng khoảng này. Dán
+     bottom:0 thì ngăn chat tụt xuống đáy màn hình, rời hẳn khỏi khung. */
+  .chat-fab{
+    right: calc(50vw - var(--shell-w) / 2 + 20px);
+    bottom: calc(max(24px, (100vh - 880px) / 2) + 80px);
+  }
+  .chat-drawer{
+    max-width: var(--shell-w);
+    bottom: max(24px, calc((100vh - 880px) / 2));
+    height: min(620px, calc(100vh - 48px));
+    border-bottom-left-radius: var(--shell-frame);
+    border-bottom-right-radius: var(--shell-frame);
+  }
 }
 
 [data-theme="dark"] .app{ box-shadow: 0 24px 70px rgba(0,0,0,.55); }
