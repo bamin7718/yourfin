@@ -5238,6 +5238,14 @@ const RECEIPT_AMOUNT_RES = [
   new RegExp('(?:vnd|vnđ)[\\s:]*(' + MONEY_GROUPED + ')')
 ];
 const RECEIPT_NOTE_RE = /(?:noi dung chuyen khoan|noi dung ck|noi dung|loi nhan|ghi chu|dien giai|memo|message)[\s:\-]*/;
+/* Tên cửa hàng — ưu tiên CAO HƠN "Nội dung". Trên biên lai MoMo, "Nội dung"
+   là chữ máy sinh và mở đầu bằng tên người TRẢ ("Nguyễn Văn A Thanh toán cho
+   The Orange Coffee…"), trong khi "Cửa hàng: The Orange Coffee" đúng là thứ
+   một người sẽ tự tay ghi vào sổ. Nó cũng là từ khoá học lại được cho lần
+   sau, còn tên của chính mình thì chỉ làm nhiễu ma trận từ khoá.
+   Biên lai chuyển tiền ngân hàng không có dòng này, nên "Lời nhắn" vẫn được
+   dùng ở đó — và đúng là nên, vì nó do người gửi tự viết. */
+const RECEIPT_MERCHANT_RE = /(?:cua hang|nguoi ban|don vi thu huong|don vi chap nhan|merchant)[\s:\-]*/;
 
 /* Nhãn của các khối khác trên biên lai — dùng làm MỐC DỪNG khi cắt một đoạn
    nội dung. Danh sách lấy từ biên lai thật của Techcombank và MoMo: hai app
@@ -5339,11 +5347,19 @@ function parseBankReceiptOCR(rawText){
     if(!out.note) out.note = generic.note;
   }
 
-  /* Nội dung chuyển khoản — cắt từ chuỗi gốc để giữ dấu, xem receiptSlice(). */
-  const nm = RECEIPT_NOTE_RE.exec(t);
-  if(nm){
-    const note = receiptSlice(flat, t, nm.index + nm[0].length, 80);
-    if(note.length >= 2) out.note = note;
+  /* Ghi chú: tên cửa hàng trước, rồi mới tới nội dung/lời nhắn. Cắt từ chuỗi
+     gốc để giữ dấu — xem receiptSlice(). */
+  const mm = RECEIPT_MERCHANT_RE.exec(t);
+  if(mm){
+    const shop = receiptSlice(flat, t, mm.index + mm[0].length, 60);
+    if(shop.length >= 2) out.note = shop;
+  }
+  if(!out.note){
+    const nm = RECEIPT_NOTE_RE.exec(t);
+    if(nm){
+      const note = receiptSlice(flat, t, nm.index + nm[0].length, 80);
+      if(note.length >= 2) out.note = note;
+    }
   }
 
   out.date = chatExtractDate(raw).date;
@@ -5363,7 +5379,11 @@ function parseBankReceiptOCR(rawText){
     });
     if(hit){
       out.categoryId = hit.id;
-      out.subId = hit.subs && hit.subs.length ? hit.subs[0].id : null;
+      /* subId để TRỐNG, không lấy subs[0]: biên lai nói "Ăn uống", nó không
+         nói "Ăn sáng". Một danh mục con sai thì tệ hơn là không có — nó hiện
+         lên thẻ xác nhận như thể ta biết, và người dùng lưu luôn. Lần đầu họ
+         tự chọn là ma trận từ khoá học được, và từ đó tự điền. */
+      out.subId = null;
       out.matched = true;
     }
   }
@@ -6482,7 +6502,7 @@ const APK_URL = `https://github.com/${GH_REPO}/releases/latest/download/sofin.ap
 
 /* Stamped in at build time from package.json; the literal is only what runs
    when someone opens the folder without building. */
-const APP_VERSION = (window.__ENV__ && window.__ENV__.VERSION) || '5.1.4';
+const APP_VERSION = (window.__ENV__ && window.__ENV__.VERSION) || '5.1.5';
 /* Which version the user already said "để sau" to — device-local, so a
    dismissal does not sync to their other phone. */
 const UPDATE_SEEN_KEY = 'FINYOURTIN_UPDATE_DISMISSED';

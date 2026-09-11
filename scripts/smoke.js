@@ -2550,11 +2550,20 @@ async function boot(opts) {
     check('MoMo thật: nhận ra nhà phát hành', momo.bank === 'MoMo', momo.bank);
     check('MoMo thật: đọc ngày 06/09/2026', momo.date === '2026-09-06', String(momo.date));
     check('MoMo thật: map sang ví điện tử', !!momo.walletId && wtype(momo.walletId) === 'ewallet');
-    /* Nội dung dài 62 ký tự, và ngay sau nó là mã đơn hàng 40 ký tự. */
-    check('MoMo thật: lấy trọn nội dung, không ăn sang "Mã đơn hàng"',
-      momo.note === 'Nguyen Van A Thanh toan cho The Orange Coffee - 259 Man Thien',
-      JSON.stringify(momo.note));
-    check('MoMo thật: không cắt đứt giữa một từ', !/ Th$/.test(momo.note), JSON.stringify(momo.note));
+    /* Ghi chú lấy TÊN CỬA HÀNG, không lấy dòng "Nội dung". Dòng "Nội dung"
+       của MoMo là chữ máy sinh và mở đầu bằng tên người TRẢ ("Nguyen Van A
+       Thanh toan cho…") — đưa vào sổ thì vừa khó đọc, vừa nhồi tên của chính
+       mình vào ma trận từ khoá. "The Orange Coffee" thì học lại được. */
+    check('MoMo thật: ghi chú lấy tên cửa hàng, không phải dòng "Nội dung" máy sinh',
+      momo.note === 'The Orange Coffee - 259 Man Thiện', JSON.stringify(momo.note));
+    check('MoMo thật: không lẫn tên người trả vào ghi chú',
+      !/Nguyen Van|Nguyễn Văn/.test(momo.note), JSON.stringify(momo.note));
+    check('MoMo thật: không cắt đứt giữa từ, không ăn sang mã đơn hàng',
+      !/ Th$/.test(momo.note) && !/qrc|MOMOKTR/.test(momo.note), JSON.stringify(momo.note));
+    /* Biên lai nói "Ăn uống", nó KHÔNG nói "Ăn sáng". Lấy subs[0] cho đủ ô là
+       dựng ra một danh mục con không có trên giấy, rồi nó hiện lên thẻ xác
+       nhận như thể ta biết — và người dùng lưu luôn. */
+    check('MoMo thật: không bịa danh mục con', momo.subId === null, String(momo.subId));
     /* MoMo tự in "Danh mục: Ăn uống" — đó là phân loại của chính giao dịch,
        đáng tin hơn mọi phép đoán từ tên cửa hàng ("The Orange Coffee" không
        có từ nào trong lịch sử người dùng). */
@@ -2569,6 +2578,7 @@ async function boot(opts) {
     check('dấu cộng ⇒ khoản thu',
       window.parseBankReceiptOCR('Techcombank\n+VND 5,000,000\nLoi nhan Luong thang 9').type === 'income');
   }
+
 
 
   console.log('\n· trợ lý chat: CSS theo biến theme');

@@ -12,6 +12,27 @@ thứ khó tìm lại sau nửa năm.
 
 ---
 
+## [5.1.5] — 12/09/2026
+
+### Sửa
+
+Soi lại kết quả trên ảnh MoMo thật, hai chỗ vẫn còn sai:
+
+- **Bịa ra danh mục con.** Biên lai ghi "Danh mục: Ăn uống" — nó *không* nói
+  "Ăn sáng", nhưng code lấy `subs[0]` cho đủ ô, và một giao dịch 10:58 ở quán
+  cà phê bị gán "Ăn sáng". Danh mục con sai thì tệ hơn là để trống: nó hiện
+  lên thẻ xác nhận như thể ta biết, rồi người dùng lưu luôn. Giờ để trống, và
+  ma trận từ khoá tự điền sau lần đầu người dùng chọn.
+- **Ghi chú lấy dòng "Nội dung" máy sinh.** Trên biên lai MoMo, dòng đó mở đầu
+  bằng tên người *trả* ("Nguyễn Văn Nam Thanh toán cho The Orange Coffee…"):
+  đưa vào sổ thì khó đọc, mà còn nhồi tên của chính mình vào ma trận từ khoá.
+  Giờ ưu tiên dòng **"Cửa hàng"** → ghi chú thành "The Orange Coffee - 259 Man
+  Thiện", đúng thứ một người sẽ tự tay ghi, và là từ khoá học lại được. Biên
+  lai chuyển tiền ngân hàng không có dòng này nên vẫn dùng "Lời nhắn" — ở đó
+  thì đúng, vì lời nhắn do người gửi tự viết.
+
+---
+
 ## [5.1.4] — 11/09/2026
 
 ### Sửa
