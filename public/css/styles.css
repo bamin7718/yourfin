@@ -1034,3 +1034,87 @@ html[data-theme="dark"] .chat-drawer{box-shadow:0 -4px 20px rgba(0,0,0,.55);}
   font-size:.84rem;font-weight:800;cursor:pointer;transition:.15s;}
 .btn-chat-send:active{transform:scale(.96);}
 .btn-chat-send:disabled{opacity:.5;cursor:default;}
+
+/* ---------- GHI NHANH (Direct-to-Keypad) ----------
+   Ba khối dùng lại khung #amount-sheet: Chi/Thu ở đầu sheet, thanh ghi
+   chú + hai chip nằm giữa con số và bàn phím. Màu lấy từ token, không phải
+   hex cứng: cùng một sheet phải đọc được ở cả hai theme, và con số to thì đã
+   mang --tcb-blue của bàn phím. */
+.qe-type{display:flex;flex:0 0 auto;gap:2px;padding:3px;border-radius:10px;background:var(--card-2);
+  border:1px solid var(--border);}
+.qe-t{min-width:46px;padding:6px 10px;border:none;border-radius:8px;background:transparent;
+  font-size:.76rem;font-weight:700;color:var(--muted);cursor:pointer;transition:.15s;}
+.qe-t.active{background:var(--card);color:var(--text);box-shadow:0 1px 3px rgba(0,0,0,.10);}
+.qe-t[data-val="expense"].active{color:var(--expense);}
+.qe-t[data-val="income"].active{color:var(--income);}
+/* Con số to hơn một nhịp so với chế độ chốt-số: ở đây nó là nội dung chính
+   của cả màn hình, không phải một bước trung gian. */
+.amt-sheet.is-quick .amt-val{font-size:38px;}
+
+.quick-inputs-bar{flex:0 0 auto;padding:12px 16px;background:var(--card-2);
+  border-top:1px solid var(--border);}
+.quick-note-input{width:100%;padding:10px 14px;border:1px solid var(--border);border-radius:12px;
+  font-size:15px;margin-bottom:10px;outline:none;background:var(--card);color:var(--text);
+  transition:.15s;}
+.quick-note-input:focus{border-color:var(--tcb-blue);}
+.quick-note-input::placeholder{color:var(--muted);}
+.quick-chips-row{display:flex;gap:8px;}
+.quick-chip{flex:1;min-width:0;padding:8px 12px;background:var(--card);border:1px solid var(--border);
+  border-radius:10px;font-size:13px;font-weight:600;color:var(--text);
+  display:flex;align-items:center;justify-content:space-between;gap:6px;cursor:pointer;
+  transition:.15s;}
+@media (hover:hover){ .quick-chip:hover{border-color:var(--tcb-blue);} }
+.quick-chip:active{transform:scale(.98);}
+.quick-chip .qe-caret{flex:0 0 auto;color:var(--muted);font-size:.7rem;}
+/* Đường ra form đầy đủ. Nhạt và nhỏ: nó là ngoại lệ, không phải lối đi chính
+   — nhồi ngày/sự kiện vào đây là phá đúng cái lý do màn này tồn tại. */
+.quick-more{display:block;width:100%;margin:10px 0 0;padding:4px 0;border:0;background:none;
+  font-size:.72rem;font-weight:600;color:var(--muted);text-align:center;cursor:pointer;}
+@media (hover:hover){ .quick-more:hover{color:var(--tcb-blue);} }
+/* Màn thấp (≤ 700px): bàn phím + thanh ghi chú + con số phải vừa một màn hình
+   mà không cuộn, nên hạ chiều cao phím và bớt đệm thay vì để bàn phím trôi
+   xuống dưới mép. */
+@media (max-height:700px){
+  .amt-sheet.is-quick .amt-body{padding:14px 16px 8px;}
+  .amt-sheet.is-quick .amt-val{font-size:32px;}
+  .amt-sheet.is-quick .quick-inputs-bar{padding:8px 14px;}
+  .amt-sheet.is-quick .quick-note-input{margin-bottom:8px;padding:8px 12px;}
+  .amt-sheet.is-quick .tcb-btn-key{height:46px;}
+}
+
+/* ---------- GIAO DỊCH GẦN ĐÂY (Tổng quan) ----------
+   .tx-row đã có viền, bo góc và lề riêng, nên thẻ bao chỉ cần đệm mỏng —
+   để nguyên padding:16px của .card là hai lớp đệm cộng vào nhau và khối này
+   trông rộng hơn mọi khối khác trên trang. */
+.recent-tx-card{padding:8px;}
+.recent-tx-card .tx-row{margin-bottom:6px;box-shadow:none;}
+.recent-tx-card .tx-row:last-child{margin-bottom:0;}
+.recent-tx-card .empty-state{padding:20px 12px;}
+
+/* Hyperlink trong thẻ kết quả truy vấn của trợ lý: một dòng bấm được, không
+   phải một nút khối — nó là đường dẫn phụ bên dưới câu trả lời, không cạnh
+   tranh với hai nút hành động của thẻ giao dịch. */
+.chat-link{display:block;width:100%;margin-top:8px;padding:8px 4px 2px;
+  border:0;border-top:1px solid var(--border);background:none;
+  font-size:.78rem;font-weight:700;color:var(--primary);text-align:left;cursor:pointer;}
+@media (hover:hover){ .chat-link:hover{color:var(--primary-dark);} }
+.chat-link:active{opacity:.7;}
+
+/* Ở chế độ ghi nhanh, con số là nội dung chính của màn hình nên nhóm
+   số-tiền + ví được căn giữa khoảng trống. Căn bằng margin:auto chứ KHÔNG
+   bằng justify-content:center: .amt-body có overflow-y:auto, và
+   justify-content trên một hộp cuộn được sẽ cắt mất phần đầu khi nội dung
+   cao hơn khung mà không cuộn lên tới được. Margin auto thì tự xẹp. */
+.amt-sheet.is-quick .amt-body{display:flex;flex-direction:column;}
+.amt-sheet.is-quick .amt-hero{margin-top:auto;}
+.amt-sheet.is-quick .amt-from{margin-bottom:auto;}
+
+/* Nút chip trong chat (chọn ví, chọn chu kỳ). Bọc dòng chứ không cuộn ngang:
+   danh sách ví có thể dài, mà một lựa chọn bị giấu ngoài mép thì coi như
+   không có. */
+.chat-chip-row{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;}
+.chat-chip{padding:7px 12px;border-radius:999px;border:1px solid var(--border);
+  background:var(--card);color:var(--text);font-size:.78rem;font-weight:700;
+  cursor:pointer;transition:.15s;}
+@media (hover:hover){ .chat-chip:hover{border-color:var(--primary);color:var(--primary);} }
+.chat-chip:active{transform:scale(.96);background:var(--primary-light);}

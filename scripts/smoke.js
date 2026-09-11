@@ -171,6 +171,12 @@ async function boot(opts) {
 
   console.log('· boot');
   check('màn hình đăng nhập hiện ra', visible('view-login'));
+  /* Luật 1 của lịch sử điều hướng: có state gốc từ lúc app load, chưa cần
+     biết ai đăng nhập. Thiếu nó thì popstate đầu tiên nhận event.state=null
+     và không còn gì để dựa vào ngoài việc đoán. */
+  check('history có state gốc ngay khi chưa đăng nhập',
+    !!window.history.state && 'activeTab' in window.history.state,
+    JSON.stringify(window.history.state));
   check('màn hình cấu hình bị ẩn', !visible('view-config'));
   check('không có lỗi console khi boot', consoleErrors.length === 0, consoleErrors[0]);
 
@@ -2144,23 +2150,59 @@ async function boot(opts) {
     $('tx-date').value = window.todayISO();
     window.saveTransaction(); await sleep(30);
 
-    const idx = window.buildCategoryKeywordIndex();
+    const idx = window.buildHistoryMappingIndex();
     check('ma trận học được cả từ đơn lẫn cụm từ trong ghi chú', idx.has('bun') && idx.has('bun bo'));
 
-    const m1 = window.matchCategoryFromInput('bún bò 40k', 'expense');
+    const m1 = window.matchWalletAndCategory('bún bò 40k', 'expense');
     check('khớp từ khoá → danh mục đã dùng trong quá khứ', m1.catId === 'c_food' && m1.matched === true, m1.catId);
     check('… nhớ luôn cả danh mục con đã chọn lần trước', m1.subId === 's_lunch', String(m1.subId));
-    check('… bỏ dấu vẫn khớp', window.matchCategoryFromInput('bun bo 40k', 'expense').catId === 'c_food');
+    check('… bỏ dấu vẫn khớp', window.matchWalletAndCategory('bun bo 40k', 'expense').catId === 'c_food');
 
-    const m2 = window.matchCategoryFromInput('zzz qwerty 40k', 'expense');
+    const m2 = window.matchWalletAndCategory('zzz qwerty 40k', 'expense');
     check('không khớp từ nào → về "Khác", và nói rõ là chưa nhận diện được',
       m2.catId === 'c_other_exp' && m2.matched === false, m2.catId + '/' + m2.matched);
     /* Một từ học từ chi tiêu mà trả về cho khoản thu là sai hẳn chiều tiền. */
     check('từ khoá chi tiêu không rò sang thu nhập',
-      window.matchCategoryFromInput('bún bò 40k', 'income').matched === false);
+      window.matchWalletAndCategory('bún bò 40k', 'income').matched === false);
     check('tài khoản chưa có lịch sử vẫn khớp được theo tên danh mục',
-      window.matchCategoryFromInput('tiền điện 500k', 'expense').catId === 'c_bill',
-      window.matchCategoryFromInput('tiền điện 500k', 'expense').catId);
+      window.matchWalletAndCategory('tiền điện 500k', 'expense').catId === 'c_bill',
+      window.matchWalletAndCategory('tiền điện 500k', 'expense').catId);
+  }
+
+  console.log('\n· trợ lý chat: gợi ý ví thông minh');
+  {
+    /* Dạy cùng một từ khoá với hai ví khác nhau, lệch tần suất 2-1: ví HAY
+       DÙNG phải thắng, không phải ví ghi gần nhất. */
+    const ws = S().wallets;
+    const w1 = ws[0].id, w2 = ws[1].id;
+    const teach = (note, walletId, catId) => {
+      window.switchTab('add');
+      window.setTxType('expense');
+      window.selectTxWallet(walletId);
+      window.selectTxCategory(catId);
+      window.applyTxAmount(60000);
+      $('tx-note').value = note;
+      $('tx-date').value = window.todayISO();
+      window.saveTransaction();
+    };
+    teach('Xăng xe máy', w2, 'c_transport'); await sleep(20);
+    teach('Xăng xe máy', w2, 'c_transport'); await sleep(20);
+    teach('Xăng xe máy', w1, 'c_transport'); await sleep(20);
+
+    const m = window.matchWalletAndCategory('xăng 50k', 'expense');
+    check('ma trận nhớ cả ví hay dùng cho từ khoá đó', m.walletId === w2, m.walletId + ' vs ' + w2);
+    check('… và đánh dấu là suy từ lịch sử', m.walletMatched === true);
+    check('… danh mục vẫn đúng', m.catId === 'c_transport', m.catId);
+    const gone = window.matchWalletAndCategory('zzz qwerty', 'expense');
+    check('không khớp gì thì không bịa ra ví', gone.walletId === null && gone.walletMatched === false,
+      String(gone.walletId));
+
+    const draft = await window.processChatMessage('xăng 50k', null);
+    check('draft dùng ví học được, không phải ví mặc định', draft.walletId === w2, draft.walletId);
+    const draft2 = await window.processChatMessage('zzz qwerty 50k', null);
+    check('không học được thì về ví mặc định (vẫn là ví có thật)',
+      !!S().wallets.find(w => w.id === draft2.walletId) && draft2.walletMatched === false);
+    window.switchTab('dashboard'); await sleep(20);
   }
 
   console.log('\n· trợ lý chat: ngăn chat và thẻ xác nhận');
@@ -2227,6 +2269,91 @@ async function boot(opts) {
     window.cancelAddTx(); await sleep(20);
   }
 
+  console.log('\n· trợ lý chat: hỏi dữ liệu + chuyển trang kèm bộ lọc');
+  {
+    const pi = window.parseQueryIntent;
+    check('“chi nhiều nhất” → HIGHEST_EXPENSE', pi('tháng này chi nhiều nhất vào đâu?').kind === 'HIGHEST_EXPENSE',
+      JSON.stringify(pi('tháng này chi nhiều nhất vào đâu?')));
+    check('“nhỏ nhất” → LOWEST_EXPENSE', pi('khoản chi nhỏ nhất tháng trước').kind === 'LOWEST_EXPENSE');
+    check('“còn bao nhiêu” → BALANCE_CHECK', pi('còn bao nhiêu tiền?').kind === 'BALANCE_CHECK');
+    check('“bao nhiêu” → CATEGORY_TOTAL', pi('ăn uống tháng này bao nhiêu?').kind === 'CATEGORY_TOTAL');
+    check('câu không phải hỏi thì trả null (để rơi về luồng tạo giao dịch)',
+      pi('cà phê 35k') === null);
+    /* Chữ "tổng cộng" nằm trên mọi tờ bill — có số tiền rõ ràng thì đây là
+       giao dịch, không phải câu hỏi. */
+    check('có số tiền rõ ràng thì không bị hiểu thành câu hỏi',
+      window.chatHasExplicitAmount('trà sữa tổng cộng 45k') === true
+      && window.chatHasExplicitAmount('chi nhiều nhất tháng 9') === false);
+
+    check('mốc mặc định là tháng này', pi('chi nhiều nhất').period === 'this_month');
+    check('“tháng trước” → last_month', pi('chi nhiều nhất tháng trước').period === 'last_month');
+    check('“năm nay” → this_year', pi('chi nhiều nhất năm nay').period === 'this_year');
+    check('“7 ngày” → last_7_days', pi('chi nhiều nhất 7 ngày qua').period === 'last_7_days');
+
+    /* Ví bóc theo TÊN, danh mục bóc qua ma trận từ khoá (nên "xăng" cũng ra
+       Di chuyển chứ không cần gõ đúng chữ "di chuyển"). */
+    const w0 = S().wallets[0];
+    check('bóc được ví theo tên', pi('còn bao nhiêu tiền trong ' + w0.name).walletId === w0.id,
+      String(pi('còn bao nhiêu tiền trong ' + w0.name).walletId));
+    check('bóc được danh mục qua ma trận từ khoá',
+      pi('xăng tháng này bao nhiêu').categoryId === 'c_transport',
+      String(pi('xăng tháng này bao nhiêu').categoryId));
+
+    /* executeQuery tính bằng chính hàm mà báo cáo dùng, nên không thể ra một
+       con số khác với tab Báo cáo. */
+    const res = window.executeQuery(pi('tháng này chi nhiều nhất'));
+    const mine = window.eval(`(function(){
+      const k = monthKey(todayISO());
+      const e = getUserTransactions().filter(t=>t.type==='expense' && monthKey(t.date)===k);
+      return e.length ? e.reduce((a,t)=>txMain(t)>txMain(a)?t:a).id : null;
+    })()`);
+    check('trả đúng khoản chi lớn nhất trong kỳ', res.nav.highlightTxId === mine,
+      res.nav.highlightTxId + ' vs ' + mine);
+    check('nav mang đủ hợp đồng {view, period, categoryId, walletId, highlightTxId}',
+      ['view','period','categoryId','walletId','highlightTxId'].every(k => k in res.nav),
+      Object.keys(res.nav).join(','));
+
+    const bal = window.executeQuery(pi('tổng tài sản còn bao nhiêu'));
+    check('BALANCE_CHECK trả tổng tài sản ròng', bal.title.includes(window.fmt(window.getUserTotalAssets())),
+      bal.title);
+    check('… và dẫn sang màn Ví', bal.nav.view === 'wallets');
+
+    /* Bot trả lời bằng thẻ có hyperlink, và KHÔNG tạo giao dịch nháp nào. */
+    window.openChatDrawer(); await sleep(20);
+    const txBefore = S().transactions.length;
+    $('chat-input').value = 'tháng này chi nhiều nhất vào đâu?';
+    window.chatSend(); await sleep(60);
+    const card = [...$('chat-body').querySelectorAll('.bot-card-action')].pop();
+    check('bot trả lời bằng thẻ kết quả', !!card && !!card.querySelector('.chat-link'));
+    check('… không có nút "Tự động lưu" (đây là câu hỏi, không phải giao dịch)',
+      !/Tự động lưu/.test(card.textContent));
+    check('… và không ghi gì vào sổ', S().transactions.length === txBefore);
+
+    /* Bấm hyperlink: sang tab đã lọc sẵn, đúng kỳ, và mở chi tiết bản ghi. */
+    card.querySelector('.chat-link').click(); await sleep(60);
+    check('bấm link thì sang tab Giao dịch', visible('view-transactions'));
+    check('… đóng ngăn chat lại', !visible('chat-drawer'));
+    check('… và mang theo bộ lọc đúng kỳ + chỉ khoản chi',
+      window.eval('txFilters.range') === 'thismonth' && window.eval('txFilters.type') === 'expense',
+      window.eval('JSON.stringify(txFilters)'));
+    check('… mở luôn chi tiết khoản được hỏi', visible('modal-tx-detail'));
+    window.closeModal('modal-tx-detail'); await sleep(20);
+
+    /* Câu hỏi theo danh mục dẫn sang tab Giao dịch (nơi có bộ lọc danh mục),
+       còn câu hỏi không danh mục thì sang Báo cáo. */
+    const catQ = window.executeQuery(pi('xăng tháng trước bao nhiêu'));
+    check('hỏi theo danh mục → tab Giao dịch', catQ.nav.view === 'transactions', catQ.nav.view);
+    const allQ = window.executeQuery(pi('tháng trước chi bao nhiêu'));
+    check('hỏi tổng cả kỳ → tab Báo cáo', allQ.nav.view === 'report', allQ.nav.view);
+    window.chatNavigate(allQ.nav); await sleep(60);
+    check('link báo cáo đặt đúng mốc tháng trước',
+      visible('view-reports') && window.eval('reportRangeKey') === 'lastmonth',
+      window.eval('reportRangeKey'));
+
+    window.closeChatDrawer(true);
+    window.switchTab('dashboard'); await sleep(20);
+  }
+
   console.log('\n· trợ lý chat: đọc hoá đơn');
   {
     /* Phần bóc tách văn bản chạy được mà không cần engine OCR — đó cũng chính
@@ -2246,6 +2373,128 @@ async function boot(opts) {
     /* Boot không được kéo theo engine OCR nào — offline-first là ràng buộc
        cứng của app, Tesseract chỉ được nạp khi người dùng gửi ảnh và đồng ý. */
     check('boot không nạp engine OCR', !window.Tesseract);
+  }
+
+  console.log('\n· trợ lý chat: chuyển ví & định kỳ bằng lời');
+  {
+    const pci = window.parseChatIntent;
+    const byName = n => S().wallets.find(w => w.name === n);
+    const bank = byName('Ngân hàng'), cash = byName('Tiền mặt');
+
+    check('“chuyển … sang …” → TRANSFER', pci('chuyển 2tr từ Ngân hàng sang Tiền mặt').kind === 'TRANSFER');
+    check('“hàng tháng” → RECURRING', pci('tiền nhà 4tr hàng tháng').kind === 'RECURRING');
+    check('câu thu/chi thường vẫn là SINGLE_TRANSACTION', pci('cà phê 35k').kind === 'SINGLE_TRANSACTION');
+
+    /* Hướng đi của tiền đọc theo chữ dẫn ("từ" / "sang"), không theo thứ tự. */
+    const i1 = pci('chuyển 2tr từ Ngân hàng sang Tiền mặt');
+    check('bóc đúng ví nguồn và ví đích', i1.fromWalletId === bank.id && i1.toWalletId === cash.id,
+      i1.fromWalletId + ' -> ' + i1.toWalletId);
+    const i2 = pci('chuyển 1tr sang Tiền mặt từ Ngân hàng');
+    check('… đảo thứ tự trong câu vẫn đúng hướng',
+      i2.fromWalletId === bank.id && i2.toWalletId === cash.id, i2.fromWalletId + ' -> ' + i2.toWalletId);
+    /* "rút" là lấy tiền RA, "nạp" là đưa tiền VÀO — một ví trong câu thì chữ
+       đó quyết định nó là nguồn hay đích. */
+    check('“rút … Ngân hàng” ⇒ ví đó là NGUỒN',
+      pci('rút 500k từ Ngân hàng').fromWalletId === bank.id && !pci('rút 500k từ Ngân hàng').toWalletId);
+    check('“nạp … Tiền mặt” ⇒ ví đó là ĐÍCH',
+      pci('nạp 500k Tiền mặt').toWalletId === cash.id);
+
+    /* Kịch bản A: thiếu ví đích thì HỎI kèm nút, không đoán. */
+    window.openChatDrawer(); await sleep(20);
+    $('chat-input').value = 'rút 500k từ Ngân hàng';
+    window.chatSend(); await sleep(60);
+    let last = [...$('chat-body').children].pop();
+    check('thiếu ví đích thì bot hỏi lại', /sang ví nào/i.test(last.textContent), last.textContent.slice(0, 60));
+    const chips = last.querySelectorAll('.chat-chip');
+    check('… kèm một chip cho mỗi ví', chips.length === S().wallets.length, String(chips.length));
+
+    /* Bấm chip là điền nốt và hiện thẻ xác nhận. */
+    [...chips].find(c => c.textContent.includes('Tiền mặt')).click(); await sleep(40);
+    const card = [...$('chat-body').querySelectorAll('.bot-card-action')].pop();
+    check('bấm chip xong thì ra thẻ xác nhận chuyển tiền', !!card && /Xác nhận chuyển/.test(card.textContent));
+    check('… thẻ nêu đúng đường đi', /Ngân hàng/.test(card.textContent) && /Tiền mặt/.test(card.textContent));
+
+    const balBefore = [window.getWalletBalance(bank.id), window.getWalletBalance(cash.id)];
+    const nBefore = S().transactions.length;
+    card.querySelector('.btn-primary').click(); await sleep(40);
+    const added = S().transactions.slice(nBefore);
+    check('xác nhận thì ghi ĐÚNG MỘT CẶP transfer_out + transfer_in', added.length === 2
+      && added.some(t => t.type === 'transfer_out') && added.some(t => t.type === 'transfer_in'), String(added.length));
+    check('… hai chân chung một transferId', added[0].transferId && added[0].transferId === added[1].transferId);
+    check('… và chung một status', added[0].status === added[1].status && added[0].status === 'completed');
+    check('… số dư hai ví đổi đúng chiều',
+      window.getWalletBalance(bank.id) === balBefore[0] - 500000
+      && window.getWalletBalance(cash.id) === balBefore[1] + 500000,
+      window.getWalletBalance(bank.id) + '/' + balBefore[0]);
+
+    /* Kịch bản A cho định kỳ: thiếu chu kỳ thì hỏi bằng ba nút. */
+    $('chat-input').value = 'định kỳ tiền nhà 4tr';
+    window.chatSend(); await sleep(60);
+    last = [...$('chat-body').children].pop();
+    check('thiếu chu kỳ thì bot hỏi lại', /chu kỳ nào/i.test(last.textContent), last.textContent.slice(0, 60));
+    const freqBtns = [...last.querySelectorAll('.chat-chip')].map(b => b.textContent.trim());
+    check('… kèm ba nút Hàng tuần / Hàng tháng / Hàng năm',
+      freqBtns.join('|') === 'Hàng tuần|Hàng tháng|Hàng năm', freqBtns.join('|'));
+
+    [...last.querySelectorAll('.chat-chip')].find(b => /tháng/.test(b.textContent)).click(); await sleep(40);
+    const rcard = [...$('chat-body').querySelectorAll('.bot-card-action')].pop();
+    check('chọn chu kỳ xong thì ra thẻ xác nhận lịch', /Xác nhận lịch định kỳ|Chu kỳ/.test(rcard.textContent));
+    const rBefore = S().recurring.length;
+    rcard.querySelector('.btn-primary').click(); await sleep(40);
+    const r = S().recurring[S().recurring.length - 1];
+    check('xác nhận thì tạo khoản định kỳ', S().recurring.length === rBefore + 1);
+    check('… đúng số tiền và chu kỳ', r.amount === 4000000 && r.frequency === 'monthly',
+      r.amount + '/' + r.frequency);
+    check('… hạn kế tiếp ở tương lai, không phải quá khứ', r.dueDate > window.todayISO(), r.dueDate);
+    check('… bản ghi đủ field như form tạo ra',
+      ['name','type','amount','walletId','categoryId','frequency','interval','dueDate','endDate','autoProcess']
+        .every(k => k in r), Object.keys(r).join(','));
+    /* Bot tạo LỊCH NHẮC, không tự bật đường ghi tiền định kỳ. */
+    check('… và KHÔNG tự bật tự động ghi', r.autoProcess === false);
+    check('… ví trỏ vào ví có thật', !!window.getWallet(r.walletId));
+
+    /* "ngày 5 hàng tháng": số 5 là ngày, không phải tiền. */
+    const i3 = pci('tiền nhà 4tr hàng tháng ngày 5');
+    check('bóc được ngày lặp trong tháng', i3.recurringDay === 5, String(i3.recurringDay));
+    const due = window.recurringDueDate('monthly', 5);
+    check('hạn kế tiếp là đúng ngày 5 của kỳ tới', due.slice(-2) === '05' && due > window.todayISO(), due);
+
+    window.closeChatDrawer(true);
+    window.switchTab('dashboard'); await sleep(20);
+  }
+
+  console.log('\n· trợ lý chat: biên lai Techcombank / MoMo');
+  {
+    /* OCR đọc dấu rất tệ, nên bộ bóc tách chạy trên chuỗi đã bỏ dấu — mẫu
+       dưới đây cố tình trộn cả có dấu và không dấu. */
+    const tcb = window.parseBankReceiptOCR(
+      'Techcombank\nChuyển tiền thành công\nSố tiền: 2,000,000 VND\n'
+      + 'Đến: NGUYEN VAN A - 1903 6688 8888\nNội dung: Tra tien nha thang 9\nThời gian: 11/09/2026 14:32');
+    check('TCB: nhận ra nhà phát hành', tcb.bank === 'Techcombank', tcb.bank);
+    check('TCB: bóc đúng số tiền có dấu phẩy nghìn', tcb.amount === 2000000, String(tcb.amount));
+    check('TCB: lấy đúng nội dung chuyển khoản', tcb.note === 'Tra tien nha thang 9', JSON.stringify(tcb.note));
+    check('TCB: đọc được ngày', tcb.date === '2026-09-11', String(tcb.date));
+    check('TCB: map sang ví ngân hàng trong sổ',
+      !!tcb.walletId && window.eval(`walletTypeOf(getWallet('${tcb.walletId}'))`) === 'bank', String(tcb.walletId));
+
+    const momo = window.parseBankReceiptOCR(
+      'Vi MoMo\nThanh toan thanh cong\n-55.000d\nNoi dung: Tra tien dien thang 9\n10/09/2026 09:15');
+    check('MoMo: nhận ra nhà phát hành', momo.bank === 'MoMo', momo.bank);
+    check('MoMo: số âm vẫn ra số tiền dương', momo.amount === 55000, String(momo.amount));
+    check('MoMo: không dấu vẫn lấy được nội dung', /Tra tien dien/.test(momo.note), JSON.stringify(momo.note));
+    check('MoMo: map sang ví điện tử trong sổ',
+      !!momo.walletId && window.eval(`walletTypeOf(getWallet('${momo.walletId}'))`) === 'ewallet', String(momo.walletId));
+
+    /* Không phải biên lai ngân hàng thì về luật chung của hoá đơn. */
+    const shop = window.parseBankReceiptOCR('QUAN COM TAM\nMon 55.000\nTONG CONG: 125.000\nTien khach 200.000');
+    check('không nhận ra nhà phát hành thì vẫn bóc được hoá đơn thường',
+      shop.bank === 'Khác' && shop.amount === 125000, shop.bank + '/' + shop.amount);
+    check('rỗng thì không đoán bừa', window.parseBankReceiptOCR('').amount === 0);
+
+    check('findWalletByNameOrType khớp theo tên trước, rồi mới tới loại ví',
+      window.findWalletByNameOrType('Ngân hàng') === S().wallets.find(w => w.name === 'Ngân hàng').id);
+    check('… tên lạ hoàn toàn thì trả null, không đoán ví',
+      window.findWalletByNameOrType('Nganhangkhongtontai') === null);
   }
 
   console.log('\n· trợ lý chat: CSS theo biến theme');
@@ -2383,6 +2632,153 @@ async function boot(opts) {
       !visible('view-add'), 'currentTab=' + window.eval('currentTab'));
 
     window.switchTab('dashboard'); await sleep(20);
+  }
+
+  console.log('\n· Tổng quan: khối "Giao dịch gần đây"');
+  {
+    window.switchTab('dashboard'); await sleep(30);
+    check('khối nằm dưới lưới Tiện ích', (() => {
+      const util = $('db-quick-access'), rec = $('recent-transactions-section');
+      if (!util || !rec) return false;
+      /* compareDocumentPosition: 4 = rec đứng SAU util trong tài liệu. */
+      return !!(util.compareDocumentPosition(rec) & 4);
+    })());
+    check('có tiêu đề và link Xem tất cả',
+      /Giao dịch gần đây/.test($('recent-transactions-section').textContent) && !!$('btn-view-all-recent'));
+
+    const rows = $('recent-transactions-list').querySelectorAll('.tx-row');
+    check('hiện tối đa 5 dòng', rows.length > 0 && rows.length <= 5, String(rows.length));
+    check('dùng lại .tx-row của tab Giao dịch, không dựng dòng riêng',
+      !!$('recent-transactions-list').querySelector('.tx-row .tx-ic'));
+
+    /* Mới nhất lên đầu, và KHÔNG được lẫn khoản dự kiến: sortTxDesc xếp ngày
+       lớn trước, nên một khoản ngày mai sẽ chiếm đầu danh sách "gần đây" và
+       người dùng đọc ra một khoản chi chưa hề xảy ra. */
+    const today = window.todayISO();
+    const shown = [...rows].map(r => r.querySelector('.tx-sub').textContent);
+    check('không có dòng nào mang nhãn Dự kiến',
+      !$('recent-transactions-list').querySelector('.tag-pending'), shown.join(' | '));
+    const done = window.eval('getUserTransactions().slice().sort(sortTxDesc)');
+    check('dòng đầu là giao dịch mới nhất đã ghi nhận',
+      rows.length === 0 || rows[0].textContent.includes(String(done[0].note || '')),
+      (done[0] && done[0].note) + ' vs ' + rows[0].textContent.slice(0, 40));
+    check('mọi ngày hiển thị đều không ở tương lai',
+      done.slice(0, 5).every(t => t.date <= today));
+
+    /* Xem tất cả: sang tab Giao dịch và KHÔNG mang theo bộ lọc nào. */
+    window.setTxFilter('type', 'income', d.querySelector('#tx-filter-type .chip[data-val="income"]'));
+    await sleep(10);
+    $('btn-view-all-recent').click(); await sleep(30);
+    check('"Xem tất cả" sang tab Giao dịch', visible('view-transactions'));
+    check('… và hạ mọi bộ lọc về "tất cả"',
+      window.eval("JSON.stringify(txFilters)") === JSON.stringify(
+        {type:'all', walletId:'all', catId:'all', eventId:'all', range:'all', status:'all'}),
+      window.eval("JSON.stringify(txFilters)"));
+    window.switchTab('dashboard'); await sleep(20);
+  }
+
+  console.log('\n· ghi nhanh: nút [+] mở thẳng bàn phím');
+  {
+    const navS = () => window.eval('navState');
+    window.switchTab('dashboard'); await sleep(20);
+
+    /* Nút [+] giữa nav bar là đường vào chính, và nó phải mở bàn phím chứ
+       không phải form: con số là thứ người ta biết trước khi biết mình sẽ xếp
+       nó vào đâu. */
+    check('nút [+] gọi openQuickEntry, không phải switchTab(add)',
+      /openQuickEntry\(\)/.test(d.querySelector('.fab').getAttribute('onclick')),
+      d.querySelector('.fab').getAttribute('onclick'));
+
+    d.querySelector('.fab').click(); await sleep(30);
+    check('bấm [+] là bàn phím số hiện ra ngay', visible('amount-sheet'));
+    check('… ở chế độ ghi nhanh', window.eval('amtKind') === 'quick', String(window.eval('amtKind')));
+    check('… có thanh ghi chú + hai chip', visible('qe-inputs') && !!$('qe-chip-wallet') && !!$('qe-chip-cat'));
+    check('… có công tắc Chi/Thu', visible('qe-type') && $('qe-type').children.length === 2);
+    check('… phím hành động là "Lưu", không phải "Tiếp tục"', txt('amt-next') === 'Lưu', txt('amt-next'));
+    check('… số tiền bắt đầu từ 0', window.eval('amtValue()') === 0);
+    check('… và dùng lại đúng một bàn phím của app (không dựng bàn phím thứ hai)',
+      d.querySelectorAll('.tcb-keypad-wrapper').length === 1);
+
+    /* Vuốt lùi phải đóng bàn phím, không thoát app. */
+    check('bàn phím là một bước lịch sử', navS().activeModal === 'amount-sheet', String(navS().activeModal));
+    window.history.back(); await sleep(150);
+    check('vuốt lùi đóng bàn phím thay vì thoát app', !visible('amount-sheet'));
+
+    /* Gõ ghi chú → ví và danh mục tự nhảy theo lịch sử (đã dạy "Xăng xe máy"
+       ở khối trên: 2 lần ví[1], 1 lần ví[0]). */
+    const w1 = S().wallets[0].id, w2 = S().wallets[1].id;
+    window.openQuickEntry(); await sleep(20);
+    window.quickSetWallet(w1); await sleep(10);          /* chọn tay trước */
+    $('qe-note').value = 'xăng';
+    window.onQuickNote('xăng'); await sleep(10);
+    check('tay người dùng thắng phỏng đoán: ví đã chọn không bị ghi đè',
+      window.eval('txSelectedWalletId') === w1, window.eval('txSelectedWalletId'));
+
+    window.openQuickEntry(); await sleep(20);            /* mở lại: cờ "đã chọn tay" phải reset */
+    $('qe-note').value = 'xăng';
+    window.onQuickNote('xăng'); await sleep(10);
+    check('gõ ghi chú thì danh mục tự nhảy theo lịch sử',
+      window.eval('txSelectedCatId') === 'c_transport', window.eval('txSelectedCatId'));
+    check('… và ví cũng tự nhảy theo ví hay dùng cho khoản đó',
+      window.eval('txSelectedWalletId') === w2, window.eval('txSelectedWalletId'));
+    check('chip hiện đúng tên ví và danh mục',
+      $('qe-chip-wallet').textContent.includes(S().wallets[1].name)
+      && /Di chuyển/.test($('qe-chip-cat').textContent),
+      $('qe-chip-wallet').textContent + ' | ' + $('qe-chip-cat').textContent);
+
+    /* Bàn phím: 3 + 5 + 000 = 35.000 */
+    window.amtKey('3'); window.amtKey('5'); window.amtKey('000'); await sleep(10);
+    check('bàn phím dựng đúng con số', window.eval('amtValue()') === 35000, String(window.eval('amtValue()')));
+    check('con số to hiển thị có dấu phân cách', txt('amt-val') === '35.000', txt('amt-val'));
+
+    const before = S().transactions.length;
+    $('qe-note').value = 'Xăng xe máy';
+    $('amt-next').click(); await sleep(40);
+    const t = S().transactions[S().transactions.length - 1];
+    check('bấm "Lưu" ghi thẳng vào sổ', S().transactions.length === before + 1);
+    check('… đúng số tiền', t.amount === 35000, String(t.amount));
+    check('… ngày là hôm nay và status suy từ ngày',
+      t.date === window.todayISO() && t.status === 'completed', t.date + '/' + t.status);
+    check('… đúng ví và danh mục đã gợi ý', t.walletId === w2 && t.categoryId === 'c_transport',
+      t.walletId + '/' + t.categoryId);
+    check('… ghi chú đi theo', t.note === 'Xăng xe máy', t.note);
+    check('lưu xong thì đóng bàn phím', !visible('amount-sheet'));
+    check('… và dọn sạch số tiền cho lần sau',
+      window.eval('amtValue()') === 0 && window.eval('txAmount') === 0 && $('qe-note').value === '');
+
+    /* Chi/Thu: đổi loại thì danh mục phải sang bảng của loại đó */
+    window.openQuickEntry(); await sleep(20);
+    window.setQuickType('income'); await sleep(10);
+    check('đổi sang Thu thì danh mục sang bảng khoản thu',
+      !!window.eval("findCategory('income', txSelectedCatId)"), window.eval('txSelectedCatId'));
+    check('… và công tắc sáng đúng ô',
+      d.querySelector('#qe-type .qe-t[data-val="income"]').classList.contains('active'));
+    window.setQuickType('expense'); await sleep(10);
+
+    /* Đường ra form đầy đủ: mang theo số tiền và ghi chú, và KHÔNG để lại
+       một bước lịch sử trỏ vào bàn phím đã đóng. */
+    window.amtKey('9'); window.amtKey('000'); await sleep(10);
+    $('qe-note').value = 'Cà phê sáng';
+    window.quickToFullForm(); await sleep(40);
+    check('"Thêm chi tiết" mở form đầy đủ', visible('view-add'));
+    check('… đóng bàn phím lại', !visible('amount-sheet'));
+    check('… mang theo số tiền', window.eval('txAmount') === 9000, String(window.eval('txAmount')));
+    check('… mang theo ghi chú', $('tx-note').value === 'Cà phê sáng', $('tx-note').value);
+    window.history.back(); await sleep(150);
+    check('vuốt lùi từ form không quay lại bàn phím đã đóng', !visible('amount-sheet'));
+
+    window.cancelAddTx(); await sleep(20);
+  }
+
+  console.log('\n· ghi nhanh: CSS theo biến theme');
+  {
+    const css = fs.readFileSync(path.join(PUBLIC, 'css', 'styles.css'), 'utf8');
+    check('thanh ghi nhanh lấy màu từ biến theme, không hex cứng',
+      /\.quick-inputs-bar\{[^}]*background:var\(--card-2\)/.test(css)
+      && /\.quick-note-input\{[^}]*background:var\(--card\)/.test(css)
+      && /\.quick-chip\{[^}]*background:var\(--card\)/.test(css));
+    check('màn thấp thì hạ chiều cao phím thay vì để bàn phím trôi khỏi màn hình',
+      /@media \(max-height:700px\)\{[\s\S]{0,400}tcb-btn-key\{height:46px/.test(css));
   }
 
   console.log('\n· realtime từ thiết bị khác');
