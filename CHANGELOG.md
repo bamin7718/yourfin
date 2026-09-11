@@ -12,6 +12,42 @@ thứ khó tìm lại sau nửa năm.
 
 ---
 
+## [5.1.4] — 11/09/2026
+
+### Sửa
+
+Chạy bộ bóc tách trên **ảnh biên lai thật** của Techcombank và MoMo, và tìm ra
+bốn chỗ đọc sai — cả bốn đều là loại lỗi chỉ ảnh thật mới lộ ra:
+
+- **"Chuyển khoản" bị hiểu thành danh mục "Di chuyển".** Hai chữ dùng chung
+  một từ gốc, nên **mọi** biên lai chuyển tiền đều bị gán vào Di chuyển. Giờ
+  chữ nghiệp vụ ngân hàng bị bóc khỏi nội dung trước khi khớp danh mục; memo
+  chỉ có "chuyển khoản nhanh qua Zalo" thì trả về *Khác* kèm nhắc "bấm để
+  đổi", vì nó thật sự không mang thông tin danh mục nào.
+- **Số tài khoản 14 chữ số bị đọc thành số tiền** (19027323500017 → mười chín
+  nghìn tỷ). Trên biên lai, số tiền luôn có dấu ngăn nghìn, nên một dãy trần
+  từ 10 chữ số trở lên không bao giờ là tiền.
+- **Nhà phát hành chọn sai khi tờ biên lai có hai tên ngân hàng.** Ảnh mẫu có
+  cả "TECHCOMBANK" (ví nguồn) và "VIETCOMBANK" (ngân hàng người nhận); giờ lấy
+  tên xuất hiện **sớm nhất** trong văn bản, vì biên lai in tên app ở đầu trang.
+- **Nội dung bị cắt đứt giữa từ** và ăn sang khối kế tiếp: thiếu nhãn "Mã đơn
+  hàng" trong danh sách mốc dừng thì memo của MoMo kéo theo cả mã 40 ký tự.
+
+### Thêm
+
+- **Đọc dòng "Danh mục" do chính app ngân hàng in ra.** MoMo ghi sẵn
+  *"Danh mục: Ăn uống"* trên biên lai — đó là phân loại của chính giao dịch
+  đó, đáng tin hơn mọi phép đoán từ tên cửa hàng.
+- **Dấu của con số quyết định chiều tiền** (`-VND 262,000` ⇒ chi,
+  `+VND 5,000,000` ⇒ thu). Mạnh hơn đoán theo từ khoá trên một trang đầy chữ
+  nghiệp vụ, nơi "Thủ Đức" chứa "thu" và "Ngoại thương" chứa "thương".
+- 18 test case dùng văn bản của hai biên lai thật (đã ẩn danh tên người và số
+  tài khoản, giữ nguyên độ dài và hình dạng — chính chúng mới là thứ làm bộ
+  bóc tách sai). `.gitignore` chặn ảnh biên lai ở gốc repo: đó là ảnh chụp
+  thật, mà repo này public.
+
+---
+
 ## [5.1.3] — 11/09/2026
 
 ### Sửa

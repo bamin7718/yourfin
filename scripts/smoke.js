@@ -2497,6 +2497,80 @@ async function boot(opts) {
       window.findWalletByNameOrType('Nganhangkhongtontai') === null);
   }
 
+  console.log('\n· biên lai THẬT: Techcombank + MoMo (ảnh mẫu)');
+  {
+    /* Hai fixture dưới đây là văn bản đọc từ ảnh chụp màn hình THẬT của app
+       Techcombank và MoMo (techcom.jpg / momo.jpg — KHÔNG commit vào repo vì
+       chứa tên người và số tài khoản thật; xem .gitignore). Tên người đã thay
+       bằng giá trị giả, còn số tài khoản / mã giao dịch giữ nguyên ĐỘ DÀI và
+       HÌNH DẠNG, vì chính chúng mới là thứ làm bộ bóc tách đọc sai: một dãy
+       14 chữ số, hay một mã đơn hàng 40 ký tự nằm ngay sau "Nội dung".
+
+       Số tiền, nhãn, thứ tự các khối và dấu phân cách giữ đúng như trên ảnh:
+       `-VND 262,000` (đơn vị đứng TRƯỚC số, dấu trừ dính vào đơn vị) và
+       `-39.000đ` (dấu chấm ngăn nghìn, đơn vị dính sau số). */
+    const TCB = 'Tài khoản thanh toán\nTECHCOMBANK\n-VND 262,000\n15:26 10/09/2026\n'
+      + 'Từ tài khoản\nNGUYEN VAN A\nTechcombank\n19027323500017\n'
+      + 'Tới tài khoản\nTRAN THI B\nNGAN HANG TMCP NGOAI THUONG VIET NAM (VIETCOMBANK)\n1054425144\n'
+      + 'Lời nhắn\nNam Nguyen chuyen khoan nhanh qua Zalo\nMã giao dịch: FT26253811322360';
+    const MOMO = 'Chi Tiết Giao Dịch\nCÔNG TY TNHH TM DV MỸ PHÚC\n-39.000đ\n'
+      + 'Trạng thái Thành công\nThời gian 10:58 - 06/09/2026\nMã giao dịch 145509989601\n'
+      + 'Tài khoản/thẻ Ví MoMo\nTổng phí Miễn phí\nDanh mục Ăn uống\n'
+      + 'Thông tin đơn hàng\nCửa hàng The Orange Coffee - 259 Man Thiện\n'
+      + 'Địa chỉ 259, Man Thiện, Hiệp Phú, Thủ Đức, Hồ Chí Minh\n'
+      + 'Nội dung Nguyen Van A Thanh toan cho The Orange Coffee - 259 Man Thien\n'
+      + 'Mã đơn hàng qrc-MOMOKTR620250917-6ad44d42-e9b6-4a65-9d54-6c9be31b2fa29418';
+    const wtype = id => window.eval(`walletTypeOf(getWallet('${id}'))`);
+
+    const tcb = window.parseBankReceiptOCR(TCB);
+    /* "-VND 262,000": đơn vị đứng TRƯỚC số — dạng này không khớp luật "số rồi
+       tới đơn vị", mà trên tờ đó còn hai dãy 14 chữ số và một mã giao dịch để
+       đọc nhầm thành tiền. */
+    check('TCB thật: đọc đúng 262.000 dù đơn vị đứng trước số', tcb.amount === 262000, String(tcb.amount));
+    /* Tờ này có CẢ "TECHCOMBANK" (ví nguồn) lẫn "VIETCOMBANK" (ngân hàng
+       người nhận). Tên xuất hiện sớm nhất mới là nhà phát hành — duyệt theo
+       thứ tự BANK_SIGNS thì kết quả phụ thuộc thứ tự ta gõ cái bảng đó. */
+    check('TCB thật: chọn nhà phát hành, không phải ngân hàng người nhận',
+      tcb.bank === 'Techcombank', tcb.bank);
+    check('TCB thật: lấy "Lời nhắn", dừng trước "Mã giao dịch"',
+      tcb.note === 'Nam Nguyen chuyen khoan nhanh qua Zalo', JSON.stringify(tcb.note));
+    check('TCB thật: đọc ngày 10/09/2026, không nhầm với giờ 15:26', tcb.date === '2026-09-10', String(tcb.date));
+    check('TCB thật: map sang ví ngân hàng', !!tcb.walletId && wtype(tcb.walletId) === 'bank');
+    check('TCB thật: dấu trừ ⇒ khoản chi', tcb.type === 'expense');
+    /* Bẫy tìm ra từ chính tờ này: "chuyển khoản" chứa "chuyển", mà danh mục
+       "Di chuyển" cũng chứa "chuyển" — trước khi sửa thì MỌI biên lai chuyển
+       tiền đều bị gán vào Di chuyển. */
+    check('TCB thật: "chuyển khoản" KHÔNG bị hiểu thành danh mục Di chuyển',
+      tcb.categoryId !== 'c_transport', String(tcb.categoryId));
+    check('TCB thật: memo chỉ có chữ nghiệp vụ thì về Khác và nói rõ chưa nhận diện được',
+      tcb.categoryId === 'c_other_exp' && tcb.matched === false, tcb.categoryId + '/' + tcb.matched);
+
+    const momo = window.parseBankReceiptOCR(MOMO);
+    check('MoMo thật: đọc đúng 39.000 từ "-39.000đ"', momo.amount === 39000, String(momo.amount));
+    check('MoMo thật: nhận ra nhà phát hành', momo.bank === 'MoMo', momo.bank);
+    check('MoMo thật: đọc ngày 06/09/2026', momo.date === '2026-09-06', String(momo.date));
+    check('MoMo thật: map sang ví điện tử', !!momo.walletId && wtype(momo.walletId) === 'ewallet');
+    /* Nội dung dài 62 ký tự, và ngay sau nó là mã đơn hàng 40 ký tự. */
+    check('MoMo thật: lấy trọn nội dung, không ăn sang "Mã đơn hàng"',
+      momo.note === 'Nguyen Van A Thanh toan cho The Orange Coffee - 259 Man Thien',
+      JSON.stringify(momo.note));
+    check('MoMo thật: không cắt đứt giữa một từ', !/ Th$/.test(momo.note), JSON.stringify(momo.note));
+    /* MoMo tự in "Danh mục: Ăn uống" — đó là phân loại của chính giao dịch,
+       đáng tin hơn mọi phép đoán từ tên cửa hàng ("The Orange Coffee" không
+       có từ nào trong lịch sử người dùng). */
+    check('MoMo thật: lấy danh mục từ dòng "Danh mục" của biên lai',
+      momo.categoryId === 'c_food' && momo.matched === true, momo.categoryId + '/' + momo.matched);
+    check('MoMo thật: dấu trừ ⇒ khoản chi', momo.type === 'expense');
+
+    /* Số tài khoản và mã giao dịch không bao giờ được đọc thành số tiền. */
+    check('dãy số dài không có dấu phân cách không bị đọc thành tiền',
+      window.parseBankReceiptOCR('Techcombank\nSo tai khoan 19027323500017\nMa giao dich FT26253811322360').amount === 0);
+    /* Dấu cộng ⇒ tiền vào. Kiểm riêng vì hai ảnh mẫu đều là tiền ra. */
+    check('dấu cộng ⇒ khoản thu',
+      window.parseBankReceiptOCR('Techcombank\n+VND 5,000,000\nLoi nhan Luong thang 9').type === 'income');
+  }
+
+
   console.log('\n· trợ lý chat: CSS theo biến theme');
   {
     const css = fs.readFileSync(path.join(PUBLIC, 'css', 'styles.css'), 'utf8');

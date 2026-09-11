@@ -31,3 +31,16 @@ desktop.ini
 # there is nothing here to keep in sync with the web app by hand.
 /android/
 /ios/
+
+# Ảnh biên lai / bill dùng để thử bộ bóc tách OCR. KHÔNG commit: chúng là
+# ảnh chụp màn hình thật, có tên người, số tài khoản và mã giao dịch — repo
+# này public. Văn bản của chúng đã được ẩn danh và đưa vào scripts/smoke.js
+# làm fixture, nên không cần chính file ảnh để chạy test.
+/*.jpg
+/*.jpeg
+/*.png
+
+# Harness tạm khi soi/đo thứ gì đó (scripts/*.tmp.js). Chúng thường chứa dữ
+# liệu dán từ ảnh hoặc log thật — không được lọt vào history.
+*.tmp.js
+*.tmp.md

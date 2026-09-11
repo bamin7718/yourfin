@@ -5081,6 +5081,14 @@ function chatAmountCandidates(s){
   const out = [];
   for(const m of String(s==null?'':s).matchAll(/(\d[\d.,]*)\s*(ty|trieu|tr|nghin|ngan|ng|vnd|dong|k|m|d)?(?![a-z0-9])/g)){
     const unit = m[2] || '';
+    /* Dãy số TRẦN quá dài là số tài khoản / mã giao dịch, không phải tiền: trên
+       biên lai thì số tiền luôn có dấu ngăn nghìn. 10 chữ số liền nhau là từ
+       một tỷ trở lên — người ta gõ "1 tỷ" chứ không gõ mười chữ số. Không có
+       luật này thì "So tai khoan 19027323500017" ra mười chín nghìn tỷ.
+       Trần 12 là AMT_MAX_INT_DIGITS, chính trần mà bàn phím số đang dùng. */
+    const digits = m[1].replace(/[^\d]/g, '');
+    if(!/[.,]/.test(m[1]) && digits.length >= 10) continue;
+    if(digits.length > AMT_MAX_INT_DIGITS) continue;
     const value = chatNumFromRaw(m[1], unit);
     if(value > 0) out.push({value, unit, guess:false});
   }
@@ -5231,9 +5239,46 @@ const RECEIPT_AMOUNT_RES = [
 ];
 const RECEIPT_NOTE_RE = /(?:noi dung chuyen khoan|noi dung ck|noi dung|loi nhan|ghi chu|dien giai|memo|message)[\s:\-]*/;
 
+/* Nhãn của các khối khác trên biên lai — dùng làm MỐC DỪNG khi cắt một đoạn
+   nội dung. Danh sách lấy từ biên lai thật của Techcombank và MoMo: hai app
+   in liền các khối vào nhau, nên không có mốc dừng thì "Nội dung" ăn luôn cả
+   mã đơn hàng dài 40 ký tự phía sau. */
+const RECEIPT_STOP_RE = /(thoi gian|ngay gio|so tai khoan|tai khoan|nguoi nhan|nguoi gui|ma giao dich|ma don hang|ma dh|ma gd|so du|bien lai|phi giao dich|tong phi|trang thai|danh muc|thong tin|cua hang|dia chi|vi tri|lien he)/;
+/* Chữ nghiệp vụ ngân hàng: bóc khỏi nội dung TRƯỚC khi đem đi khớp danh mục.
+   Lý do rất cụ thể, tìm ra từ biên lai thật: "chuyển khoản" chứa "chuyển", mà
+   danh mục "Di chuyển" cũng chứa "chuyển" — nên MỌI biên lai chuyển tiền đều
+   bị gán vào Di chuyển. Một memo chỉ có "chuyển khoản nhanh qua Zalo" thật ra
+   không mang thông tin danh mục nào, và trả về "Khác" kèm lời nhắc "bấm để
+   đổi" mới là câu trả lời đúng. */
+const RECEIPT_FILLER_RE = new RegExp('(chuyen khoan|chuyen tien|chuyen nhanh|thanh toan cho|thanh toan|chuyen sang|napas|vietqr|\\bqr\\b|\\bck\\b|\\bib\\b|nhanh|mien phi|thanh cong|noi dung|loi nhan)', 'g');
+
+/* Nhà phát hành = tên xuất hiện SỚM NHẤT trong văn bản, không phải tên đầu
+   tiên trong BANK_SIGNS. Biên lai in logo/tên app ở đầu, còn tên ngân hàng
+   của người NHẬN thì nằm giữa trang — mẫu techcom.jpg có đúng cả
+   "TECHCOMBANK" (nguồn) lẫn "VIETCOMBANK" (đích), và duyệt theo thứ tự bảng
+   thì kết quả phụ thuộc thứ tự ta gõ bảng đó. */
 function receiptBank(t){
-  for(const b of BANK_SIGNS){ if(b.re.test(t)) return b; }
-  return null;
+  let best = null;
+  BANK_SIGNS.forEach(b=>{
+    const m = b.re.exec(t);
+    if(!m) return;
+    if(!best || m.index < best.at) best = {name:b.name, type:b.type, at:m.index};
+  });
+  return best;
+}
+/* Cắt một đoạn từ chuỗi GỐC (có dấu) theo chỉ số tìm trên bản không dấu:
+   dừng ở nhãn kế tiếp, và không bao giờ cắt giữa một từ. */
+function receiptSlice(flat, t, from, max){
+  const probe = t.slice(from, from + max + 50);
+  const stop = probe.search(RECEIPT_STOP_RE);
+  const src = (t.length === flat.length) ? flat : t;
+  let out = src.slice(from, from + (stop > -1 ? stop : probe.length));
+  if(out.length > max){
+    out = out.slice(0, max);
+    const sp = out.lastIndexOf(' ');
+    if(sp > max * 0.6) out = out.slice(0, sp);      /* thà ngắn hơn là đứt giữa từ */
+  }
+  return out.replace(/[\s:\-|,]+$/, '').trim();
 }
 /* Ví tương ứng trong sổ: khớp theo TÊN trước (người dùng đặt tên ví là
    "Techcombank" thì không có gì phải đoán), rồi mới tới LOẠI ví — và loại
@@ -5256,7 +5301,8 @@ function findWalletByNameOrType(bank){
 }
 
 function parseBankReceiptOCR(rawText){
-  const out = {amount:0, bank:'Khác', note:'', date:null, walletId:null, categoryId:null, subId:null, type:'expense'};
+  const out = {amount:0, bank:'Khác', note:'', date:null, walletId:null,
+               categoryId:null, subId:null, matched:false, type:'expense'};
   const raw = String(rawText == null ? '' : rawText);
   if(!raw.trim()) return out;
   /* Gộp mọi khoảng trắng: OCR hay cắt một dòng thành hai, và cái nhãn
@@ -5273,7 +5319,16 @@ function parseBankReceiptOCR(rawText){
       /* Nhóm nghìn: bỏ hết dấu phân cách là đúng, không cần đoán dấu nào là
          thập phân — VND không có xu trên biên lai. */
       const v = parseInt(m[1].replace(/[.,+\-]/g, ''), 10);
-      if(v > 0){ out.amount = v; break; }
+      if(v > 0){
+        out.amount = v;
+        /* Dấu của con số là bằng chứng mạnh nhất về chiều tiền — mạnh hơn
+           nhiều so với đoán theo từ khoá trên một trang đầy chữ nghiệp vụ
+           ("Thủ Đức" chứa "thu", "Ngoại thương" chứa "thương"). Dấu có thể
+           đứng trước số HOẶC trước đơn vị: "-VND 262,000". */
+        const head = t.slice(Math.max(0, m.index - 3), m.index + m[0].length);
+        if(/\+/.test(head)) out.type = 'income';
+        break;
+      }
     }
   }
   /* Không có nhãn nào đọc được thì về luật chung của hoá đơn (dòng "tổng
@@ -5284,31 +5339,41 @@ function parseBankReceiptOCR(rawText){
     if(!out.note) out.note = generic.note;
   }
 
-  /* Ghi chú: cắt từ chuỗi GỐC để giữ dấu. deaccent() không đổi độ dài với
-     tiếng Việt tổ hợp sẵn, nên chỉ số khớp được — nhưng vẫn kiểm tra, gặp OCR
-     trả về chuỗi đã tách dấu thì thà lấy bản không dấu còn hơn cắt lệch. */
+  /* Nội dung chuyển khoản — cắt từ chuỗi gốc để giữ dấu, xem receiptSlice(). */
   const nm = RECEIPT_NOTE_RE.exec(t);
   if(nm){
-    const from = nm.index + nm[0].length;
-    const src = (t.length === flat.length) ? flat : t;
-    /* Mốc cắt phải tìm trên bản KHÔNG DẤU rồi mới áp chỉ số sang bản có dấu:
-       tìm "thoi gian" trong chuỗi có dấu sẽ không bao giờ khớp "Thời gian",
-       và ghi chú sẽ kéo theo cả nửa tờ biên lai. */
-    const probe = t.slice(from, from + 70);
-    const cut = probe.search(/(thoi gian|ngay gio|so tai khoan|tai khoan|nguoi nhan|nguoi gui|ma giao dich|ma gd|so du|bien lai|phi giao dich)/);
-    let note = src.slice(from, from + (cut > -1 ? cut : probe.length));
-    note = note.replace(/[\s:\-|]+$/, '').trim();
-    if(note.length >= 2) out.note = note.slice(0, 60);
+    const note = receiptSlice(flat, t, nm.index + nm[0].length, 80);
+    if(note.length >= 2) out.note = note;
   }
 
   out.date = chatExtractDate(raw).date;
   out.walletId = findWalletByNameOrType(bank);
-  /* Danh mục suy từ nội dung chuyển khoản — chính là chỗ ma trận từ khoá tự
-     học phát huy: "tra tien dien" từng vào Hoá đơn thì lần này cũng vậy. */
-  const m2 = matchWalletAndCategory(out.note || t, 'expense');
-  out.categoryId = m2.catId;
-  out.subId = m2.subId;
-  out.matched = m2.matched;
+
+  /* Danh mục — ba nguồn, độ tin cậy giảm dần:
+     1. Dòng "Danh mục" do chính app ngân hàng in ra (MoMo có): không gì đáng
+        tin hơn, đó là phân loại của chính giao dịch đó.
+     2. Nội dung chuyển khoản, sau khi bóc chữ nghiệp vụ.
+     3. Toàn bộ văn bản, cũng đã bóc chữ nghiệp vụ. */
+  const cm = /danh muc[\s:]*/.exec(t);
+  if(cm){
+    const label = normText(receiptSlice(flat, t, cm.index + cm[0].length, 30));
+    const hit = label && getCats(out.type).find(c=>{
+      const n = normText(c.name);
+      return n && (n === label || label.includes(n) || n.includes(label));
+    });
+    if(hit){
+      out.categoryId = hit.id;
+      out.subId = hit.subs && hit.subs.length ? hit.subs[0].id : null;
+      out.matched = true;
+    }
+  }
+  if(!out.categoryId){
+    const clean = normText(out.note || t).replace(RECEIPT_FILLER_RE, ' ').replace(/\s+/g, ' ').trim();
+    const m2 = matchWalletAndCategory(clean, out.type);
+    out.categoryId = m2.catId;
+    out.subId = m2.subId;
+    out.matched = m2.matched;
+  }
   return out;
 }
 
@@ -6417,7 +6482,7 @@ const APK_URL = `https://github.com/${GH_REPO}/releases/latest/download/sofin.ap
 
 /* Stamped in at build time from package.json; the literal is only what runs
    when someone opens the folder without building. */
-const APP_VERSION = (window.__ENV__ && window.__ENV__.VERSION) || '5.1.3';
+const APP_VERSION = (window.__ENV__ && window.__ENV__.VERSION) || '5.1.4';
 /* Which version the user already said "để sau" to — device-local, so a
    dismissal does not sync to their other phone. */
 const UPDATE_SEEN_KEY = 'FINYOURTIN_UPDATE_DISMISSED';
