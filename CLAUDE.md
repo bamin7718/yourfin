@@ -214,6 +214,20 @@ Cảnh báo không còn là banner trên Trang chủ. Banner ở đó vừa chi�
 - **`checkBudgetAndPushNotifications()` gọi từ `initUserSession()` và `checkBudgetWarning()`** — không gọi từ hàm render: render mà ghi state là một vòng vẽ-ghi-vẽ. Nó quét cả ba nguồn cảnh báo (ngân sách, nợ đến hạn, thẻ tới ngày trả); toast là cảnh báo tức thì cho danh mục vừa ghi, thông báo là bản ghi lâu dài — hai thứ khác nhau.
 - **Bấm một tin thì đi tới chỗ xử lý được nó**, qua `chatNavigate()` — cùng một cửa điều hướng với hyperlink trong chat. Ngân sách theo danh mục dẫn sang **Giao dịch** (chỗ duy nhất có bộ lọc danh mục), ngân sách tổng dẫn sang **Báo cáo**.
 
+## Vuốt ngang đổi tab
+
+`SWIPE_TABS = ['dashboard','transactions','reports','settings']` — đúng thứ tự trên nav bar, nên chiều vuốt trùng chiều mắt đọc. Dùng **tên tab thật** của app, không phải một bộ tên song song.
+
+- **Gọi `switchTab(tab)` KHÔNG có tham số thứ hai.** Tham số đó ở app này là `replaceStep` ("bước cũ đã xong, ghi đè entry") — truyền `true` vào sẽ làm mỗi cú vuốt ăn mất một bước lịch sử và nút Back nhảy cách tab. Đẩy entry mới là hành vi mặc định, và đó đúng là thứ cần ở đây.
+- **Bốn vùng chừa ra**, mỗi vùng một lý do:
+  1. Overlay đang mở (modal / bàn phím số / ngăn chat / màn khoá) — kiểm cả khi ngón tay đặt **ngoài** overlay: đổi tab sau lưng một modal thì người dùng đóng nó ra và thấy mình ở màn hình khác.
+  2. Vùng cuộn ngang (`.wallet-strip`, `.chip-scroll`, `.scroll-x`) — không chừa thì thanh ví không cuộn được nữa, nó đổi tab.
+  3. `canvas` — biểu đồ có tooltip theo ngón tay.
+  4. **24px sát mép trái** (`SWIPE_EDGE_GUARD`) — vùng cử chỉ Back của iOS/Android. Không chừa thì một động tác cho ra hai bước: lùi lịch sử **và** đổi tab.
+- Ngang phải nhiều hơn dọc, và tối thiểu 60px: thiếu hai điều kiện đó thì một cú cuộn trang hơi chéo tay cũng nhảy tab. Hai ngón (pinch) bị bỏ qua.
+- **Màn hình con không có tab kế bên** (`indexOf` trả `-1` → không làm gì): Ví, Ngân sách, Sổ nợ… vào từ lưới Tiện ích chứ không từ nav bar.
+- **Không có animation trượt.** Mỗi `.view` là một khối riêng; muốn trượt thì phải dựng cả băng bốn màn hình cạnh nhau và giữ nó đồng bộ với `switchTab()` — trả bằng một nguồn sự thật thứ hai về "đang ở tab nào". `touch-action` trong CSS là thứ cần khoá: `pan-y` cho `.app`, `pan-x` cho các vùng cuộn ngang.
+
 ## Bố cục Trang chủ
 
 Thứ tự cố định, từ trên xuống: **Tổng tài sản ròng → Giao dịch gần đây → Tiện ích → Ví (thanh cuộn ngang) → cụm cảnh báo (Sắp đến hạn + Ngân sách) → Chi tiêu theo danh mục.** Smoke khoá đúng thứ tự này bằng vị trí trong `innerHTML`, vì nó là thứ vỡ âm thầm khi ai đó thêm một khối mới vào giữa.

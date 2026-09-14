@@ -1177,3 +1177,14 @@ html[data-theme="dark"] .chat-drawer{box-shadow:0 -4px 20px rgba(0,0,0,.55);}
 .hist-note{font-size:.85rem;font-weight:700;}
 .hist-meta{font-size:.7rem;color:var(--muted);margin-top:2px;}
 .hist-clone{margin-top:10px;min-height:38px;font-size:.78rem;}
+
+/* ---------- VUỐT NGANG ĐỔI TAB ----------
+   Không có animation trượt: mỗi .view là một khối riêng, muốn trượt thì phải
+   dựng cả băng bốn màn hình nằm cạnh nhau và giữ đồng bộ với switchTab() —
+   đổi lấy một hiệu ứng mà trả bằng một nguồn sự thật thứ hai về "đang ở tab
+   nào". Cái cần khoá ở đây là ĐỪNG để trình duyệt tự diễn giải cú vuốt. */
+.app{touch-action:pan-y;}
+/* Trừ đúng những vùng cuộn ngang: ở đó cú vuốt là của chính chúng. */
+.wallet-strip,.chip-scroll,.scroll-x{touch-action:pan-x;}
+/* Bàn phím số và ngăn chat cuộn dọc bên trong, không liên quan tới đổi tab. */
+.amt-panel,.chat-body,.notif-list{touch-action:pan-y;}

@@ -3121,6 +3121,103 @@ async function boot(opts) {
     window.switchTab('dashboard'); await sleep(20);
   }
 
+  console.log('\n· vuốt ngang đổi tab');
+  {
+    /* jsdom không có TouchEvent thật; dựng event rồi gắn changedTouches vào —
+       handler chỉ đọc `changedTouches[0].screenX/Y` và `e.target`, nên đây là
+       đúng những gì nó thấy trên máy thật. */
+    const touch = (type, el, x, y, n) => {
+      const ev = new window.Event(type, {bubbles: true});
+      const list = [];
+      for (let i = 0; i < (n || 1); i++) list.push({screenX: x, screenY: y});
+      Object.defineProperty(ev, 'changedTouches', {value: list});
+      el.dispatchEvent(ev);
+    };
+    const swipe = async (el, dx, dy, opts) => {
+      const o = opts || {};
+      const x0 = o.from == null ? 200 : o.from;
+      touch('touchstart', el, x0, 300, o.fingers);
+      touch('touchend', el, x0 + dx, 300 + (dy || 0), o.fingers);
+      await sleep(30);
+    };
+    const view = () => window.eval('currentTab');
+
+    window.switchTab('dashboard'); await sleep(20);
+    const canvasArea = $('view-dashboard');
+
+    /* Vuốt sang TRÁI là đi tiếp theo đúng thứ tự nav bar. */
+    await swipe(canvasArea, -120, 0);
+    check('vuốt trái: Tổng quan → Giao dịch', view() === 'transactions', view());
+    await swipe($('view-transactions'), -120, 0);
+    check('vuốt trái tiếp: Giao dịch → Báo cáo', view() === 'reports', view());
+    await swipe($('view-reports'), 120, 0);
+    check('vuốt phải: Báo cáo → Giao dịch', view() === 'transactions', view());
+
+    /* Mỗi cú vuốt là MỘT bước lịch sử: Back phải lùi đúng một tab.
+       switchTab(tab, true) sẽ ghi đè entry — đúng nghĩa tham số thứ hai của
+       app này là `replaceStep`, ngược với ý "pushState" — nên cú vuốt gọi
+       switchTab(tab) không tham số. */
+    const len = window.history.length;
+    await swipe($('view-transactions'), -120, 0);
+    check('vuốt đẩy một bước lịch sử mới, không ghi đè',
+      window.history.length === len + 1, window.history.length + '/' + len);
+    window.history.back(); await sleep(150);
+    check('Back sau khi vuốt lùi đúng một tab', view() === 'transactions', view());
+
+    /* Hai đầu dãy: không có tab kế bên thì không làm gì. */
+    window.switchTab('dashboard'); await sleep(20);
+    await swipe($('view-dashboard'), 150, 0);
+    check('ở tab đầu, vuốt phải không đi đâu cả', view() === 'dashboard', view());
+    window.switchTab('settings'); await sleep(20);
+    await swipe($('view-settings'), -150, 0);
+    check('ở tab cuối, vuốt trái không đi đâu cả', view() === 'settings', view());
+
+    /* Cuộn dọc hơi chéo tay không được nhảy tab. */
+    window.switchTab('dashboard'); await sleep(20);
+    await swipe($('view-dashboard'), -100, -140);
+    check('vuốt chéo (dọc nhiều hơn ngang) bị bỏ qua', view() === 'dashboard', view());
+    await swipe($('view-dashboard'), -40, 0);
+    check('vuốt quá ngắn (<60px) bị bỏ qua', view() === 'dashboard', view());
+    await swipe($('view-dashboard'), -120, 0, {fingers: 2});
+    check('hai ngón (pinch/zoom) không phải vuốt đổi tab', view() === 'dashboard', view());
+
+    /* Vùng cử chỉ Back của hệ điều hành: không được nhận thêm một bước nữa. */
+    await swipe($('view-dashboard'), 150, 0, {from: 10});
+    check('vuốt từ sát mép trái nhường cho cử chỉ Back của OS, không đổi tab',
+      view() === 'dashboard', view());
+
+    /* Vùng cuộn ngang phải giữ được cú vuốt của nó — nếu không thì thanh ví
+       vừa dựng xong sẽ không cuộn được nữa, nó đổi tab. */
+    await swipe($('db-wallet-scroll'), -120, 0);
+    check('vuốt trong thanh ví cuộn thanh ví, không đổi tab', view() === 'dashboard', view());
+    await swipe($('upcoming-filter'), -120, 0);
+    check('vuốt trong băng chip lọc cũng vậy', view() === 'dashboard', view());
+
+    /* Màn hình con vào từ lưới Tiện ích: không có "tab kế bên". */
+    window.switchTab('wallets'); await sleep(20);
+    await swipe($('view-wallets'), -150, 0);
+    check('màn hình con không đổi tab khi vuốt', view() === 'wallets', view());
+
+    /* Overlay đang mở: cú vuốt thuộc về nội dung bên trong. */
+    window.switchTab('dashboard'); await sleep(20);
+    window.openQuickEntry(); await sleep(20);
+    await swipe($('amount-sheet'), -150, 0);
+    check('bàn phím số đang mở thì không đổi tab', view() === 'dashboard' && visible('amount-sheet'));
+    window.closeAmountSheet(); await sleep(20);
+    window.openChatDrawer(); await sleep(20);
+    await swipe($('chat-body'), -150, 0);
+    check('ngăn chat đang mở thì không đổi tab', view() === 'dashboard' && visible('chat-drawer'));
+    window.closeChatDrawer(false); await sleep(10);
+    window.openWalletModal(); await sleep(20);
+    await swipe($('view-dashboard'), -150, 0);
+    check('modal đang mở thì không đổi tab, kể cả khi ngón tay đặt ngoài modal',
+      view() === 'dashboard' && visible('modal-wallet'));
+    window.closeModal('modal-wallet'); await sleep(30);
+
+    check('không có lỗi console nào sau loạt vuốt', consoleErrors.length === 0, consoleErrors[0]);
+    window.switchTab('dashboard'); await sleep(20);
+  }
+
   console.log('\n· Trang chủ: cụm cảnh báo tự thu gọn');
   {
     window.switchTab('dashboard'); await sleep(30);

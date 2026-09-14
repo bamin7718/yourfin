@@ -12,6 +12,27 @@ thứ khó tìm lại sau nửa năm.
 
 ---
 
+## [5.1.8] — 14/09/2026
+
+### Thêm
+
+- **Vuốt ngang đổi tab**: Tổng quan → Giao dịch → Báo cáo → Cài đặt, đúng thứ
+  tự trên nav bar. Mỗi cú vuốt là **một bước lịch sử** nên Back lùi đúng một
+  tab.
+
+  Phần khó không phải việc bắt cú vuốt mà là **không cướp cử chỉ của thứ
+  khác**, nên có bốn vùng chừa ra: overlay đang mở (kể cả khi ngón tay đặt
+  ngoài nó — đổi tab sau lưng một modal thì đóng modal ra là thấy mình ở màn
+  hình khác), vùng cuộn ngang (không chừa thì thanh ví không cuộn được nữa),
+  `canvas` (biểu đồ có tooltip theo ngón tay), và **24px sát mép trái** — vùng
+  cử chỉ Back của iOS/Android, không chừa thì một động tác cho ra hai bước.
+
+  Vuốt chéo (dọc nhiều hơn ngang), vuốt ngắn hơn 60px và hai ngón đều bị bỏ
+  qua. Màn hình con (Ví, Ngân sách, Sổ nợ…) không có tab kế bên nên vuốt ở đó
+  không làm gì.
+
+---
+
 ## [5.1.7] — 14/09/2026
 
 ### Sửa

@@ -1575,6 +1575,89 @@ function renderAll(){
   const fn = VIEW_RENDERERS[currentTab];
   if(fn) fn();
 }
+/* ---------- VUỐT NGANG ĐỔI TAB ----------
+   Bốn tab gốc xếp đúng thứ tự chúng nằm trên nav bar, nên chiều vuốt trùng
+   với chiều mắt đọc: vuốt sang trái là đi tiếp sang phải.
+
+   Dùng TÊN TAB THẬT của app (`dashboard`, `reports`), không phải một bộ tên
+   song song — switchTab() nhận chính chuỗi này.
+
+   Bốn thứ phải chừa ra, và mỗi thứ có một lý do cụ thể:
+
+   1. Overlay đang mở (modal, bàn phím số, ngăn chat, màn khoá): ở đó cú vuốt
+      thuộc về nội dung bên trong, và đổi tab sau lưng một modal thì người
+      dùng đóng modal ra và thấy mình ở một màn hình khác.
+   2. Vùng CUỘN NGANG (`.wallet-strip`, `.chip-scroll`, `.scroll-x`): vuốt ở
+      đó là để cuộn chính nó. Không chừa thì thanh ví vừa dựng xong sẽ không
+      cuộn được nữa — nó đổi tab.
+   3. `canvas`: biểu đồ có tooltip theo ngón tay.
+   4. **24px sát mép trái**: đó là vùng cử chỉ Back của iOS và Android. Không
+      chừa thì một cú vuốt vừa lùi lịch sử vừa đổi tab, và người dùng nhận
+      được hai bước cho một động tác.
+
+   Màn hình con (Ví, Ngân sách, Sổ nợ…) không nằm trong dãy nên vuốt ở đó
+   không làm gì: chúng vào từ lưới Tiện ích, không phải từ nav bar, nên không
+   có "tab kế bên" nào để đi tới. */
+const SWIPE_TABS = ['dashboard', 'transactions', 'reports', 'settings'];
+const SWIPE_MIN_DISTANCE = 60;      /* px: ngắn hơn thì đó là một cú chạm lệch tay */
+const SWIPE_EDGE_GUARD = 24;        /* px sát mép trái: nhường cho cử chỉ Back của OS */
+const SWIPE_NO_ZONE = '.modal, .amt-sheet, #chat-drawer, .lock-screen, .wallet-strip, .chip-scroll, .scroll-x, canvas';
+
+let touchStartX = 0, touchStartY = 0, touchEndX = 0, touchEndY = 0;
+let swipeArmed = false;
+
+function swipeBlocked(target){
+  if(!target || !target.closest) return true;
+  if(target.closest(SWIPE_NO_ZONE)) return true;
+  /* Overlay có thể đang mở mà ngón tay lại đặt ngoài nó (backdrop) — vẫn
+     không được đổi tab sau lưng nó. */
+  const sheet = document.getElementById('amount-sheet');
+  const chat = document.getElementById('chat-drawer');
+  if(document.querySelector('.modal:not(.hidden)')) return true;
+  if(sheet && !sheet.classList.contains('hidden')) return true;
+  if(chat && !chat.classList.contains('hidden')) return true;
+  return false;
+}
+document.addEventListener('touchstart', e=>{
+  swipeArmed = false;
+  if(!navArmed) return;                       /* ngoài phiên: không có tab nào để đổi */
+  if(e.changedTouches.length !== 1) return;   /* hai ngón là pinch/zoom, không phải vuốt */
+  if(swipeBlocked(e.target)) return;
+  const t = e.changedTouches[0];
+  if(t.screenX <= SWIPE_EDGE_GUARD) return;   /* vùng cử chỉ Back của hệ điều hành */
+  touchStartX = t.screenX;
+  touchStartY = t.screenY;
+  swipeArmed = true;
+}, {passive: true});
+
+document.addEventListener('touchend', e=>{
+  if(!swipeArmed) return;
+  swipeArmed = false;
+  if(e.changedTouches.length !== 1) return;
+  if(swipeBlocked(e.target)) return;
+  touchEndX = e.changedTouches[0].screenX;
+  touchEndY = e.changedTouches[0].screenY;
+  handleSwipeGesture();
+}, {passive: true});
+
+function handleSwipeGesture(){
+  const deltaX = touchEndX - touchStartX;
+  const deltaY = touchEndY - touchStartY;
+  /* Ngang phải nhiều hơn dọc, không thì một cú cuộn trang hơi chéo tay cũng
+     nhảy tab. */
+  if(Math.abs(deltaX) <= Math.abs(deltaY)) return;
+  if(Math.abs(deltaX) < SWIPE_MIN_DISTANCE) return;
+  const i = SWIPE_TABS.indexOf(currentTab);
+  if(i === -1) return;                        /* màn hình con: không có tab kế bên */
+  const next = deltaX < 0 ? i + 1 : i - 1;
+  if(next < 0 || next >= SWIPE_TABS.length) return;
+  /* switchTab(tab) — KHÔNG truyền tham số thứ hai. Ở app này tham số đó là
+     `replaceStep` ("bước cũ đã xong, ghi đè entry"), nên truyền `true` sẽ làm
+     mỗi cú vuốt ăn mất một bước lịch sử và nút Back nhảy cách tab. Đẩy entry
+     mới là hành vi MẶC ĐỊNH, đúng thứ cần ở đây. */
+  switchTab(SWIPE_TABS[next]);
+}
+
 /* ============================================================
    LỊCH SỬ ĐIỀU HƯỚNG TOÀN CỤC (nút Back cứng / vuốt lùi)
 
@@ -7014,7 +7097,7 @@ const APK_URL = `https://github.com/${GH_REPO}/releases/latest/download/sofin.ap
 
 /* Stamped in at build time from package.json; the literal is only what runs
    when someone opens the folder without building. */
-const APP_VERSION = (window.__ENV__ && window.__ENV__.VERSION) || '5.1.7';
+const APP_VERSION = (window.__ENV__ && window.__ENV__.VERSION) || '5.1.8';
 /* Which version the user already said "để sau" to — device-local, so a
    dismissal does not sync to their other phone. */
 const UPDATE_SEEN_KEY = 'FINYOURTIN_UPDATE_DISMISSED';
