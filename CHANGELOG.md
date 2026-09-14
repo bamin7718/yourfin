@@ -12,6 +12,22 @@ thứ khó tìm lại sau nửa năm.
 
 ---
 
+## [5.1.9] — 14/09/2026
+
+### Sửa
+
+- **Trợ lý: lưu xong giao dịch thì phải xong ngay, không cần mở lại app.** Sau
+  khi bấm "Tự động lưu", thẻ trong chat chỉ còn một dòng *"✓ Đã lưu 55.000 đ"*
+  — không thông tin giao dịch, không nút "Tạo lại". Thẻ đầy đủ chỉ xuất hiện
+  khi `restoreChatHistory()` vẽ lại, tức là sau khi đóng app mở lại. Giờ thẻ
+  xác nhận biến thành **đúng cái thẻ mà lịch sử sẽ vẽ ra**: số tiền, ghi chú,
+  ví, danh mục, ngày, và nút 🔄 Tạo lại ngay tại chỗ.
+- **Nút "Tạo lại" từng trỏ theo chỉ số mảng lịch sử.** `slice(-100)` cắt từ
+  đầu, nên mỗi lần cắt là mọi chỉ số trượt đi và một nút đã vẽ ra sẽ dựng lại
+  **nhầm giao dịch khác**. Giờ mỗi bản ghi có `lid` riêng và nút khoá theo nó.
+
+---
+
 ## [5.1.8] — 14/09/2026
 
 ### Thêm

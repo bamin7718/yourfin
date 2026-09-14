@@ -6565,9 +6565,15 @@ function loadChatHistory(){
   }catch(e){ chatLog = []; }
   return chatLog;
 }
+/* `lid` — id ổn định của một bản ghi trong lịch sử. KHÔNG dùng chỉ số mảng:
+   saveChatHistory() cắt còn 100 bằng slice(-100), nên mỗi lần cắt là mọi chỉ
+   số trượt đi, và một nút "Tạo lại" đã vẽ ra sẽ dựng lại NHẦM giao dịch khác.
+   Trả về entry để chỗ gọi vẽ thẻ ngay mà không phải đi tìm lại. */
 function chatLogPush(entry){
-  if(chatSkipLog || !entry) return;
-  saveChatHistory(chatLog.concat([Object.assign({at: Date.now()}, entry)]));
+  if(chatSkipLog || !entry) return null;
+  const rec = Object.assign({lid: uid('lg'), at: Date.now()}, entry);
+  saveChatHistory(chatLog.concat([rec]));
+  return rec;
 }
 /* Vẽ lại toàn bộ lịch sử khi mở ngăn chat. Bong bóng chữ vẽ lại thành chữ;
    giao dịch đã lưu vẽ thành THẺ LỊCH SỬ có nút "Tạo lại". */
@@ -6580,7 +6586,7 @@ function restoreChatHistory(){
   try{
     body.innerHTML = '';
     chatLog.forEach((m, i)=>{
-      if(m.role === 'tx' && m.tx) chatAppend('bot', chatHistoryCardHtml(m.tx, i), 'has-card');
+      if(m.role === 'tx' && m.tx) chatAppend('bot', chatHistoryCardHtml(m.tx, m.lid || ('idx-' + i)), 'has-card');
       else if(m.text) chatAppend(m.role === 'user' ? 'user' : 'bot', esc(m.text));
     });
   } finally { chatSkipLog = false; }
@@ -6590,7 +6596,7 @@ function restoreChatHistory(){
 /* Thẻ giao dịch cũ. `data-*` giữ đủ để dựng lại một draft mới — nhưng ví và
    danh mục được kiểm lại lúc bấm, không phải lúc vẽ: ví có thể đã bị xoá từ
    lúc giao dịch đó được lưu. */
-function chatHistoryCardHtml(tx, idx){
+function chatHistoryCardHtml(tx, lid){
   const w = getWallet(tx.walletId);
   const cat = findCategory(tx.type === 'income' ? 'income' : 'expense', tx.catId);
   return `<div class="between"><span class="hist-badge">Giao dịch cũ</span>`
@@ -6599,15 +6605,16 @@ function chatHistoryCardHtml(tx, idx){
     + `${tx.type === 'income' ? '+' : '-'}${esc(chatAmountText(tx.amount, w))}</div>`
     + `<div class="hist-note">${esc(tx.note || (cat ? cat.name : ''))}</div>`
     + `<div class="hist-meta">💳 ${w ? esc(w.name) : 'ví đã xoá'} · 🏷️ ${cat ? esc(cat.name) : 'Khác'}</div>`
-    + `<button type="button" class="btn btn-secondary hist-clone" onclick="cloneChatTransaction(${idx})">`
+    + `<button type="button" class="btn btn-secondary hist-clone" onclick="cloneChatTransaction('${lid}')">`
     + `🔄 Tạo lại giao dịch này</button>`;
 }
 /* "Tạo lại": dựng một draft MỚI từ bản ghi cũ rồi hiện thẻ xác nhận — không
    ghi thẳng vào sổ. Ngày lấy HÔM NAY (tạo lại nghĩa là lần này, không phải
    lần trước), và ví/danh mục được kiểm lại: cái đã bị xoá thì rơi về mặc
    định thay vì tạo ra một giao dịch không số dư nào đọc được. */
-function cloneChatTransaction(idx){
-  const m = chatLog[idx];
+function cloneChatTransaction(lid){
+  /* Tra theo lid; chấp cả chỉ số cho những bản ghi lưu từ trước khi có lid. */
+  const m = chatLog.find(x=>x.lid === lid) || chatLog[Number(String(lid).replace('idx-', ''))];
   if(!m || !m.tx) return;
   const tx = m.tx;
   const type = tx.type === 'income' ? 'income' : 'expense';
@@ -7008,10 +7015,19 @@ function chatAutoSave(id){
   chatDrafts.delete(id);
   /* Bản ghi đã vào sổ thì vào lịch sử hội thoại dưới dạng thẻ "Giao dịch cũ"
      — chính nó là thứ nút "Tạo lại" dựng lại sau này. */
-  chatLogPush({role:'tx', tx:{amount:d.amount, note:d.note, type:d.type,
+  const rec = chatLogPush({role:'tx', tx:{amount:d.amount, note:d.note, type:d.type,
     catId:d.catId, subId:d.subId, walletId:d.walletId, date:d.date}});
+  /* Thay thẻ xác nhận bằng ĐÚNG cái thẻ mà lịch sử sẽ vẽ ra — đầy đủ thông
+     tin giao dịch và có nút "Tạo lại" ngay tại đó. Trước đây chỗ này chỉ in
+     một dòng "✓ Đã lưu", nên muốn thấy thông tin hay tạo lại thì phải đóng
+     app mở lại cho lịch sử vẽ lại thẻ: đúng lỗi người dùng báo. */
   const box = document.getElementById('chat-card-' + id);
-  if(box) box.innerHTML = `<div class="bca-saved">✓ Đã lưu ${esc(chatAmountText(d.amount, w))} · ${esc(w.name)}</div>`;
+  if(box && rec){
+    box.innerHTML = `<div class="bca-saved">✓ Đã ghi vào sổ</div>`
+      + chatHistoryCardHtml(rec.tx, rec.lid);
+  } else if(box){
+    box.innerHTML = `<div class="bca-saved">✓ Đã lưu ${esc(chatAmountText(d.amount, w))} · ${esc(w.name)}</div>`;
+  }
   chatAppend('bot', status === 'pending'
     ? 'Đã lên lịch — chưa trừ tiền, xem ở “Sắp đến hạn”.'
     : 'Đã ghi vào sổ. Lần sau gặp lại mấy chữ này mình sẽ nhớ danh mục.');
@@ -7097,7 +7113,7 @@ const APK_URL = `https://github.com/${GH_REPO}/releases/latest/download/sofin.ap
 
 /* Stamped in at build time from package.json; the literal is only what runs
    when someone opens the folder without building. */
-const APP_VERSION = (window.__ENV__ && window.__ENV__.VERSION) || '5.1.8';
+const APP_VERSION = (window.__ENV__ && window.__ENV__.VERSION) || '5.1.9';
 /* Which version the user already said "để sau" to — device-local, so a
    dismissal does not sync to their other phone. */
 const UPDATE_SEEN_KEY = 'FINYOURTIN_UPDATE_DISMISSED';

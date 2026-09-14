@@ -2280,6 +2280,74 @@ async function boot(opts) {
     window.cancelAddTx(); await sleep(20);
   }
 
+  console.log('\n· trợ lý chat: lưu xong là xong ngay, không cần mở lại app');
+  {
+    window.closeChatDrawer(true);
+    window.switchTab('dashboard'); await sleep(20);
+    window.openChatDrawer(); await sleep(20);
+    const balBefore = window.getUserTotalAssets();
+    const nBefore = S().transactions.length;
+
+    $('chat-input').value = 'bún bò 55k';
+    window.chatSend(); await sleep(80);
+    const card = [...$('chat-body').querySelectorAll('.bot-card-action')].pop();
+    card.querySelector('.btn-primary').click(); await sleep(60);
+
+    /* 1. Bản ghi vào sổ ngay và ở trạng thái đã hoàn thành. */
+    const t = S().transactions[S().transactions.length - 1];
+    check('lưu xong là bản ghi có ngay trong sổ',
+      S().transactions.length === nBefore + 1 && t.amount === 55000);
+    check('… và đã hoàn thành, không phải dự kiến',
+      t.status === 'completed' && !window.eval(`isPending(state.transactions[state.transactions.length-1])`),
+      t.status);
+
+    /* 2. Thẻ trong chat đổi thành thẻ giao dịch ĐẦY ĐỦ THÔNG TIN ngay tại
+       chỗ — trước đây nó chỉ in một dòng "✓ Đã lưu", nên muốn xem thông tin
+       hay tạo lại thì phải tắt app mở lại cho lịch sử vẽ lại thẻ. */
+    const saved = [...$('chat-body').querySelectorAll('.bot-card-action')].pop();
+    check('thẻ trong chat xác nhận đã ghi vào sổ', !!saved.querySelector('.bca-saved'));
+    check('… và hiện luôn thông tin giao dịch (số tiền, ghi chú, ví, danh mục)',
+      /55\.000/.test(saved.textContent) && /bún bò 55k/.test(saved.textContent)
+      && /💳/.test(saved.textContent) && /🏷️/.test(saved.textContent),
+      saved.textContent.replace(/\s+/g, ' ').slice(0, 120));
+    check('… kèm nút "Tạo lại" ngay tại đó, không phải mở lại app',
+      !!saved.querySelector('.hist-clone') && /Tạo lại/.test(saved.querySelector('.hist-clone').textContent));
+
+    /* 3. Số dư và các khối phía sau ngăn chat đã cập nhật, không chờ reload. */
+    check('tổng tài sản cập nhật ngay', window.getUserTotalAssets() === balBefore - 55000,
+      balBefore + ' -> ' + window.getUserTotalAssets());
+    window.closeChatDrawer(false); await sleep(20);
+    check('khối "Giao dịch gần đây" có ngay bản ghi mới, không cần reload',
+      /bún bò 55k/.test($('recent-transactions-list').textContent),
+      $('recent-transactions-list').textContent.replace(/\s+/g, ' ').slice(0, 80));
+
+    /* 4. Bấm "Tạo lại" ngay trên thẻ vừa lưu. */
+    window.openChatDrawer(); await sleep(20);
+    const clone = [...$('chat-body').querySelectorAll('.hist-clone')].pop();
+    const n2 = S().transactions.length;
+    clone.click(); await sleep(60);
+    const newCard = [...$('chat-body').querySelectorAll('.bot-card-action')].pop();
+    check('bấm "Tạo lại" trên thẻ vừa lưu thì ra thẻ xác nhận mới',
+      !!newCard && !!newCard.querySelector('.btn-primary') && S().transactions.length === n2);
+    newCard.querySelector('.btn-primary').click(); await sleep(60);
+    check('… xác nhận thì có bản ghi thứ hai y như vậy',
+      S().transactions.length === n2 + 1
+      && S().transactions[S().transactions.length - 1].amount === 55000);
+
+    /* 5. Nút "Tạo lại" phải trỏ đúng bản ghi kể cả sau khi lịch sử bị cắt còn
+       100 — trước đây nó dùng CHỈ SỐ mảng, mà slice(-100) làm mọi chỉ số
+       trượt đi, nên nút cũ sẽ dựng lại nhầm một giao dịch khác. */
+    const src = fs.readFileSync(path.join(PUBLIC, 'js', 'app.js'), 'utf8');
+    check('nút "Tạo lại" khoá theo id ổn định, không theo chỉ số mảng',
+      /cloneChatTransaction\('\$\{lid\}'\)/.test(src) && /lid: uid\('lg'\)/.test(src));
+    check('… và mỗi bản ghi lịch sử có lid riêng',
+      window.eval('chatLog.filter(m=>m.role==="tx").every(m=>!!m.lid)'));
+
+    check('không có lỗi console', consoleErrors.length === 0, consoleErrors[0]);
+    window.closeChatDrawer(true);
+    window.switchTab('dashboard'); await sleep(20);
+  }
+
   console.log('\n· trợ lý chat: lịch sử 100 bản ghi + nút Tạo lại');
   {
     const KEY = 'sofin_chat_history::' + S().currentUser;
