@@ -2581,6 +2581,55 @@ async function boot(opts) {
 
 
 
+
+  console.log('\n· biên lai: chiều tiền do TỜ GIẤY quyết, không do từ khoá');
+  {
+    /* Đây là ca người dùng báo: giao dịch MoMo bị ghi thành khoản THU.
+       OCR trên máy thật không trả về đẹp như transcript — nó làm mất mấy chữ
+       gợi ý chi, và những gì còn lại thì có "Thủ Đức" (chứa "thu"). */
+    const NOISY = 'Vi MoMo\n-39.000d\nCua hang Orange Coffee\nDia diem Thu Duc';
+    /* Bẫy có thật, và test này chứng minh nó tồn tại: bộ đoán theo từ khoá
+       đọc tên một QUẬN và kết luận đây là tiền vào. */
+    check('bẫy: đoán theo từ khoá đọc "Thủ Đức" thành khoản thu',
+      window.detectChatType(NOISY) === 'income', window.detectChatType(NOISY));
+    /* Còn tờ giấy thì nói rõ: -39.000đ. Dấu thắng từ khoá. */
+    const r = window.parseBankReceiptOCR(NOISY);
+    check('biên lai: dấu trừ thắng từ khoá ⇒ vẫn là khoản CHI',
+      r.type === 'expense' && r.typeFromSign === true, r.type + '/' + r.typeFromSign);
+
+    /* Và luồng thật phải giữ nguyên kết luận đó tới lúc lưu vào sổ. */
+    const realOcr = window.chatOcrImage;
+    window.chatOcrImage = async () => NOISY;
+    const d = await window.processChatMessage('', {name:'momo.jpg', type:'image/jpeg'});
+    check('draft từ ảnh lấy chiều tiền của biên lai, không đoán lại trên toàn văn OCR',
+      d.type === 'expense', d.type);
+    const n0 = S().transactions.length;
+    window.chatAutoSave(d.id); await sleep(30);
+    const t = S().transactions[S().transactions.length - 1];
+    check('bản ghi vào sổ là khoản CHI', S().transactions.length === n0 + 1 && t.type === 'expense',
+      t.type);
+    check('… và trừ đúng vào ví điện tử của biên lai',
+      window.eval(`walletTypeOf(getWallet('${t.walletId}'))`) === 'ewallet');
+    /* "Mã đơn hàng" chứa "hàng", và đoán trên toàn văn thì nó khớp vào danh
+       mục con "Nhà hàng" — một quán cà phê thành nhà hàng. */
+    check('không bịa danh mục con từ chữ "đơn hàng"', t.subcategoryId !== 's_restaurant',
+      String(t.subcategoryId));
+    window.chatOcrImage = realOcr;
+
+    /* Dấu cộng thì vẫn phải ra khoản thu — không phải cứ mặc định chi. */
+    check('dấu cộng ⇒ khoản thu',
+      window.parseBankReceiptOCR('Techcombank\n+VND 5,000,000\nLoi nhan Luong thang 9').type === 'income');
+    /* OCR làm mất dấu là chuyện thường; khi đó từ khoá NÓI VỀ HƯỚNG mới được
+       lên tiếng, còn không có gì thì mặc định CHI (lỗi nghiêng về phía an
+       toàn: số dư thiếu chứ không phình). */
+    check('mất dấu + có "nhận từ" ⇒ khoản thu',
+      window.parseBankReceiptOCR('Vi MoMo\n500.000d\nNhan tu NGUYEN VAN A').type === 'income');
+    check('mất dấu, không có dấu hiệu hướng nào ⇒ mặc định CHI',
+      window.parseBankReceiptOCR('Vi MoMo\n500.000d\nCua hang Circle K').type === 'expense');
+    check('OCR đọc dấu trừ thành gạch dài ⇒ vẫn là CHI',
+      window.parseBankReceiptOCR('Vi MoMo\n—39.000d\nNhan tu ai do').type === 'expense');
+  }
+
   console.log('\n· trợ lý chat: CSS theo biến theme');
   {
     const css = fs.readFileSync(path.join(PUBLIC, 'css', 'styles.css'), 'utf8');

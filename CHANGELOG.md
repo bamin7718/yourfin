@@ -12,6 +12,29 @@ thứ khó tìm lại sau nửa năm.
 
 ---
 
+## [5.1.6] — 14/09/2026
+
+### Sửa
+
+- **Giao dịch từ ảnh biên lai bị ghi thành khoản THU.** Tờ giấy nói rõ
+  `-39.000đ`, nhưng `draft.type` lại được đoán lại bằng từ khoá trên **toàn
+  văn OCR** — và ở đó tên một quận là đủ để lật chiều tiền: "Thủ Đức" chứa
+  "thu". Giờ ảnh biên lai lấy chiều tiền từ chính bằng chứng trên giấy:
+  **dấu của con số** (`-`/`+`, kể cả khi OCR đọc thành gạch dài), rồi tới từ
+  khoá *nói về hướng* ("nhận từ", "tiền vào" ⇔ vào; "thanh toán", "chuyển
+  tiền" ⇔ ra), cuối cùng mặc định **chi** — lỗi nghiêng về phía an toàn, số
+  dư thiếu chứ không phình.
+- **Danh mục con bị bịa từ chữ trên trang.** "Mã đơn **hàng**" khớp vào danh
+  mục con "Nhà **hàng**", nên một quán cà phê thành nhà hàng. Ảnh biên lai
+  không đoán danh mục trên toàn văn nữa: nó dùng đúng ba nguồn có bằng chứng
+  (dòng "Danh mục" do app in ra → nội dung chuyển khoản → tên cửa hàng).
+
+Bài học chung, đã ghi vào CLAUDE.md: **trên một tờ biên lai, đừng đoán bằng
+từ khoá rải rác.** Trang đó đầy tên riêng, tên quận huyện và chữ nghiệp vụ;
+bằng chứng thật thì nằm ở dấu của con số và ở các nhãn do chính app in ra.
+
+---
+
 ## [5.1.5] — 12/09/2026
 
 ### Sửa

@@ -5308,6 +5308,31 @@ function findWalletByNameOrType(bank){
   return byType ? byType.id : null;
 }
 
+/* Chiều tiền của một tờ biên lai. Ba tầng, và tầng nào cũng CHỈ đọc bằng
+   chứng nói về hướng tiền — tuyệt đối không đoán theo từ khoá rải rác trên
+   trang: một biên lai có "Thủ Đức" (chứa "thu") hay "Ngoại thương" (chứa
+   "thương") là chuyện thường, và để mấy chữ đó quyết định thì một khoản cà
+   phê 39 nghìn thành khoản THU 39 nghìn — sai cả dấu của số dư.
+
+   1. Dấu ngay cạnh con số. Mạnh nhất, và OCR đọc dấu thì hay mất chứ hiếm khi
+      thêm vào — nên "không thấy dấu" không được coi là bằng chứng.
+   2. Từ khoá NÓI VỀ HƯỚNG: "nhận từ", "tiền vào", "ghi có" ⇔ vào;
+      "thanh toán", "chuyển tiền", "ghi nợ" ⇔ ra.
+   3. Mặc định CHI. Tờ biên lai người ta chụp trong app thanh toán gần như
+      luôn là tiền đi ra, và đoán sai theo hướng này thì số dư chỉ thiếu chứ
+      không phình — lỗi nghiêng về phía an toàn, cùng nguyên tắc với
+      getUserTransactions() chỉ trả về khoản đã ghi nhận. */
+const RECEIPT_IN_RE = /(nhan tu|nhan tien|tien vao|ghi co|credit|hoan tien|tien den|da nhan|cong tien)/;
+const RECEIPT_OUT_RE = /(thanh toan|chuyen tien|chuyen khoan|ghi no|debit|tru tien|da chi|rut tien)/;
+function receiptDirection(t, signHead){
+  /* OCR đọc dấu trừ thành gạch ngang dài, dấu ngã, hoặc mất hẳn. */
+  if(/[+]/.test(signHead)) return 'income';
+  if(/[-–—~]/.test(signHead)) return 'expense';
+  const hasIn = RECEIPT_IN_RE.test(t), hasOut = RECEIPT_OUT_RE.test(t);
+  if(hasIn && !hasOut) return 'income';
+  return 'expense';
+}
+
 function parseBankReceiptOCR(rawText){
   const out = {amount:0, bank:'Khác', note:'', date:null, walletId:null,
                categoryId:null, subId:null, matched:false, type:'expense'};
@@ -5329,12 +5354,11 @@ function parseBankReceiptOCR(rawText){
       const v = parseInt(m[1].replace(/[.,+\-]/g, ''), 10);
       if(v > 0){
         out.amount = v;
-        /* Dấu của con số là bằng chứng mạnh nhất về chiều tiền — mạnh hơn
-           nhiều so với đoán theo từ khoá trên một trang đầy chữ nghiệp vụ
-           ("Thủ Đức" chứa "thu", "Ngoại thương" chứa "thương"). Dấu có thể
-           đứng trước số HOẶC trước đơn vị: "-VND 262,000". */
-        const head = t.slice(Math.max(0, m.index - 3), m.index + m[0].length);
-        if(/\+/.test(head)) out.type = 'income';
+        /* Dấu có thể đứng trước số HOẶC trước đơn vị: "-VND 262,000". Lấy
+           rộng ra 8 ký tự để bắt được cả hai chỗ. */
+        const head = t.slice(Math.max(0, m.index - 8), m.index + m[0].indexOf(m[1]) + 2);
+        out.type = receiptDirection(t, head);
+        out.typeFromSign = /[-+–—~]/.test(head);
         break;
       }
     }
@@ -5345,6 +5369,7 @@ function parseBankReceiptOCR(rawText){
     const generic = parseBillText(raw);
     out.amount = generic.amount;
     if(!out.note) out.note = generic.note;
+    out.type = receiptDirection(t, '');
   }
 
   /* Ghi chú: tên cửa hàng trước, rồi mới tới nội dung/lời nhắn. Cắt từ chuỗi
@@ -5732,9 +5757,18 @@ async function processChatMessage(userInput, imageFile){
     draft.date = bill.date || draft.date;
     draft.bank = bill.bank;
     draft.note = [text, bill.note].filter(Boolean).join(' — ') || (bill.bank !== 'Khác' ? 'Chuyển khoản ' + bill.bank : 'Hoá đơn');
+    /* Chiều tiền và danh mục lấy thẳng từ tờ giấy — xem chỗ gán draft.type
+       bên dưới để biết vì sao KHÔNG đoán lại trên toàn văn OCR. */
+    draft.billType = bill.type;
+    draft.billSigned = !!bill.typeFromSign;
+    draft.catId = bill.categoryId;
+    draft.subId = bill.subId;
+    draft.matched = bill.matched;
     /* Ví: biên lai nói rõ nó của nhà nào, nên ưu tiên ví tương ứng trong sổ. */
     if(bill.walletId) { draft.walletId = bill.walletId; draft.walletMatched = true; }
-    /* Từ khoá học và loại thu/chi đọc cả chú thích người dùng gõ kèm ảnh. */
+    /* Vẫn gộp toàn văn để dùng cho những chỗ CHỈ đọc từ khoá (ghi chú học
+       lại, chú thích người dùng gõ kèm ảnh) — nhưng không cho nó quyết chiều
+       tiền hay danh mục nữa. */
     text = [text, bill.note, ocr].filter(Boolean).join(' ');
   } else {
     const {date, rest} = chatExtractDate(text);
@@ -5747,18 +5781,29 @@ async function processChatMessage(userInput, imageFile){
     draft.note = text;
   }
 
-  draft.type = detectChatType(text);
-  const m = matchWalletAndCategory(text, draft.type);
-  draft.catId = m.catId; draft.subId = m.subId;
-  draft.matched = m.matched; draft.via = m.via;
+  /* Ảnh biên lai: chiều tiền và danh mục ĐÃ được quyết bằng bằng chứng trên
+     chính tờ giấy (dấu của con số, dòng "Danh mục" do app in ra). Đoán lại
+     bằng detectChatType()/matchWalletAndCategory() trên toàn văn OCR là ghi
+     đè bằng chứng bằng phỏng đoán — và phỏng đoán đó đọc cả tên quận huyện:
+     "Thủ Đức" chứa "thu" nên khoản cà phê thành khoản THU, còn "Mã đơn hàng"
+     chứa "hàng" nên danh mục con thành "Nhà hàng". */
+  if(draft.source === 'bill' && draft.amount > 0){
+    draft.type = draft.billType || 'expense';
+  } else {
+    draft.type = detectChatType(text);
+    const m = matchWalletAndCategory(text, draft.type);
+    draft.catId = m.catId; draft.subId = m.subId;
+    draft.matched = m.matched; draft.via = m.via;
+    draft.walletFromHistory = m.walletId; draft.walletMatchedHistory = m.walletMatched;
+  }
   /* Ví: ưu tiên ví mà lịch sử nói người dùng hay trả khoản NÀY bằng — "xăng"
      hay ra từ ví tiền mặt, "Netflix" hay ra từ thẻ. Không đủ dữ liệu để đoán
      thì mới về ví mặc định; đừng bịa ra một ví "trông có lý". */
   /* Ví từ biên lai (parseBankReceiptOCR) thắng: tờ giấy nói rõ tiền đi từ
      nhà nào, đó là bằng chứng mạnh hơn thống kê lịch sử. */
   if(!draft.walletId){
-    draft.walletMatched = m.walletMatched;
-    if(m.walletId) draft.walletId = m.walletId;
+    draft.walletMatched = !!draft.walletMatchedHistory;
+    if(draft.walletFromHistory) draft.walletId = draft.walletFromHistory;
     else { const w = chatDefaultWallet(); draft.walletId = w ? w.id : null; }
   }
 
@@ -6502,7 +6547,7 @@ const APK_URL = `https://github.com/${GH_REPO}/releases/latest/download/sofin.ap
 
 /* Stamped in at build time from package.json; the literal is only what runs
    when someone opens the folder without building. */
-const APP_VERSION = (window.__ENV__ && window.__ENV__.VERSION) || '5.1.5';
+const APP_VERSION = (window.__ENV__ && window.__ENV__.VERSION) || '5.1.6';
 /* Which version the user already said "để sau" to — device-local, so a
    dismissal does not sync to their other phone. */
 const UPDATE_SEEN_KEY = 'FINYOURTIN_UPDATE_DISMISSED';
