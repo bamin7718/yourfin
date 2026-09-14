@@ -272,6 +272,7 @@ function migrateState(){
   if(!Array.isArray(state.events)) state.events = [];
   if(!state.categories || Array.isArray(state.categories)) state.categories = {};
   if(!state.onboardingStatus) state.onboardingStatus = {};
+  if(!Array.isArray(state.notifications)) state.notifications = [];
   if(typeof state.updatedAt !== 'number') state.updatedAt = 0;
   delete state.users;                       /* local accounts are gone — Supabase Auth owns identity */
   state.app = Object.assign({theme:'light', pinEnabled:false, pinHash:null, privacy:false, mainCurrency:'VND', rates:{...DEFAULT_RATES}}, state.app||{});
@@ -1410,6 +1411,7 @@ function initUserSession(){
   ensureUserCategories(state.currentUser);
   autoSettlePending();          /* yesterday's plans became today's spending */
   autoProcessRecurring();
+  checkBudgetAndPushNotifications();
   document.getElementById('view-login').classList.add('hidden');
   document.getElementById('main-header').classList.remove('hidden');
   document.getElementById('user-display-name').textContent = displayName();
@@ -1627,6 +1629,7 @@ const NAV_SHEETS = {
 
 let navState = Object.assign({}, stateSchema, {filterState:{}});
 let navBusy = 0;              /* >0: đang khôi phục từ popstate, cấm ghi lịch sử */
+let navSilent = 0;            /* >0: đóng overlay mà KHÔNG tiêu thụ entry lịch sử */
 let navArmed = false;         /* chỉ ghi lịch sử khi đã vào phiên */
 let navConfirmDismiss = null; /* uiConfirm đang mở → cách trả lời nếu bị Back đóng */
 
@@ -1718,9 +1721,31 @@ function navReplace(patch){
 }
 /* Đóng overlay: ghi đè entry của nó chứ không đẩy entry mới (luật 2). */
 function navDropOverlay(id){
-  if(navBusy || !navArmed) return;
+  if(navBusy || navSilent || !navArmed) return;
   if(navState.activeModal !== id) return;
-  navReplace({activeModal:null});
+  /* Đóng một modal mở TỪ bàn phím số (chọn ví / chọn danh mục) thì bên dưới
+     VẪN còn bàn phím — khai activeModal:null ở đó là nói sai trạng thái, và
+     cú Back kế tiếp sẽ đóng nhầm một lớp. */
+  navReplace({activeModal: navTopOverlay(id)});
+}
+/* Đóng overlay mà KHÔNG đụng vào lịch sử — dành cho đường "đóng rồi đi tiếp
+   ngay trong cùng một lượt": ở đó bước điều hướng kế tiếp sẽ ghi đè entry của
+   overlay, còn để hàm đóng tự ghi thì hai lệnh ghi đá nhau. */
+function navCloseSilently(fn){
+  navSilent++;
+  try{ fn(); }
+  finally{ navSilent--; }
+}
+/* Overlay nào còn đang mở (bỏ qua `except`), đọc từ DOM — nguồn sự thật duy
+   nhất về việc cái gì đang hiện. */
+function navTopOverlay(except){
+  for(const id of Object.keys(NAV_SHEETS)){
+    if(id === except) continue;
+    const el = document.getElementById(id);
+    if(el && !el.classList.contains('hidden')) return id;
+  }
+  const m = [...document.querySelectorAll('.modal:not(.hidden)')].filter(x=>x.id !== except).pop();
+  return m ? m.id : null;
 }
 /* Mốc gốc của phiên. replaceState chứ không push: entry đầu tiên phải LÀ
    entry hiện có của trình duyệt, đẩy thêm thì một cú Back ở Tổng quan chỉ
@@ -1821,6 +1846,178 @@ window.addEventListener('popstate', e=>{
 });
 
 /* ============================================================
+   TRUNG TÂM THÔNG BÁO
+
+   Cảnh báo không còn nằm thành banner trên Trang chủ nữa. Lý do: banner ở đó
+   vừa chiếm đúng chỗ của Giao dịch gần đây và Ví trên màn hình đầu tiên, vừa
+   không có trạng thái "đã đọc" — nên nó hiện lại y nguyên mỗi lần mở app cho
+   tới khi người dùng xử lý xong, và người ta học cách nhìn xuyên qua nó.
+   Giờ tất cả đi vào một chỗ: quả chuông trên app bar, có chấm đỏ khi còn
+   thông báo chưa đọc.
+
+   `state.notifications` nằm TRONG state nên nó đi theo snapshot Supabase —
+   cố ý: đánh dấu đã đọc trên điện thoại thì máy tính cũng thôi nhắc. Đổi lại
+   nó làm snapshot to dần, nên có trần NOTIF_MAX.
+
+   `createdAt` là CHUỖI ISO, không phải object Date: state đi qua
+   JSON.stringify vào localStorage và lên Supabase, nên một Date sẽ thành
+   string sau lần nạp đầu tiên — kiểu dữ liệu khác nhau trước và sau reload là
+   một lớp lỗi không đáng có. */
+const NOTIF_MAX = 50;
+
+function getNotifications(){
+  if(!Array.isArray(state.notifications)) state.notifications = [];
+  return state.notifications.filter(n=>n.userId === state.currentUser);
+}
+function unreadNotifications(){ return getNotifications().filter(n=>!n.read); }
+
+/* Đẩy một thông báo, bỏ qua nếu đã có cùng `id`. Dedup bằng chính id là lý do
+   id KHÔNG được chứa Date.now(): hai lần quét trong cùng một tháng phải ra
+   cùng một id, không thì mỗi lần mở app lại sinh thêm một bản trùng. */
+function pushNotification(n){
+  if(!Array.isArray(state.notifications)) state.notifications = [];
+  if(!n || !n.id) return false;
+  if(state.notifications.some(x=>x.id === n.id && x.userId === state.currentUser)) return false;
+  state.notifications.push(Object.assign({
+    userId: state.currentUser, read: false, createdAt: new Date().toISOString()
+  }, n));
+  /* Trần: state đi cả gói lên Supabase mỗi lần ghi, nên một mảng thông báo
+     không giới hạn là cái giá phải trả mãi mãi cho một cảnh báo của tháng
+     trước. Cắt từ đầu (cũ nhất) và chỉ cắt phần ĐÃ ĐỌC trước. */
+  const mine = state.notifications.filter(x=>x.userId === state.currentUser);
+  if(mine.length > NOTIF_MAX){
+    const drop = mine.length - NOTIF_MAX;
+    const doomed = mine.filter(x=>x.read).slice(0, drop);
+    const rest = drop - doomed.length;
+    if(rest > 0) doomed.push(...mine.filter(x=>!x.read).slice(0, rest));
+    state.notifications = state.notifications.filter(x=>!doomed.includes(x));
+  }
+  return true;
+}
+
+/* Quét toàn bộ nguồn cảnh báo và đẩy thành thông báo. Gọi lúc vào phiên và
+   sau mỗi lần ghi giao dịch (qua checkBudgetWarning) — không gọi từ hàm
+   render: render mà ghi state là một vòng vẽ-ghi-vẽ.
+
+   Ngưỡng 80% và 100% là HAI tin khác nhau, nên id mang theo mốc; vượt hạn
+   mức rồi thì người dùng phải được nhắc lại dù đã đọc tin 80%. */
+function checkBudgetAndPushNotifications(){
+  if(!state.currentUser) return 0;
+  let added = 0;
+  getUserBudgets().filter(b=>effectivePeriodKey(b) === currentPeriodKey(b.period)).forEach(b=>{
+    const spent = getBudgetSpent(b), pct = b.limit ? Math.round(spent / b.limit * 100) : 0;
+    const bucket = pct >= 100 ? '100' : pct >= 80 ? '80' : null;
+    if(!bucket) return;
+    const catId = b.categoryId && b.categoryId !== '__all__' ? b.categoryId : null;
+    /* Báo cáo không có bộ lọc danh mục — chỗ trả lời được "tôi đã chi gì
+       trong danh mục này" là tab Giao dịch. Ngân sách tổng thì ngược lại:
+       Báo cáo mới là nơi nhìn được cả kỳ. */
+    const action = catId
+      ? {view:'transactions', period:'this_month', categoryId:catId, walletId:'all'}
+      : {view:'report', period:'this_month', categoryId:'all', walletId:'all'};
+    if(pushNotification({
+      id: 'budget-alert-' + (catId || 'all') + '-' + effectivePeriodKey(b) + '-' + bucket,
+      type: 'budget_warning',
+      title: bucket === '100' ? 'Vượt ngân sách ⚠️' : 'Cảnh báo ngân sách ⚠️',
+      message: `Ngân sách ${budgetName(b)} đã dùng ${pct}% hạn mức (${fmt(spent)}/${fmt(b.limit)}).`,
+      action
+    })) added++;
+  });
+  /* Nợ đến hạn và thẻ tín dụng tới ngày trả cũng là cảnh báo, và cũng từng là
+     banner trên Trang chủ — gom về cùng một chỗ, không để hai hệ thống song
+     song cho cùng một khái niệm. id mang theo ngày đến hạn nên mỗi kỳ hạn
+     nhắc đúng một lần. */
+  const today = todayISO();
+  getUserDebts().filter(d=>debtRemaining(d) > 0 && d.dueDate).forEach(d=>{
+    const diff = daysBetween(today, d.dueDate);
+    if(diff > 7) return;
+    if(pushNotification({
+      id: 'debt-due-' + d.id + '-' + d.dueDate,
+      type: 'debt_due',
+      title: diff < 0 ? 'Khoản nợ quá hạn ⏰' : 'Khoản nợ sắp đến hạn ⏰',
+      message: `${d.kind === 'borrow' ? 'Khoản vay' : 'Khoản cho vay'} ${d.party} — `
+        + `${fmt(toMain(debtRemaining(d), (getWallet(d.walletId) || {}).currency))} · ${relDueLabel(d.dueDate).text}.`,
+      action: {view:'debts'}
+    })) added++;
+  });
+  getUserWallets().filter(w=>isCreditCard(w) && getCardUsedAmount(w) > 0).forEach(w=>{
+    const due = getCardNextDueDate(w), diff = daysBetween(today, due);
+    if(diff > 5) return;
+    if(pushNotification({
+      id: 'card-due-' + w.id + '-' + due,
+      type: 'card_due',
+      title: 'Thẻ tín dụng đến hạn 💳',
+      message: `Thẻ ${w.name} đến hạn ${fmtDate(due)} — ${fmtW(getCardUsedAmount(w), w)}.`,
+      action: {view:'wallets'}
+    })) added++;
+  });
+  if(added) saveStorage();
+  syncAlertDot();
+  return added;
+}
+
+/* Chấm đỏ trên quả chuông. Thay cho renderAlerts() cũ — nó vừa vẽ banner vừa
+   bật chấm, và chấm thì sáng theo "có cảnh báo" chứ không theo "chưa đọc". */
+function syncAlertDot(){
+  const dot = document.getElementById('alert-dot');
+  if(dot) dot.classList.toggle('hidden', unreadNotifications().length === 0);
+}
+
+function openNotifications(){
+  const list = getNotifications().slice().sort((a, b)=>(b.createdAt || '') > (a.createdAt || '') ? 1 : -1);
+  const unread = unreadNotifications().length;
+  const body = list.length
+    ? `<div class="notif-list">` + list.map(n=>
+        `<div class="notif-item ${n.read ? '' : 'is-unread'}" onclick="openNotification('${n.id}')">
+           <div class="notif-ic notif-${esc(n.type)}">${icon(NOTIF_ICON[n.type] || 'bell')}</div>
+           <div class="flex1">
+             <div class="notif-title">${esc(n.title)}</div>
+             <div class="notif-msg">${esc(n.message)}</div>
+             <div class="notif-time">${esc(notifTimeLabel(n.createdAt))}</div>
+           </div>
+           ${n.read ? '' : '<span class="notif-dot"></span>'}
+         </div>`).join('') + `</div>`
+      + (unread ? `<button class="btn btn-ghost mt12" onclick="markAllNotificationsRead()">Đánh dấu tất cả đã đọc</button>` : '')
+    : `<div class="empty-state"><div class="ic">${icon('bell')}</div>
+         <div class="text-sm">Chưa có thông báo nào</div>
+         <div class="es-sub">Cảnh báo ngân sách, nợ đến hạn và thẻ tới ngày trả sẽ hiện ở đây.</div></div>`;
+  uiSheet('Thông báo' + (unread ? ` (${unread})` : ''), body);
+}
+const NOTIF_ICON = {budget_warning:'target', debt_due:'handshake', card_due:'card'};
+/* Nhãn thời gian tương đối, tự dựng: một thông báo "2 giờ trước" đọc nhanh
+   hơn "14/09/2026 10:58", còn cũ hơn một ngày thì ngày tháng lại rõ hơn. */
+function notifTimeLabel(iso){
+  if(!iso) return '';
+  const then = new Date(iso), now = new Date();
+  const mins = Math.round((now - then) / 60000);
+  if(isNaN(mins)) return '';
+  if(mins < 1) return 'vừa xong';
+  if(mins < 60) return mins + ' phút trước';
+  if(mins < 24 * 60) return Math.round(mins / 60) + ' giờ trước';
+  return fmtDate(isoOf(then));
+}
+/* Bấm một thông báo: đánh dấu đã đọc rồi đi tới chỗ xử lý được nó.
+   chatNavigate() là cửa điều hướng dùng chung, nên thông báo và hyperlink
+   trong chat không đi hai đường khác nhau. */
+function openNotification(id){
+  const n = (state.notifications || []).find(x=>x.id === id && x.userId === state.currentUser);
+  if(!n) return;
+  if(!n.read){ n.read = true; saveStorage(); }
+  syncAlertDot();
+  closeSheet();
+  const a = n.action || {};
+  if(a.view === 'debts' || a.view === 'wallets' || a.view === 'budget'){ switchTab(a.view); return; }
+  chatNavigate(a);
+}
+function markAllNotificationsRead(){
+  let touched = 0;
+  (state.notifications || []).forEach(n=>{ if(n.userId === state.currentUser && !n.read){ n.read = true; touched++; } });
+  if(touched) saveStorage();
+  syncAlertDot();
+  openNotifications();      /* vẽ lại danh sách ngay, không đóng sheet */
+}
+
+/* ============================================================
    DASHBOARD
    ============================================================ */
 function renderDashboard(){
@@ -1836,7 +2033,7 @@ function renderDashboard(){
   document.getElementById('db-month-income').textContent = fmt(inc);
   document.getElementById('db-month-expense').textContent = fmt(exp);
 
-  renderAlerts();
+  syncAlertDot();
   document.getElementById('db-income-label').innerHTML = icon('arrowDown') + 'Thu tháng này';
   document.getElementById('db-expense-label').innerHTML = icon('arrowUp') + 'Chi tháng này';
   renderUpcomingCard();
@@ -1899,6 +2096,20 @@ function renderDashboard(){
 
   renderFeatureTiles('db-quick-access');
   renderRecentTransactions();
+  syncAlertZone();
+}
+/* Cụm "Sắp đến hạn + Ngân sách" chỉ hiện khi thật sự có gì để nhắc: một khoản
+   sắp tới hạn, hoặc một ngân sách đang theo dõi. Không có gì thì ẩn cả cụm —
+   hai thẻ rỗng ("Không có khoản nào sắp đến hạn 🎉" + "Chưa đặt ngân sách
+   nào") chiếm đúng chỗ mà Giao dịch gần đây và Ví đang cần trên màn hình đầu.
+   Ẩn, KHÔNG xoá: id và handler bên trong vẫn nguyên, và khi người dùng đặt
+   ngân sách đầu tiên thì nó hiện lại ở lần vẽ kế tiếp. */
+function syncAlertZone(){
+  const zone = document.getElementById('db-alert-zone');
+  if(!zone) return;
+  const hasUpcoming = getUpcomingItems(getUpcomingRange()).length > 0;
+  const hasBudget = getUserBudgets('monthly').some(b=>effectivePeriodKey(b)===currentPeriodKey('monthly'));
+  zone.classList.toggle('hidden', !hasUpcoming && !hasBudget);
 }
 /* ---------- GIAO DỊCH GẦN ĐÂY ----------
    Năm bản ghi mới nhất, ngay dưới lưới Tiện ích. */
@@ -1964,12 +2175,6 @@ function collectAlerts(){
     if(diff <= 5) alerts.push({level: diff<=2?'danger':'warn', icon:icon('card'), text:`Thẻ <b>${esc(w.name)}</b> đến hạn thanh toán ${fmtDate(due)} — ${fmtW(getCardUsedAmount(w),w)}`, action:`switchTab('wallets')`});
   });
   return alerts;
-}
-function renderAlerts(){
-  const alerts = collectAlerts();
-  document.getElementById('alert-dot').classList.toggle('hidden', alerts.length===0);
-  document.getElementById('db-alerts').innerHTML = alerts.slice(0,4).map(a=>
-    `<div class="alert alert-${a.level}" onclick="${a.action}" style="cursor:pointer;"><span>${a.icon}</span><span>${a.text}</span></div>`).join('');
 }
 
 /* ============================================================
@@ -2455,6 +2660,10 @@ function saveTransaction(){
   switchTab('dashboard', true);
 }
 function checkBudgetWarning(catId){
+  /* Toast là cảnh báo tức thì cho đúng danh mục vừa ghi; thông báo là bản ghi
+     lâu dài cho mọi ngân sách đang vượt ngưỡng. Hai thứ khác nhau, và đây là
+     chỗ duy nhất chắc chắn chạy sau mỗi lần ghi giao dịch. */
+  checkBudgetAndPushNotifications();
   const bs = getUserBudgets().filter(b=>effectivePeriodKey(b)===currentPeriodKey(b.period) && (b.categoryId===catId || b.categoryId==='__all__'));
   bs.forEach(b=>{
     const spent = getBudgetSpent(b), pct = b.limit ? spent/b.limit*100 : 0;
@@ -2703,8 +2912,12 @@ function renderAmountSheet(){
   const from = document.getElementById('amt-from');
   if(w){
     const card = isCreditCard(w);
+    /* Chuyển ví thì ví nguồn do <select> trong form quyết, đổi ở đây sẽ lệch
+       với form — nên chỉ hai chế độ kia mới bấm được. */
+    const pickable = amtKind !== 'tf';
     from.innerHTML = `<div class="amt-sec-lbl">Trừ vào ví</div>
-      <div class="amt-from-card">
+      <div class="amt-from-card${pickable ? ' wallet-selector-header-card ripple-host' : ''}"${
+        pickable ? ' onclick="quickPickWallet()"' : ''}>
         <div class="amt-party-ic">${esc(w.icon)}</div>
         <div class="flex1">
           <div class="amt-party-name truncate">${esc(w.name)}</div>
@@ -2714,6 +2927,7 @@ function renderAmountSheet(){
           <div class="amt-from-lbl">${card ? 'Hạn mức còn' : 'Số dư khả dụng'}</div>
           <div class="amt-from-val tabular">${fmtW(card ? getCardAvailableLimit(w) : getWalletBalance(w.id), w)}</div>
         </div>
+        ${pickable ? '<span class="wsel-caret">▾</span>' : ''}
       </div>`;
   } else {
     from.innerHTML = '';
@@ -2754,7 +2968,7 @@ function openQuickEntry(type){
   qeWalletPicked = false; qeCatPicked = false;
   /* Ví mở sẵn là ví vừa dùng gần nhất — cùng hàm mà trợ lý chat dùng. */
   if(!txSelectedWalletId || !getWallet(txSelectedWalletId)){
-    const w = chatDefaultWallet();
+    const w = chatDefaultWallet(currentTxType);
     txSelectedWalletId = w ? w.id : ws[0].id;
   }
   ensureQuickCategory();
@@ -2817,7 +3031,10 @@ function quickSetWallet(id){
   txSelectedWalletId = id;
   qeWalletPicked = true;
   closeSheet();
-  renderAmountSheet();
+  /* Vẽ lại cả bàn phím (số dư khả dụng, cảnh báo vượt số dư) VÀ form phía sau
+     — cùng một biến txSelectedWalletId, hai bề mặt cùng đọc nó. */
+  if(amtKind) renderAmountSheet();
+  if(currentTab === 'add') renderAddForm();
 }
 function quickPickCategory(){
   const type = currentTxType === 'income' ? 'income' : 'expense';
@@ -5251,7 +5468,7 @@ const RECEIPT_MERCHANT_RE = /(?:cua hang|nguoi ban|don vi thu huong|don vi chap 
    nội dung. Danh sách lấy từ biên lai thật của Techcombank và MoMo: hai app
    in liền các khối vào nhau, nên không có mốc dừng thì "Nội dung" ăn luôn cả
    mã đơn hàng dài 40 ký tự phía sau. */
-const RECEIPT_STOP_RE = /(thoi gian|ngay gio|so tai khoan|tai khoan|nguoi nhan|nguoi gui|ma giao dich|ma don hang|ma dh|ma gd|so du|bien lai|phi giao dich|tong phi|trang thai|danh muc|thong tin|cua hang|dia chi|vi tri|lien he)/;
+const RECEIPT_STOP_RE = /(thoi gian|ngay gio|so tai khoan|tai khoan|nguoi nhan|nguoi gui|ma giao dich|ma don hang|ma dh|ma gd|so du|bien lai|phi giao dich|tong phi|trang thai|danh muc|thong tin|cua hang|dia chi|dia diem|vi tri|lien he)/;
 /* Chữ nghiệp vụ ngân hàng: bóc khỏi nội dung TRƯỚC khi đem đi khớp danh mục.
    Lý do rất cụ thể, tìm ra từ biên lai thật: "chuyển khoản" chứa "chuyển", mà
    danh mục "Di chuyển" cũng chứa "chuyển" — nên MỌI biên lai chuyển tiền đều
@@ -5708,6 +5925,75 @@ function chatGoQuery(id){
   if(nav) chatNavigate(nav);
 }
 
+/* ---------- THIẾU THÔNG TIN: HỎI LẠI, ĐỪNG TẠO BẢN GHI LỖI ----------
+   Không có số tiền thì KHÔNG dựng thẻ xác nhận. Một thẻ với "chưa rõ — bấm để
+   nhập" vẫn có nút "Tự động lưu", và nút đó chỉ toast một câu rồi đứng im —
+   người dùng bấm hai lần rồi bỏ đi. Hỏi lại một câu thì rẻ hơn nhiều.
+
+   `pendingChatContext` giữ ý định dở dang để tin nhắn sau chỉ cần con số.
+   Nó sống trong RAM, có HẠN 10 PHÚT: một context của nửa tiếng trước lặng lẽ
+   dính vào câu "50k" bây giờ là một khoản chi không ai nhớ mình đã khai. */
+const CHAT_CONTEXT_TTL = 10 * 60 * 1000;
+let pendingChatContext = null;
+
+/* Những trường không có thì bản ghi vô nghĩa. Số tiền là trường duy nhất
+   không thể suy ra được: ví và danh mục đều có đường mặc định hợp lý (ví hay
+   dùng, danh mục "Khác"), còn số tiền thì không ai đoán hộ được. */
+function validateChatPayload(d){
+  const missing = [];
+  if(!d || !(d.amount > 0)) missing.push('amount');
+  if(d && !getWallet(d.walletId)) missing.push('wallet');
+  if(d && !d.catId) missing.push('category');
+  return missing;
+}
+/* Câu hỏi đổi luân phiên cho đỡ máy móc — nhưng luôn là MỘT câu hỏi rõ ràng,
+   không phải một lời xin lỗi dài dòng. */
+const MISSING_PROMPTS = {
+  amount: [
+    'Khoản này hết bao nhiêu vậy bạn? Cho mình xin con số để lưu nhé 💸',
+    'Bạn chưa ghi số tiền rồi. Khoản này bao nhiêu thế ạ?',
+    'Mình cần thêm số tiền nữa là đủ. Bao nhiêu bạn nhỉ?'
+  ],
+  wallet: ['Khoản này bạn trả bằng ví nào?'],
+  category: ['Khoản này xếp vào danh mục nào bạn nhỉ?']
+};
+function generateMissingInfoPrompt(field, d){
+  const bank = MISSING_PROMPTS[field] || MISSING_PROMPTS.amount;
+  const q = bank[Math.floor(Math.random() * bank.length)];
+  if(field !== 'amount' || !d || !d.note) return q;
+  /* Nhắc lại thứ ĐÃ hiểu được — LUÔN LUÔN, và là một dòng riêng chứ không
+     nhét vào giữa câu hỏi: câu hỏi được rút ngẫu nhiên trong ba biến thể, nên
+     mọi cách chèn vào thân câu đều chỉ đúng với một biến thể. Người dùng cần
+     biết mình không phải gõ lại cả câu, chỉ cần trả lời phần còn thiếu. */
+  return q + `<span class="chat-hint">Mình đã ghi nhận: “${esc(d.note)}”.</span>`;
+}
+
+/* Tin nhắn "chỉ có con số": sau khi bỏ số tiền ra thì không còn từ khoá nào.
+   Đây là điều kiện để GỘP với context, và nó phải chặt — "cà phê 30k" cũng có
+   số tiền, nhưng nó là một giao dịch MỚI chứ không phải câu trả lời cho câu
+   hỏi trước. */
+function chatIsAmountOnly(text){
+  const {rest} = chatExtractDate(text);
+  const pick = chatPickAmount(rest);
+  if(!pick) return false;
+  const stripped = String(rest).replace(/\d[\d.,]*\s*(ty|trieu|tr|nghin|ngan|ng|vnd|dong|k|m|d)?/gi, ' ');
+  return chatTokens(stripped).uni.length === 0;
+}
+function chatContextAlive(){
+  return !!pendingChatContext && (Date.now() - pendingChatContext.at) < CHAT_CONTEXT_TTL;
+}
+/* Gộp câu trả lời (chỉ có số tiền) vào ý định đang chờ. */
+function chatMergeContext(text){
+  const d = pendingChatContext.draft;
+  const pick = chatPickAmount(chatExtractDate(text).rest);
+  pendingChatContext = null;
+  if(!pick) return null;
+  d.amount = pick.value;
+  d.amountGuess = !!pick.guess;
+  chatDrafts.set(d.id, d);
+  return d;
+}
+
 /* ---------- DRAFT ----------
    Draft sống trong RAM. KHÔNG đẩy vào state.transactions: một giao dịch chỉ
    ra đời khi người dùng bấm, cùng lý do với các mục dự kiến "ảo". */
@@ -5716,9 +6002,23 @@ let chatBusy = false;
 
 /* Ví mặc định: ví người dùng vừa ghi vào gần đây nhất, không thì ví đầu danh
    sách (getUserWallets() đã sắp theo displayOrder). */
-function chatDefaultWallet(){
+function chatDefaultWallet(type){
   const ws = getUserWallets();
   if(!ws.length) return null;
+  /* Có loại giao dịch thì lấy ví DÙNG NHIỀU NHẤT cho đúng loại đó: lương hay
+     vào ví ngân hàng, chi lẻ hay ra ví tiền mặt. Tần suất bền hơn "ví vừa
+     dùng gần nhất" — một lần ghi lẻ ở ví khác không kéo mặc định đi theo. */
+  if(type === 'expense' || type === 'income'){
+    const count = new Map();
+    getAllUserTransactions().forEach(t=>{
+      if(t.type !== type || !t.walletId) return;
+      if(!ws.some(w=>w.id === t.walletId)) return;
+      count.set(t.walletId, (count.get(t.walletId) || 0) + 1);
+    });
+    let best = null, bestN = 0;
+    count.forEach((n, id)=>{ if(n > bestN){ bestN = n; best = id; } });
+    if(best) return ws.find(w=>w.id === best) || ws[0];
+  }
   const last = getAllUserTransactions().reduce((a, t)=>{
     if(!t.walletId || !ws.some(w=>w.id === t.walletId)) return a;
     if(!a) return t;
@@ -5804,7 +6104,7 @@ async function processChatMessage(userInput, imageFile){
   if(!draft.walletId){
     draft.walletMatched = !!draft.walletMatchedHistory;
     if(draft.walletFromHistory) draft.walletId = draft.walletFromHistory;
-    else { const w = chatDefaultWallet(); draft.walletId = w ? w.id : null; }
+    else { const w = chatDefaultWallet(draft.type); draft.walletId = w ? w.id : null; }
   }
 
   chatDrafts.set(draft.id, draft);
@@ -6136,6 +6436,131 @@ function chatEditRecurring(id){
   chatDrafts.delete(id);
 }
 
+/* ---------- LỊCH SỬ HỘI THOẠI (100 BẢN GHI GẦN NHẤT) ----------
+   Hội thoại sống qua lần đóng app, nên mở ngăn chat lên là cuộn lại xem được
+   những gì mình đã ghi — và ghi lại một khoản y như cũ chỉ bằng một nút.
+
+   KHÔNG lưu trong `state`: hội thoại không phải dữ liệu tài chính, và đẩy nó
+   lên Supabase là làm snapshot to thêm mỗi lần nhắn. Nó nằm ở localStorage,
+   và **khoá có namespace theo tài khoản** — hai người dùng cùng một máy
+   không được đọc hội thoại của nhau, đúng lý do mà FINYOURTIN_STATE_V4 cũng
+   mang `::<uid>`.
+
+   Chỉ lưu thứ ĐÃ XẢY RA: câu người dùng nhắn, câu bot trả lời, và bản ghi đã
+   lưu vào sổ. Thẻ xác nhận đang chờ thì không — nó trỏ vào một draft trong
+   RAM, nạp lại là một cái thẻ có nút bấm không làm gì cả. */
+const CHAT_HISTORY_KEY = 'sofin_chat_history';
+const CHAT_HISTORY_MAX = 100;
+let chatLog = [];
+/* Bật khi đang vẽ một bong bóng KHÔNG thuộc hội thoại thật: lúc khôi phục
+   lịch sử (không thì mỗi lần mở lại nhân đôi), và lúc chào (lời chào là
+   giao diện, không phải tin nhắn — để nó vào lịch sử thì người dùng cuộn
+   lại sẽ thấy nó nằm chen giữa những khoản chi của mình). */
+let chatSkipLog = false;
+
+function chatHistoryKey(){
+  return storageNamespace ? CHAT_HISTORY_KEY + '::' + storageNamespace : null;
+}
+/* Luôn cắt còn 100 bản ghi cuối. Trần này là để localStorage (~5MB dùng chung
+   với bản cache của cả sổ) không bị một hội thoại dài ăn hết. */
+function saveChatHistory(newMessagesArray){
+  const key = chatHistoryKey();
+  const trimmed = (newMessagesArray || []).slice(-CHAT_HISTORY_MAX);
+  chatLog = trimmed;
+  if(!key) return trimmed;
+  try{ localStorage.setItem(key, JSON.stringify(trimmed)); }
+  catch(e){ /* hết chỗ: mất lịch sử chat còn hơn mất dữ liệu sổ */ }
+  return trimmed;
+}
+function loadChatHistory(){
+  const key = chatHistoryKey();
+  if(!key){ chatLog = []; return chatLog; }
+  try{
+    const raw = localStorage.getItem(key);
+    const arr = raw ? JSON.parse(raw) : [];
+    chatLog = Array.isArray(arr) ? arr.slice(-CHAT_HISTORY_MAX) : [];
+  }catch(e){ chatLog = []; }
+  return chatLog;
+}
+function chatLogPush(entry){
+  if(chatSkipLog || !entry) return;
+  saveChatHistory(chatLog.concat([Object.assign({at: Date.now()}, entry)]));
+}
+/* Vẽ lại toàn bộ lịch sử khi mở ngăn chat. Bong bóng chữ vẽ lại thành chữ;
+   giao dịch đã lưu vẽ thành THẺ LỊCH SỬ có nút "Tạo lại". */
+function restoreChatHistory(){
+  const body = document.getElementById('chat-body');
+  if(!body) return 0;
+  loadChatHistory();
+  if(!chatLog.length) return 0;
+  chatSkipLog = true;
+  try{
+    body.innerHTML = '';
+    chatLog.forEach((m, i)=>{
+      if(m.role === 'tx' && m.tx) chatAppend('bot', chatHistoryCardHtml(m.tx, i), 'has-card');
+      else if(m.text) chatAppend(m.role === 'user' ? 'user' : 'bot', esc(m.text));
+    });
+  } finally { chatSkipLog = false; }
+  chatScrollBottom();
+  return chatLog.length;
+}
+/* Thẻ giao dịch cũ. `data-*` giữ đủ để dựng lại một draft mới — nhưng ví và
+   danh mục được kiểm lại lúc bấm, không phải lúc vẽ: ví có thể đã bị xoá từ
+   lúc giao dịch đó được lưu. */
+function chatHistoryCardHtml(tx, idx){
+  const w = getWallet(tx.walletId);
+  const cat = findCategory(tx.type === 'income' ? 'income' : 'expense', tx.catId);
+  return `<div class="between"><span class="hist-badge">Giao dịch cũ</span>`
+    + `<span class="notif-time">${fmtDate(tx.date)}</span></div>`
+    + `<div class="hist-amt ${tx.type === 'income' ? 'c-income' : 'c-expense'}">`
+    + `${tx.type === 'income' ? '+' : '-'}${esc(chatAmountText(tx.amount, w))}</div>`
+    + `<div class="hist-note">${esc(tx.note || (cat ? cat.name : ''))}</div>`
+    + `<div class="hist-meta">💳 ${w ? esc(w.name) : 'ví đã xoá'} · 🏷️ ${cat ? esc(cat.name) : 'Khác'}</div>`
+    + `<button type="button" class="btn btn-secondary hist-clone" onclick="cloneChatTransaction(${idx})">`
+    + `🔄 Tạo lại giao dịch này</button>`;
+}
+/* "Tạo lại": dựng một draft MỚI từ bản ghi cũ rồi hiện thẻ xác nhận — không
+   ghi thẳng vào sổ. Ngày lấy HÔM NAY (tạo lại nghĩa là lần này, không phải
+   lần trước), và ví/danh mục được kiểm lại: cái đã bị xoá thì rơi về mặc
+   định thay vì tạo ra một giao dịch không số dư nào đọc được. */
+function cloneChatTransaction(idx){
+  const m = chatLog[idx];
+  if(!m || !m.tx) return;
+  const tx = m.tx;
+  const type = tx.type === 'income' ? 'income' : 'expense';
+  const cats = getCats(type);
+  const wallet = getWallet(tx.walletId) || chatDefaultWallet();
+  const catOk = cats.some(c=>c.id === tx.catId);
+  const fallback = fallbackCategory(type);
+  const d = {
+    id: uid('cd'), kind:'SINGLE_TRANSACTION', source:'clone', type,
+    amount: tx.amount, amountGuess: false,
+    catId: catOk ? tx.catId : (fallback ? fallback.id : null),
+    subId: catOk ? tx.subId : null,
+    walletId: wallet ? wallet.id : null,
+    walletMatched: false, walletPicked: false,
+    date: todayISO(), note: tx.note || '', matched: catOk, via: null, ocr: ''
+  };
+  chatDrafts.set(d.id, d);
+  chatAppend('user', esc('Tạo lại: ' + (tx.note || chatAmountText(tx.amount, wallet))));
+  chatLogPush({role:'user', text:'Tạo lại: ' + (tx.note || '')});
+  if(!catOk || !getWallet(tx.walletId)){
+    chatAppend('bot', 'Ví hoặc danh mục cũ không còn, mình chọn tạm cái khác — bạn kiểm lại giúp nhé:');
+  }
+  chatReply(d);
+}
+function clearChatHistory(){
+  uiConfirm('Xoá hội thoại', 'Xoá toàn bộ lịch sử trò chuyện với trợ lý trên máy này? Giao dịch đã lưu vào sổ thì không bị ảnh hưởng.', 'Xoá')
+    .then(ok=>{
+      if(!ok) return;
+      saveChatHistory([]);
+      const body = document.getElementById('chat-body');
+      if(body) body.innerHTML = '';
+      chatGreet();
+      toast('Đã xoá hội thoại','ok');
+    });
+}
+
 /* ---------- NGĂN CHAT ---------- */
 function renderChatChrome(){
   const fab = document.getElementById('chat-fab');
@@ -6156,7 +6581,11 @@ function openChatDrawer(){
   dr.classList.remove('hidden');
   showChatFab(false);                       /* nút nổi nằm ngay dưới ngăn — để cả hai là chồng nhau */
   const body = document.getElementById('chat-body');
-  if(body && !body.childElementCount) chatGreet();
+  /* Khôi phục trước, chào sau: có lịch sử thì người dùng cần thấy nó, còn lời
+     chào lặp lại mỗi lần mở là nhiễu. */
+  if(body && !body.childElementCount){
+    if(!restoreChatHistory()) chatGreet();
+  }
   chatScrollBottom();
   const inp = document.getElementById('chat-input');
   if(inp && !isNativeApp()) inp.focus();    /* trên máy thật, focus là bật bàn phím ảo che mất hội thoại */
@@ -6184,6 +6613,11 @@ function toggleChatDrawer(){
 function resetChatAssistant(){
   chatDrafts = new Map();
   chatQueryNavs = new Map();
+  pendingChatContext = null;
+  /* Chỉ dọn bộ nhớ RAM. Không xoá localStorage: khoá đã mang namespace theo
+     tài khoản, nên tài khoản sau đọc khoá khác — còn tài khoản này quay lại
+     thì lịch sử của họ vẫn còn. */
+  chatLog = [];
   chatKwIndex = null; chatKwStamp = -1; chatKwUser = null;
   chatBusy = false;
   const body = document.getElementById('chat-body');
@@ -6204,14 +6638,23 @@ function chatAppend(role, html, cls){
   el.className = 'chat-bubble ' + role + (cls ? ' ' + cls : '');
   el.innerHTML = html;
   body.appendChild(el);
+  /* Ghi vào lịch sử ngay tại đây: đó là chỗ DUY NHẤT mọi bong bóng đi qua,
+     nên không có đường nào nhắn được mà không được lưu. Lưu CHỮ chứ không lưu
+     HTML — HTML còn ôm theo id của draft trong RAM, nạp lại là một cái thẻ có
+     nút bấm không làm gì cả. Bong bóng rỗng (ba dấu chấm "đang gõ") bị bỏ. */
+  const plain = (el.textContent || '').trim();
+  if(plain) chatLogPush({role, text: plain});
   chatScrollBottom();
   return el;
 }
 function chatGreet(){
+  chatSkipLog = true;
+  try{
   chatAppend('bot', `Chào ${esc(displayName())}! Nhắn cho mình một câu như <b>“cà phê 35k”</b>, `
     + `hoặc gửi ảnh hoá đơn — mình sẽ điền sẵn giao dịch để bạn xác nhận.`
     + `<span class="chat-hint">Danh mục và ví thì mình học từ ghi chú của chính bạn trong sổ, nên càng dùng càng đoán đúng. `
     + `Hỏi mình cũng được: <i>“tháng này chi nhiều nhất vào đâu?”</i>, <i>“ăn uống tháng trước bao nhiêu?”</i>, <i>“còn bao nhiêu tiền?”</i></span>`);
+  } finally { chatSkipLog = false; }
 }
 
 function chatSend(){
@@ -6252,6 +6695,18 @@ async function chatHandle(text, file){
   if(file) chatAppendImage(file, text);
   else chatAppend('user', esc(text));
 
+  /* Câu trả lời cho câu hỏi vừa rồi được xử lý TRƯỚC TIÊN: "45k" mà đem đi
+     phân tích lại từ đầu thì nó thành một giao dịch mới với ghi chú "45k" và
+     danh mục "Khác" — đúng cái bản ghi lỗi mà việc hỏi lại đang tránh. */
+  if(!file && chatContextAlive() && chatIsAmountOnly(text)){
+    const merged = chatMergeContext(text);
+    if(merged){ chatReply(merged); return; }
+  }
+  /* Người dùng nhắn sang chuyện khác: bỏ context. Một ý định dở dang còn nằm
+     đó rồi lặng lẽ dính vào một con số ở tin nhắn sau là khoản chi không ai
+     nhớ mình đã khai. */
+  if(!file) pendingChatContext = null;
+
   /* Câu hỏi dữ liệu được trả lời TRƯỚC: "tháng này chi nhiều nhất vào đâu"
      không có số tiền nào để ghi, mà biến nó thành giao dịch thì bot vừa trả
      lời sai vừa tạo rác trong sổ. parseQueryIntent() trả null khi không nhận
@@ -6279,6 +6734,14 @@ async function chatHandle(text, file){
 }
 function chatReply(draft){
   if(draft && draft.kind && draft.kind !== 'SINGLE_TRANSACTION') return renderBotInteractiveCard(draft);
+  /* Thiếu số tiền: hỏi lại và GIỮ phần đã hiểu được. Ảnh bill thì không hỏi
+     kiểu này — ở đó thẻ vẫn hiện vì người dùng còn muốn thấy app đã đọc được
+     gì từ tờ giấy, và dòng "Số tiền" bấm được để nhập tay. */
+  if(draft && draft.source !== 'bill' && validateChatPayload(draft).includes('amount')){
+    pendingChatContext = {draft, at: Date.now()};
+    chatAppend('bot', generateMissingInfoPrompt('amount', draft));
+    return;
+  }
   const cat = findCategory(draft.type, draft.catId);
   let lead;
   if(draft.source === 'bill'){
@@ -6460,6 +6923,10 @@ function chatAutoSave(id){
   });
   saveStorage();
   chatDrafts.delete(id);
+  /* Bản ghi đã vào sổ thì vào lịch sử hội thoại dưới dạng thẻ "Giao dịch cũ"
+     — chính nó là thứ nút "Tạo lại" dựng lại sau này. */
+  chatLogPush({role:'tx', tx:{amount:d.amount, note:d.note, type:d.type,
+    catId:d.catId, subId:d.subId, walletId:d.walletId, date:d.date}});
   const box = document.getElementById('chat-card-' + id);
   if(box) box.innerHTML = `<div class="bca-saved">✓ Đã lưu ${esc(chatAmountText(d.amount, w))} · ${esc(w.name)}</div>`;
   chatAppend('bot', status === 'pending'
@@ -6547,7 +7014,7 @@ const APK_URL = `https://github.com/${GH_REPO}/releases/latest/download/sofin.ap
 
 /* Stamped in at build time from package.json; the literal is only what runs
    when someone opens the folder without building. */
-const APP_VERSION = (window.__ENV__ && window.__ENV__.VERSION) || '5.1.6';
+const APP_VERSION = (window.__ENV__ && window.__ENV__.VERSION) || '5.1.7';
 /* Which version the user already said "để sau" to — device-local, so a
    dismissal does not sync to their other phone. */
 const UPDATE_SEEN_KEY = 'FINYOURTIN_UPDATE_DISMISSED';

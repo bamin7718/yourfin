@@ -1087,11 +1087,22 @@ async function boot(opts) {
   {
     const css = fs.readFileSync(path.join(PUBLIC, 'css', 'styles.css'), 'utf8');
     check('primary là xanh VietinBank #00529C', /--primary:#00529C/.test(css));
-    check('ví xếp lưới 2 cột', /\.wallet-grid\{display:grid;grid-template-columns:repeat\(2,1fr\)/.test(css));
-    /* Ô "Thêm ví" là con cuối; rơi vào ô lẻ nghĩa là số ví chẵn và nó đứng
-       một mình nửa hàng — lúc đó cho trải hết hàng thay vì chừa lỗ hổng. */
-    check('số ví chẵn thì ô "Thêm ví" trải hết hàng',
-      /\.wallet-card\.add:nth-child\(odd\)\{grid-column:1 \/ -1/.test(css));
+    /* ĐÃ ĐẢO NGƯỢC quyết định cũ (lưới 2 cột): từ khi Giao dịch gần đây và
+       Tiện ích lên đầu trang chủ, chiều dọc đắt hơn chiều ngang. Thứ phải
+       khoá lại là mảnh hở của thẻ thứ ba — không có nó thì không ai biết là
+       cuộn được, và đó đúng là lỗi mà lưới 2 cột ngày trước dựng lên để sửa. */
+    check('thanh ví cuộn ngang, ẩn thanh cuộn',
+      new RegExp('\\.wallet-strip{[^}]*display:flex').test(css)
+      && new RegExp('\\.wallet-strip{[^}]*overflow-x:auto').test(css)
+      && new RegExp('\\.wallet-strip::-webkit-scrollbar{display:none').test(css));
+    check('thẻ ví rộng 46% để luôn hở phần thẻ kế tiếp (tín hiệu cuộn được)',
+      new RegExp('\\.wallet-strip > \\*{flex:0 0 46%').test(css));
+    /* Trong một hàng flex cuộn ngang thì "ô lẻ đứng một mình nửa hàng" không
+       còn là vấn đề, nên luật grid-column của thời lưới 2 cột đã bỏ. */
+    check('ô "Thêm ví" xếp ngang, hẹp hơn một thẻ ví',
+      new RegExp('\\.wallet-card.add{flex-direction:row').test(css)
+      && new RegExp('\\.wallet-strip > \\.wallet-card.add{flex:0 0 30%').test(css)
+      && !/nth-child\(odd\)\{grid-column/.test(css));
     check('hàng danh mục bấm được có con trỏ tay và phản hồi khi nhấn',
       /\.category-item\{[^}]*cursor:pointer/.test(css) && /\.category-item:active\{[^}]*transform:scale\(\.98\)/.test(css));
     check('hàng chip chọn loại ví đủ chỗ cho 5 loại',
@@ -1145,9 +1156,9 @@ async function boot(opts) {
     check('header thu gọn còn một hàng ~70px',
       /header\{[^}]*padding:calc\(9px \+ env\(safe-area-inset-top,0px\)\) 14px 26px/.test(css)
       && /header \.hd-who\{display:flex/.test(css));
-    check('ví xếp lưới 2 cột, không cuộn ngang',
-      /\.wallet-grid\{display:grid;grid-template-columns:repeat\(2,1fr\)/.test(css)
-      && !/\.wallet-scroll\{/.test(css));
+    check('ví xếp thành thanh cuộn ngang, không còn lưới 2 cột',
+      new RegExp('\\.wallet-strip{[^}]*overflow-x:auto').test(css)
+      && !/\.wallet-grid\{/.test(css));
     check('thẻ ví gọn, chống tràn khi số tiền dài',
       /\.wallet-card\{width:100%;min-width:0;min-height:72px/.test(css)
       && /\.wallet-card \.wbal\.amt-xs\{/.test(css));
@@ -1732,8 +1743,8 @@ async function boot(opts) {
     const grid = $('db-wallet-scroll');
     const cards = [...grid.querySelectorAll('.wallet-card:not(.add)')];
     check('render đủ 6 ví, không giấu bớt', cards.length === 6, cards.length + ' thẻ');
-    check('container là lưới, không phải carousel',
-      grid.classList.contains('wallet-grid') && !grid.classList.contains('wallet-scroll'));
+    check('container là thanh cuộn ngang',
+      grid.classList.contains('wallet-strip') && !grid.classList.contains('wallet-grid'));
     check('thẻ nằm trực tiếp trong lưới, không bọc div thừa',
       cards.every(c => c.parentNode === grid));
     check('ô "Thêm ví" cũng là một ô lưới',
@@ -1899,9 +1910,9 @@ async function boot(opts) {
       !quick.includes('openAddTransaction'), 'còn ô ghi thu/chi/chuyển ví');
     check('lưới dẫn thẳng tới các màn hình chính',
       ['wallets', 'budget', 'debts', 'recurring'].every(t => quick.includes(`switchTab('${t}')`)));
-    check('khối Tiện ích nằm dưới khối Ví của bạn', (() => {
+    check('khối Tiện ích nằm TRÊN khối Ví của bạn', (() => {
       const html = $('view-dashboard').innerHTML;
-      return html.indexOf('db-wallet-scroll') < html.indexOf('db-quick-access');
+      return html.indexOf('db-quick-access') < html.indexOf('db-wallet-scroll');
     })());
     check('phần còn lại vào được qua "Tất cả tiện ích"', (() => {
       window.openAllFeatures();
@@ -2267,6 +2278,154 @@ async function boot(opts) {
     check('bấm ✕ thì xoá hội thoại', $('chat-body').children.length === 0);
     check('… và trả lại nút nổi', visible('chat-fab'));
     window.cancelAddTx(); await sleep(20);
+  }
+
+  console.log('\n· trợ lý chat: lịch sử 100 bản ghi + nút Tạo lại');
+  {
+    const KEY = 'sofin_chat_history::' + S().currentUser;
+    const stored = () => JSON.parse(window.localStorage.getItem(KEY) || '[]');
+
+    window.closeChatDrawer(false);
+    window.eval('saveChatHistory([])');
+    window.openChatDrawer(); await sleep(20);
+    $('chat-body').innerHTML = '';
+
+    /* Ghi một giao dịch qua chat rồi đóng/mở lại ngăn chat: hội thoại phải
+       còn nguyên, không phải một tờ giấy trắng. */
+    $('chat-input').value = 'bún bò 40k';
+    window.chatSend(); await sleep(80);
+    const card = [...$('chat-body').querySelectorAll('.bot-card-action')].pop();
+    card.querySelector('.btn-primary').click(); await sleep(40);
+
+    check('lịch sử được lưu vào localStorage theo tài khoản',
+      stored().length > 0 && !window.localStorage.getItem('sofin_chat_history'),
+      'entries=' + stored().length);
+    check('câu người dùng nhắn được lưu', stored().some(m => m.role === 'user' && /bún bò 40k/.test(m.text)));
+    check('giao dịch đã lưu vào sổ cũng vào lịch sử dưới dạng bản ghi tx',
+      stored().some(m => m.role === 'tx' && m.tx && m.tx.amount === 40000),
+      JSON.stringify(stored().filter(m => m.role === 'tx').slice(-1)));
+    /* Lưu CHỮ, không lưu HTML: HTML ôm theo id của draft trong RAM, nạp lại là
+       một cái thẻ có nút bấm không làm gì cả. */
+    check('lịch sử lưu chữ, không lưu HTML',
+      !stored().some(m => /<[a-z]/i.test(m.text || '')), JSON.stringify(stored().slice(-1)));
+
+    window.closeChatDrawer(false); await sleep(10);
+    $('chat-body').innerHTML = '';
+    window.openChatDrawer(); await sleep(30);
+    check('mở lại ngăn chat thì hội thoại được khôi phục',
+      $('chat-body').children.length === stored().length,
+      $('chat-body').children.length + '/' + stored().length);
+    check('… và không chào lại từ đầu', !/Chào /.test($('chat-body').textContent));
+    /* Khôi phục KHÔNG được ghi log lần nữa, không thì mỗi lần mở lại nhân đôi. */
+    const n = stored().length;
+    $('chat-body').innerHTML = '';
+    window.openChatDrawer(); await sleep(20);
+    check('khôi phục không nhân đôi lịch sử', stored().length === n, n + ' -> ' + stored().length);
+
+    /* Thẻ "Giao dịch cũ" có nút Tạo lại. */
+    const hist = $('chat-body').querySelector('.hist-clone');
+    check('giao dịch cũ hiện thành thẻ có nút "Tạo lại"',
+      !!hist && /Tạo lại/.test(hist.textContent));
+    check('… kèm nhãn "Giao dịch cũ" và ngày', !!$('chat-body').querySelector('.hist-badge'));
+
+    const txBefore = S().transactions.length;
+    hist.click(); await sleep(60);
+    const clone = [...$('chat-body').querySelectorAll('.bot-card-action')].pop();
+    check('bấm "Tạo lại" thì ra thẻ xác nhận MỚI, chưa ghi vào sổ',
+      !!clone && S().transactions.length === txBefore);
+    check('… đúng số tiền của bản ghi cũ', /40\.000/.test(clone.textContent), clone.textContent.slice(0, 60));
+    /* Tạo lại nghĩa là LẦN NÀY: ngày phải là hôm nay, không phải ngày cũ. */
+    check('… nhưng ngày là hôm nay, không phải ngày của giao dịch cũ',
+      clone.textContent.includes(window.fmtDate(window.todayISO())),
+      clone.textContent.slice(0, 120));
+    clone.querySelector('.btn-primary').click(); await sleep(40);
+    const t = S().transactions[S().transactions.length - 1];
+    check('xác nhận thì lưu thành giao dịch mới',
+      S().transactions.length === txBefore + 1 && t.amount === 40000 && t.date === window.todayISO());
+
+    /* Trần 100: cắt từ đầu, giữ 100 bản ghi cuối. */
+    window.eval(`saveChatHistory(Array.from({length:130}, (_,i)=>({role:'bot', text:'m'+i, at:Date.now()})))`);
+    check('luôn cắt còn 100 bản ghi gần nhất', stored().length === 100, String(stored().length));
+    check('… giữ phần MỚI nhất, bỏ phần cũ',
+      stored()[0].text === 'm30' && stored()[99].text === 'm129',
+      stored()[0].text + ' … ' + stored()[99].text);
+
+    /* Xoá hội thoại là một hành động riêng, có hỏi lại — nút ✕ chỉ đóng. */
+    check('nút ✕ chỉ đóng, không xoá lịch sử',
+      /closeChatDrawer\(false\)/.test($('chat-drawer').innerHTML));
+    check('có nút xoá hội thoại riêng', /clearChatHistory\(\)/.test($('chat-drawer').innerHTML));
+    window.clearChatHistory(); await sleep(20);
+    $('confirm-yes').click(); await sleep(30);
+    check('xoá hội thoại thì localStorage cũng sạch', stored().length <= 1, String(stored().length));
+
+    window.closeChatDrawer(false);
+    window.switchTab('dashboard'); await sleep(20);
+  }
+
+  console.log('\n· trợ lý chat: thiếu số tiền thì hỏi lại, không tạo bản ghi lỗi');
+  {
+    window.closeChatDrawer(true);
+    window.openChatDrawer(); await sleep(20);
+    const bubbles = () => [...$('chat-body').children];
+    const lastText = () => bubbles()[bubbles().length - 1].textContent;
+
+    /* Bước 1: câu không có số tiền. */
+    const txBefore = S().transactions.length;
+    $('chat-input').value = 'Vừa mua áo mới';
+    window.chatSend(); await sleep(80);
+    check('không có số tiền thì KHÔNG dựng thẻ xác nhận',
+      !bubbles()[bubbles().length - 1].querySelector('.bot-card-action'), lastText().slice(0, 50));
+    check('bot hỏi lại số tiền một cách tự nhiên',
+      /bao nhiêu/i.test(lastText()) && /\?/.test(lastText()), lastText().slice(0, 80));
+    check('… và nhắc lại phần đã hiểu được, để không phải gõ lại cả câu',
+      /Vừa mua áo mới/.test(lastText()), lastText().slice(0, 80));
+    check('… chưa ghi gì vào sổ', S().transactions.length === txBefore);
+    check('… và giữ ý định dở dang lại', window.eval('!!pendingChatContext'));
+
+    /* Bước 2: trả lời chỉ bằng con số → gộp vào context. */
+    $('chat-input').value = '200k';
+    window.chatSend(); await sleep(80);
+    const card = [...$('chat-body').querySelectorAll('.bot-card-action')].pop();
+    check('trả lời "200k" thì ra thẻ xác nhận hoàn chỉnh', !!card);
+    check('… đúng số tiền vừa nhắn', /200\.000/.test(card.textContent), card.textContent.slice(0, 60));
+    /* Ghi chú phải là câu GỐC, không phải "200k": nó vừa là thứ hiện trong sổ,
+       vừa là dữ liệu học cho lần sau. */
+    check('… và giữ ghi chú của câu đầu, không phải chuỗi "200k"', (() => {
+      const d = window.eval(`JSON.stringify([...chatDrafts.values()].pop())`);
+      return /Vừa mua áo mới/.test(d) && !/"note":"200k"/.test(d);
+    })(), window.eval(`JSON.stringify([...chatDrafts.values()].pop()||{}).slice(0,120)`));
+    check('… và dọn context sau khi gộp', window.eval('!pendingChatContext'));
+
+    /* Một câu MỚI có số tiền không được gộp vào context cũ. */
+    $('chat-input').value = 'Đổ xăng';
+    window.chatSend(); await sleep(80);
+    check('câu mới thiếu tiền: lại hỏi lại', /bao nhiêu/i.test(lastText()));
+    $('chat-input').value = 'cà phê 30k';
+    window.chatSend(); await sleep(80);
+    const card2 = [...$('chat-body').querySelectorAll('.bot-card-action')].pop();
+    check('câu mới CÓ số tiền thì là giao dịch mới, không dính vào "Đổ xăng"',
+      /cà phê 30k/.test(window.eval(`JSON.stringify([...chatDrafts.values()].pop()||{})`)),
+      window.eval(`JSON.stringify([...chatDrafts.values()].pop()||{}).slice(0,100)`));
+    check('… và context cũ bị bỏ, không treo lại', window.eval('!pendingChatContext'));
+
+    /* Hạn của context: một ý định của nửa tiếng trước không được lặng lẽ dính
+       vào con số bây giờ. */
+    check('context có hạn 10 phút', /CHAT_CONTEXT_TTL = 10 \* 60 \* 1000/.test(
+      fs.readFileSync(path.join(PUBLIC, 'js', 'app.js'), 'utf8')));
+    $('chat-input').value = 'Ăn trưa';
+    window.chatSend(); await sleep(80);
+    window.eval('pendingChatContext.at = Date.now() - 11*60*1000');
+    check('context hết hạn thì không còn sống', window.eval('!chatContextAlive()'));
+
+    /* validateChatPayload + câu hỏi */
+    check('validateChatPayload nêu đúng trường còn thiếu',
+      window.eval(`JSON.stringify(validateChatPayload({amount:0, walletId:null, catId:null}))`)
+        === JSON.stringify(['amount','wallet','category']));
+    check('câu hỏi thiếu tiền luôn là một câu hỏi thật',
+      window.eval(`[0,1,2].every(()=>/\\?|nhé/.test(generateMissingInfoPrompt('amount', {note:'x'})))`));
+
+    window.closeChatDrawer(true);
+    window.switchTab('dashboard'); await sleep(20);
   }
 
   console.log('\n· trợ lý chat: hỏi dữ liệu + chuyển trang kèm bộ lọc');
@@ -2819,11 +2978,22 @@ async function boot(opts) {
   console.log('\n· Tổng quan: khối "Giao dịch gần đây"');
   {
     window.switchTab('dashboard'); await sleep(30);
-    check('khối nằm dưới lưới Tiện ích', (() => {
+    /* Bố cục mới: Tổng tài sản → Giao dịch gần đây → Tiện ích → Ví → cảnh
+       báo. Giao dịch gần đây lên vị trí 2 để biến động dòng tiền là thứ đọc
+       được ngay, không phải cuộn xuống cuối trang mới thấy. */
+    check('khối nằm ngay trên lưới Tiện ích', (() => {
       const util = $('db-quick-access'), rec = $('recent-transactions-section');
       if (!util || !rec) return false;
-      /* compareDocumentPosition: 4 = rec đứng SAU util trong tài liệu. */
-      return !!(util.compareDocumentPosition(rec) & 4);
+      /* compareDocumentPosition: 2 = util đứng TRƯỚC rec; ta cần ngược lại. */
+      return !!(rec.compareDocumentPosition(util) & 4);
+    })());
+    check('thứ tự trang chủ: tổng tài sản → gần đây → tiện ích → ví → cảnh báo', (() => {
+      const html = $('view-dashboard').innerHTML;
+      const at = k => html.indexOf(k);
+      return at('db-total-balance') < at('recent-transactions-list')
+        && at('recent-transactions-list') < at('db-quick-access')
+        && at('db-quick-access') < at('db-wallet-scroll')
+        && at('db-wallet-scroll') < at('db-alert-zone');
     })());
     check('có tiêu đề và link Xem tất cả',
       /Giao dịch gần đây/.test($('recent-transactions-section').textContent) && !!$('btn-view-all-recent'));
@@ -2856,6 +3026,129 @@ async function boot(opts) {
       window.eval("JSON.stringify(txFilters)") === JSON.stringify(
         {type:'all', walletId:'all', catId:'all', eventId:'all', range:'all', status:'all'}),
       window.eval("JSON.stringify(txFilters)"));
+    window.switchTab('dashboard'); await sleep(20);
+  }
+
+  console.log('\n· Trung tâm thông báo (cảnh báo ngân sách)');
+  {
+    window.switchTab('dashboard'); await sleep(30);
+    /* Banner cảnh báo đã rời khỏi Trang chủ: nó vừa chiếm chỗ của Giao dịch
+       gần đây và Ví trên màn hình đầu, vừa không có trạng thái "đã đọc" nên
+       hiện lại y nguyên mỗi lần mở app cho tới khi xử lý xong — và người ta
+       học cách nhìn xuyên qua nó. */
+    check('Trang chủ không còn khối banner cảnh báo', !$('db-alerts'));
+    check('… và không còn thẻ .alert nào trên Trang chủ',
+      $('view-dashboard').querySelectorAll('.alert').length === 0);
+    check('quả chuông trên app bar có id và mở trung tâm thông báo',
+      !!$('notification-bell') && /openNotifications\(\)/.test($('notification-bell').getAttribute('onclick')));
+
+    /* Ngân sách hạn mức 1.000đ cho Ăn uống — sổ đã có chi tiêu ăn uống tháng
+       này nên nó vượt 100% ngay. */
+    window.eval(`state.budgets = state.budgets.filter(b=>b.id!=='bg_notif');
+      state.budgets.push({id:'bg_notif', userId:state.currentUser, categoryId:'c_food', walletId:'all',
+        period:'monthly', periodKey:currentPeriodKey('monthly'), limit:1000, repeat:true});
+      state.notifications = []; saveStorage();`);
+    const added = window.checkBudgetAndPushNotifications();
+    check('vượt ngưỡng thì đẩy thông báo vào store', added >= 1, 'added=' + added);
+
+    const notifs = window.eval('JSON.stringify(getNotifications())');
+    const list = JSON.parse(notifs);
+    const bud = list.find(n => n.type === 'budget_warning');
+    check('thông báo đủ trường theo hợp đồng',
+      !!bud && ['id','type','title','message','createdAt','read','action'].every(k => k in bud),
+      bud ? Object.keys(bud).join(',') : 'không có');
+    check('message nêu tên danh mục và phần trăm đã dùng',
+      /Ăn uống/.test(bud.message) && /%/.test(bud.message), bud.message);
+    /* createdAt phải là CHUỖI: state đi qua JSON.stringify vào localStorage và
+       lên Supabase, nên một object Date sẽ thành string sau lần nạp đầu —
+       kiểu khác nhau trước/sau reload là một lớp lỗi không đáng có. */
+    check('createdAt là chuỗi ISO, sống được qua JSON', typeof bud.createdAt === 'string'
+      && !isNaN(new Date(bud.createdAt).getTime()), typeof bud.createdAt);
+    check('chưa đọc', bud.read === false);
+
+    /* Quét lại KHÔNG được đẻ thêm bản trùng — đó là lý do id không chứa
+       Date.now(): hai lần quét trong cùng một tháng phải ra cùng một id. */
+    const n1 = window.eval('getNotifications().length');
+    window.checkBudgetAndPushNotifications();
+    window.checkBudgetAndPushNotifications();
+    check('quét lại nhiều lần không sinh thông báo trùng',
+      window.eval('getNotifications().length') === n1, n1 + ' -> ' + window.eval('getNotifications().length'));
+    check('id mang theo kỳ và mốc ngưỡng, không mang Date.now()',
+      /^budget-alert-c_food-\d{4}-\d{2}-(80|100)$/.test(bud.id), bud.id);
+
+    /* Chấm đỏ theo "chưa đọc", không theo "có cảnh báo". */
+    window.syncAlertDot();
+    check('có thông báo chưa đọc thì chuông hiện chấm đỏ', visible('alert-dot'));
+
+    window.openNotifications(); await sleep(20);
+    check('bấm chuông thì mở danh sách thông báo', visible('modal-sheet')
+      && /Thông báo/.test(txt('sheet-title')), txt('sheet-title'));
+    const rows = $('sheet-body').querySelectorAll('.notif-item');
+    check('… liệt kê đủ thông báo', rows.length === list.length, rows.length + '/' + list.length);
+    check('… tin chưa đọc được đánh dấu riêng',
+      $('sheet-body').querySelectorAll('.notif-item.is-unread').length === list.filter(n => !n.read).length);
+
+    /* Bấm vào tin: đánh dấu đã đọc, tắt chấm đỏ, và đi tới chỗ trả lời được
+       câu hỏi "tôi đã chi gì trong danh mục này" — tab Giao dịch, vì Báo cáo
+       không có bộ lọc danh mục. */
+    window.openNotification(bud.id); await sleep(40);
+    check('bấm tin thì đánh dấu đã đọc', window.eval(`(state.notifications.find(n=>n.id==='${bud.id}')||{}).read`) === true);
+    check('… tắt chấm đỏ khi không còn tin chưa đọc nào',
+      window.eval('unreadNotifications().length') === 0 ? !visible('alert-dot') : true);
+    check('… đóng sheet lại', !visible('modal-sheet'));
+    check('… và chuyển sang tab đã lọc đúng danh mục',
+      visible('view-transactions') && window.eval('txFilters.catId') === 'c_food',
+      window.eval('JSON.stringify(txFilters)'));
+
+    /* Mốc 80% và 100% là hai tin khác nhau: vượt hạn mức rồi thì phải được
+       nhắc lại dù đã đọc tin 80%. */
+    window.eval(`state.notifications = []; state.budgets.find(b=>b.id==='bg_notif').limit =
+      Math.round(getBudgetSpent(state.budgets.find(b=>b.id==='bg_notif')) / 0.9); saveStorage();`);
+    window.checkBudgetAndPushNotifications();
+    const at90 = JSON.parse(window.eval('JSON.stringify(getNotifications())')).find(n => n.type === 'budget_warning');
+    check('dùng 90% thì gắn mốc 80, chưa phải mốc 100', /-80$/.test(at90.id), at90.id);
+    window.eval(`state.budgets.find(b=>b.id==='bg_notif').limit = 1000; saveStorage();`);
+    window.checkBudgetAndPushNotifications();
+    check('vượt 100% thì có thêm tin mốc 100 bên cạnh tin mốc 80',
+      window.eval("getNotifications().filter(n=>/-100$/.test(n.id)).length") === 1
+      && window.eval("getNotifications().filter(n=>/-80$/.test(n.id)).length") === 1);
+
+    /* Trần: state đi cả gói lên Supabase mỗi lần ghi. */
+    check('có trần số thông báo để snapshot không phình mãi',
+      /const NOTIF_MAX = \d+/.test(fs.readFileSync(path.join(PUBLIC, 'js', 'app.js'), 'utf8')));
+    window.eval(`state.notifications = []; state.budgets = state.budgets.filter(b=>b.id!=='bg_notif'); saveStorage();`);
+    window.syncAlertDot();
+    window.switchTab('dashboard'); await sleep(20);
+  }
+
+  console.log('\n· Trang chủ: cụm cảnh báo tự thu gọn');
+  {
+    window.switchTab('dashboard'); await sleep(30);
+    /* Kiểm bằng cách thay hai nguồn dữ liệu, KHÔNG xoá state thật: một bài
+       test mà phải wipe rồi restore state là một bài test có thể làm hỏng
+       những bài sau nó. */
+    const realUpcoming = window.getUpcomingItems, realBudgets = window.getUserBudgets;
+
+    window.getUpcomingItems = () => [];
+    window.getUserBudgets = () => [];
+    window.syncAlertZone();
+    check('không còn gì để nhắc thì cụm cảnh báo tự ẩn', !visible('db-alert-zone'));
+    /* Ẩn, KHÔNG xoá khỏi DOM: id và handler bên trong phải còn nguyên. */
+    check('… nhưng vẫn còn trong DOM để lần vẽ sau hiện lại được',
+      !!$('upcoming-list') && !!$('db-budget-mini') && !!$('btn-view-all-upcoming'));
+
+    window.getUpcomingItems = () => [{id:'x', kind:'tx', name:'Thử', amount:1000, dueDate:window.todayISO(), walletId:null}];
+    window.syncAlertZone();
+    check('có khoản sắp đến hạn thì hiện lại', visible('db-alert-zone'));
+
+    window.getUpcomingItems = () => [];
+    window.getUserBudgets = () => [{id:'b', userId:S().currentUser, period:'monthly',
+      periodKey:window.eval("currentPeriodKey('monthly')"), repeat:true, limit:1000000, categoryId:'__all__'}];
+    window.syncAlertZone();
+    check('chỉ có ngân sách đang theo dõi cũng đủ để hiện', visible('db-alert-zone'));
+
+    window.getUpcomingItems = realUpcoming;
+    window.getUserBudgets = realBudgets;
     window.switchTab('dashboard'); await sleep(20);
   }
 
@@ -2952,6 +3245,97 @@ async function boot(opts) {
     window.cancelAddTx(); await sleep(20);
   }
 
+  console.log('\n· ghi nhanh: chọn ví ngay trên bàn phím + sheet không bị che');
+  {
+    const css = fs.readFileSync(path.join(PUBLIC, 'css', 'styles.css'), 'utf8');
+    /* LỖI ĐÃ SỬA: .modal thấp hơn #amount-sheet nên mọi sheet mở TỪ bàn phím
+       (chọn ví, chọn danh mục) nằm SAU bàn phím — người dùng bấm và không
+       thấy gì, tưởng app đơ. jsdom không layout nên chỉ phép so hai z-index
+       trong CSS bắt được. */
+    const zOf = re => Number((re.exec(css) || [])[1] || 0);
+    const zModal = zOf(/\.modal\{[^}]*z-index:(\d+)/);
+    const zAmt = zOf(/\.amt-sheet\{[^}]*z-index:(\d+)/);
+    check('modal nằm TRÊN bàn phím số, không thì sheet chọn danh mục bị che',
+      zModal > zAmt && zAmt > 0, 'modal=' + zModal + ' amt-sheet=' + zAmt);
+    check('… và vẫn dưới màn khoá PIN với toast',
+      zModal < zOf(/\.lock-screen\{[^}]*z-index:(\d+)/)
+      && zModal < zOf(/#toast-wrap\{[^}]*z-index:(\d+)/));
+
+    window.openQuickEntry(); await sleep(20);
+    /* Thẻ ví ở đầu bàn phím phải là một nút, và phải nói ra điều đó bằng ▾ */
+    const wcard = $('amt-from').querySelector('.amt-from-card');
+    check('thẻ ví ở đầu bàn phím bấm được',
+      wcard.classList.contains('wallet-selector-header-card')
+      && /quickPickWallet\(\)/.test(wcard.getAttribute('onclick') || ''), wcard.className);
+    check('… có mũi tên ▾ để thấy là đổi được', !!wcard.querySelector('.wsel-caret'));
+
+    const other = S().wallets.find(w => w.id !== window.eval('txSelectedWalletId'));
+    wcard.click(); await sleep(20);
+    check('bấm thẻ ví thì mở danh sách ví', visible('modal-sheet')
+      && $('sheet-body').querySelectorAll('.pick-item').length === S().wallets.length);
+    $('sheet-body').querySelectorAll('.pick-item').forEach(el => {
+      if (el.textContent.includes(other.name)) el.click();
+    });
+    await sleep(20);
+    check('chọn ví khác thì bàn phím cập nhật ngay',
+      window.eval('txSelectedWalletId') === other.id
+      && $('amt-from').textContent.includes(other.name), window.eval('txSelectedWalletId'));
+    check('… và đóng sheet, bàn phím vẫn mở', !visible('modal-sheet') && visible('amount-sheet'));
+    /* Đóng sheet mở TỪ bàn phím thì lịch sử phải biết bên dưới vẫn còn bàn
+       phím, không thì cú Back kế tiếp đóng nhầm một lớp. */
+    check('lịch sử điều hướng trả về đúng lớp bên dưới',
+      window.eval('navState.activeModal') === 'amount-sheet', String(window.eval('navState.activeModal')));
+
+    /* Chip danh mục cũng mở được — đây chính là "bấm loại giao dịch không load ra" */
+    $('qe-chip-cat').click(); await sleep(20);
+    check('bấm chip Danh mục thì danh sách hiện ra', visible('modal-sheet')
+      && $('sheet-body').querySelectorAll('.pick-item').length > 0,
+      $('sheet-body').querySelectorAll('.pick-item').length + ' mục');
+    check('… và đúng bảng danh mục của loại đang chọn',
+      $('sheet-body').querySelectorAll('.pick-item').length === window.eval("getCats('expense').length"));
+    window.setQuickType('income'); await sleep(10);
+    window.quickPickCategory(); await sleep(20);
+    check('đổi sang Thu thì danh sách đổi theo',
+      $('sheet-body').querySelectorAll('.pick-item').length === window.eval("getCats('income').length"));
+    window.closeSheet();
+    window.setQuickType('expense');
+    window.closeAmountSheet(); await sleep(20);
+  }
+
+  console.log('\n· trợ lý chat: nút "Chỉnh sửa ➔" mở form thật');
+  {
+    /* Hai nút này từng gọi một hàm KHÔNG TỒN TẠI (navCloseSilently) — nó chỉ
+       nổ khi người dùng bấm, mà test cũ chỉ bấm nút xác nhận. */
+    window.openChatDrawer(); await sleep(20);
+    const bank = S().wallets.find(w => w.name === 'Ngân hàng');
+    $('chat-input').value = 'chuyển 1tr từ Ngân hàng sang Tiền mặt';
+    window.chatSend(); await sleep(80);
+    const card = [...$('chat-body').querySelectorAll('.bot-card-action')].pop();
+    const before = S().transactions.length;
+    card.querySelector('.btn-secondary').click(); await sleep(60);
+    check('"Chỉnh sửa ➔" của thẻ chuyển ví mở form chuyển tiền, không ném lỗi',
+      visible('view-add') && !$('form-transfer').classList.contains('hidden'));
+    check('… nạp sẵn số tiền và ví nguồn',
+      window.eval('tfAmount') === 1000000 && $('tf-from-wallet').value === bank.id,
+      window.eval('tfAmount') + '/' + $('tf-from-wallet').value);
+    check('… và chưa ghi gì vào sổ', S().transactions.length === before);
+    check('không có lỗi console nào', consoleErrors.length === 0, consoleErrors[0]);
+
+    window.openChatDrawer(); await sleep(20);
+    $('chat-input').value = 'tiền nhà 4tr hàng tháng';
+    window.chatSend(); await sleep(80);
+    const rcard = [...$('chat-body').querySelectorAll('.bot-card-action')].pop();
+    rcard.querySelector('.btn-secondary').click(); await sleep(60);
+    check('"Chỉnh sửa ➔" của thẻ định kỳ mở modal định kỳ', visible('modal-recurring'));
+    check('… nạp sẵn tên và số tiền',
+      /tiền nhà/i.test($('mr-name').value) && window.eval("readMoney('mr-amount')") === 4000000,
+      $('mr-name').value + '/' + window.eval("readMoney('mr-amount')"));
+    check('vẫn không có lỗi console', consoleErrors.length === 0, consoleErrors[0]);
+    window.closeModal('modal-recurring');
+    window.closeChatDrawer(true);
+    window.switchTab('dashboard'); await sleep(20);
+  }
+
   console.log('\n· ghi nhanh: CSS theo biến theme');
   {
     const css = fs.readFileSync(path.join(PUBLIC, 'css', 'styles.css'), 'utf8');
@@ -2962,6 +3346,7 @@ async function boot(opts) {
     check('màn thấp thì hạ chiều cao phím thay vì để bàn phím trôi khỏi màn hình',
       /@media \(max-height:700px\)\{[\s\S]{0,400}tcb-btn-key\{height:46px/.test(css));
   }
+
 
   console.log('\n· realtime từ thiết bị khác');
   const remote = JSON.parse(JSON.stringify(S()));

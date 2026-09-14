@@ -12,6 +12,46 @@ thứ khó tìm lại sau nửa năm.
 
 ---
 
+## [5.1.7] — 14/09/2026
+
+### Sửa
+
+- **Bấm chip Danh mục / chip Ví trong màn ghi nhanh thì không thấy gì.** `.modal`
+  (z-index 100) thấp hơn `#amount-sheet` (120), nên sheet mở **ra sau** bàn
+  phím — người dùng bấm và tưởng app đơ. Modal luôn được mở *từ* một bề mặt
+  nào đó nên phải nằm trên bề mặt đó; giờ `.modal` ở 130. Loại lỗi này jsdom
+  không thấy (không layout), nên test so trực tiếp hai con số z-index.
+- **Nút "Chỉnh sửa ➔" trên thẻ chuyển ví / định kỳ ném ReferenceError** — nó
+  gọi một hàm không tồn tại (`navCloseSilently`, mất trong một lần revert).
+  Test cũ chỉ bấm nút xác nhận nên không chạm tới; giờ có test cho cả hai nút.
+- **Tên quận lọt vào ghi chú biên lai**: thiếu nhãn "Địa điểm" trong danh sách
+  mốc dừng nên "Thu Duc" theo vào ghi chú rồi khớp sang danh mục "Giáo dục".
+
+### Thêm
+
+- **Trung tâm thông báo.** Cảnh báo ngân sách / nợ đến hạn / thẻ tới ngày trả
+  rời khỏi Trang chủ, vào quả chuông trên app bar với chấm đỏ khi chưa đọc.
+  Banner cũ không có trạng thái "đã đọc" nên hiện lại y nguyên mỗi lần mở app,
+  và người ta học cách nhìn xuyên qua nó. Bấm một tin là đánh dấu đã đọc và mở
+  thẳng màn hình xử lý được nó. Trạng thái đã đọc đồng bộ đa thiết bị.
+- **Bố cục Trang chủ mới**: Tổng tài sản → **Giao dịch gần đây** → Tiện ích →
+  **Ví (thanh cuộn ngang)** → cụm cảnh báo (tự ẩn khi không có gì để nhắc).
+  Ví chuyển từ lưới 2 cột sang thanh cuộn — một lần **đảo ngược** quyết định
+  cũ, vì sau khi hai khối trên lên đầu thì chiều dọc đắt hơn chiều ngang. Thẻ
+  rộng 46% để luôn hở một phần thẻ kế tiếp: mảnh hở đó là tín hiệu duy nhất
+  nói rằng cuộn được.
+- **Lịch sử hội thoại 100 bản ghi** + nút **🔄 Tạo lại** trên mỗi giao dịch cũ
+  (dựng lại với ngày hôm nay, kiểm lại ví/danh mục lúc bấm). Lưu riêng theo
+  tài khoản trên máy, không đẩy lên cloud.
+- **Hỏi lại khi thiếu số tiền** thay vì tạo bản ghi lỗi: giữ ý định dở dang
+  (hạn 10 phút) và gộp với con số ở tin nhắn sau — nhưng chỉ khi tin đó *thực
+  sự chỉ có con số*, vì "cà phê 30k" là một giao dịch mới.
+- **Chọn ví ngay trên bàn phím nhập tiền**: thẻ "Trừ vào ví" thành một nút có
+  mũi tên ▾. Và ví mặc định lấy theo **tần suất của đúng loại giao dịch**, không
+  phải "ví vừa dùng gần nhất".
+
+---
+
 ## [5.1.6] — 14/09/2026
 
 ### Sửa

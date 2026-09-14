@@ -72,7 +72,7 @@
     </div>
     <div class="hd-tools">
       <button class="icon-btn" onclick="toggleTheme()" id="btn-theme" title="Đổi giao diện"><svg class="ic-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4 8.5 8.5 0 1 0 20 14.5z"/></svg></button>
-      <button class="icon-btn" style="position:relative;" onclick="switchTab('dashboard')" title="Cảnh báo"><svg class="ic-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 9a6 6 0 1 0-12 0c0 5-2 6.5-2 6.5h16S18 14 18 9"/><path d="M13.7 19a2 2 0 0 1-3.4 0"/></svg><span id="alert-dot" class="badge-dot hidden"></span></button>
+      <button class="icon-btn" style="position:relative;" id="notification-bell" onclick="openNotifications()" title="Thông báo" aria-label="Thông báo"><svg class="ic-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 9a6 6 0 1 0-12 0c0 5-2 6.5-2 6.5h16S18 14 18 9"/><path d="M13.7 19a2 2 0 0 1-3.4 0"/></svg><span id="alert-dot" class="badge-dot hidden"></span></button>
     </div>
   </header>
 
@@ -192,11 +192,36 @@
       </div>
     </div>
 
-    <div id="db-alerts"></div>
+
+
+    <!-- Giao dịch gần đây — 5 bản ghi mới nhất, dưới lưới Tiện ích.
+         Dùng .tx-row của tab Giao dịch chứ không dựng dòng riêng: một hàng
+         giao dịch phải trông y như nhau ở mọi màn hình, và mọi thứ đi kèm
+         (nhãn Dự kiến, chạm để mở chi tiết) theo luôn. -->
+    <section id="recent-transactions-section">
+      <div class="section-title"><h4>Giao dịch gần đây</h4>
+        <span class="link" id="btn-view-all-recent" onclick="viewAllRecent()">Xem tất cả ›</span>
+      </div>
+      <div class="card recent-tx-card" id="recent-transactions-list"></div>
+    </section>
+
+    <div class="section-title"><h4>Tiện ích</h4></div>
+    <div class="menu-grid menu-grid-compact" id="db-quick-access"></div>
 
     <div class="section-title"><h4>Ví của bạn</h4><span class="link" onclick="switchTab('wallets')">Quản lý</span></div>
-    <div id="db-wallet-scroll" class="wallet-grid"></div>
+    <!-- Cuộn ngang, KHÔNG lưới 2 cột. Đây là một lần ĐẢO NGƯỢC quyết định cũ
+         ("ví xếp lưới 2 cột, không phải vuốt"): giờ Giao dịch gần đây và
+         Tiện ích đã lên trên, nên chiều dọc đắt hơn chiều ngang. Thẻ rộng
+         46% để LUÔN hở một phần thẻ thứ ba — không có mảnh hở đó thì người
+         dùng không biết là cuộn được, và ví thứ ba coi như không tồn tại. -->
+    <div id="db-wallet-scroll" class="wallet-strip"></div>
 
+    <!-- Sắp đến hạn + Ngân sách: hai khối "cảnh báo". renderDashboard() ẩn
+         CẢ CỤM khi không có gì phải nhắc — trên một trang chủ đã có Giao dịch
+         gần đây và Tiện ích ở trên, hai thẻ rỗng chỉ đẩy mọi thứ khác xuống
+         dưới màn hình đầu tiên. Chúng không bị xoá khỏi DOM, chỉ ẩn: mọi
+         handler và id vẫn nguyên. -->
+    <section id="db-alert-zone">
     <div class="section-title"><h4><svg class="ic-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.5 17h5"/><path d="M10 20.5h4"/><path d="M12 3a6 6 0 0 1 3.5 10.9V17h-7v-3.1A6 6 0 0 1 12 3z"/></svg>Sắp đến hạn</h4>
       <span class="st-links">
         <span class="link" onclick="switchTab('recurring')">Định kỳ</span>
@@ -220,22 +245,10 @@
     <div class="section-title"><h4>Ngân sách tháng này</h4><span class="link" onclick="switchTab('budget')">Chi tiết</span></div>
     <div class="card" id="db-budget-mini"></div>
 
+    </section>
     <div class="section-title"><h4>Chi tiêu theo danh mục</h4><span class="link" onclick="switchTab('reports')">Báo cáo</span></div>
     <div class="card" id="db-cat-mini"></div>
 
-    <div class="section-title"><h4>Tiện ích</h4></div>
-    <div class="menu-grid menu-grid-compact" id="db-quick-access"></div>
-
-    <!-- Giao dịch gần đây — 5 bản ghi mới nhất, dưới lưới Tiện ích.
-         Dùng .tx-row của tab Giao dịch chứ không dựng dòng riêng: một hàng
-         giao dịch phải trông y như nhau ở mọi màn hình, và mọi thứ đi kèm
-         (nhãn Dự kiến, chạm để mở chi tiết) theo luôn. -->
-    <section id="recent-transactions-section">
-      <div class="section-title"><h4>Giao dịch gần đây</h4>
-        <span class="link" id="btn-view-all-recent" onclick="viewAllRecent()">Xem tất cả ›</span>
-      </div>
-      <div class="card recent-tx-card" id="recent-transactions-list"></div>
-    </section>
 
   </div>
 
@@ -1133,8 +1146,9 @@
     <div class="chat-head-tools">
       <!-- Thu nhỏ giữ nguyên hội thoại, Đóng thì xoá — hai việc khác nhau, nên
            là hai nút, không phải một nút đoán ý. -->
+      <button type="button" class="chat-icon-btn" onclick="clearChatHistory()" title="Xoá hội thoại" aria-label="Xoá hội thoại">🗑</button>
       <button type="button" class="chat-icon-btn" onclick="minimizeChatDrawer()" title="Thu nhỏ" aria-label="Thu nhỏ">–</button>
-      <button type="button" class="chat-icon-btn" onclick="closeChatDrawer(true)" title="Đóng và xoá hội thoại" aria-label="Đóng">✕</button>
+      <button type="button" class="chat-icon-btn" onclick="closeChatDrawer(false)" title="Đóng" aria-label="Đóng">✕</button>
     </div>
   </div>
 

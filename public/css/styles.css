@@ -143,10 +143,12 @@ header .icon-btn:hover{background:rgba(255,255,255,.26);}
 .sub-view-head h3{font-size:1.12rem;font-weight:800;flex:1;}
 
 /* ---------- SURFACES ---------- */
-.card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:12px;box-shadow:var(--shadow);transition:box-shadow .18s ease;}
+/* padding 14 chứ không 16: trang chủ giờ xếp năm khối trong màn hình đầu
+   tiên, và 2px mỗi thẻ nhân lên là gần một dòng chữ. */
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:12px;box-shadow:var(--shadow);transition:box-shadow .18s ease;}
 .card.tight{padding:12px;}
 .card.flat{background:var(--card-2);box-shadow:none;}
-.section-title{display:flex;justify-content:space-between;align-items:center;margin:16px 0 10px;}
+.section-title{display:flex;justify-content:space-between;align-items:center;margin:14px 0 8px;}
 .section-title h4{font-size:.95rem;font-weight:800;}
 .link{color:var(--primary);font-size:.78rem;font-weight:700;cursor:pointer;}
 /* Nhiều hơn một link ở góc phải tiêu đề khối */
@@ -202,7 +204,22 @@ select.input{appearance:none;background-image:linear-gradient(45deg,transparent 
 /* ---------- WALLET CARDS ---------- */
 /* Two up, no swiping: six wallets are three rows you can take in at a glance
    instead of a carousel that hides four of them off the right edge. */
-.wallet-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;width:100%;padding:2px 0 4px;}
+/* Thanh ví CUỘN NGANG. Đây là một lần đảo ngược quyết định cũ (trước đây là
+   lưới 2 cột, "6 ví = 3 hàng, không phải vuốt"): sau khi Giao dịch gần đây và
+   Tiện ích lên trên, chiều dọc của màn hình đầu tiên đắt hơn chiều ngang.
+
+   flex-basis 46% là con số có chủ đích: hai thẻ vừa khung và LUÔN hở một phần
+   thẻ thứ ba. Không có mảnh hở đó thì không có tín hiệu nào nói rằng cuộn
+   được, và mọi ví từ thứ ba trở đi coi như không tồn tại — đúng cái lỗi mà
+   lưới 2 cột ngày trước được dựng lên để sửa. */
+.wallet-strip{display:flex;gap:10px;width:100%;padding:2px 0 6px;
+  overflow-x:auto;overflow-y:hidden;scroll-snap-type:x proximity;
+  -webkit-overflow-scrolling:touch;scrollbar-width:none;-ms-overflow-style:none;
+  overscroll-behavior-x:contain;}
+.wallet-strip::-webkit-scrollbar{display:none;}
+.wallet-strip > *{flex:0 0 46%;scroll-snap-align:start;}
+/* Ô "Thêm ví" không cần rộng bằng một thẻ ví: nó chỉ có một dấu + và hai chữ. */
+.wallet-strip > .wallet-card.add{flex:0 0 30%;}
 /* Icon on the left, name over balance in a column beside it. Side-by-side
    would leave each half about 70px on a 360px screen, which is not enough for
    either a wallet name or an amount. */
@@ -231,12 +248,12 @@ select.input{appearance:none;background-image:linear-gradient(45deg,transparent 
 .wallet-card.add{flex-direction:column;justify-content:center;gap:3px;background:var(--card);
   border:1px dashed var(--border);color:var(--muted);width:100%;min-height:72px;box-shadow:none;}
 .wallet-card.add::after{display:none;}
-/* With an even number of wallets the add card starts a row of its own and sits
-   there half-width next to a hole. It is the last child, so landing on an odd
-   slot means exactly that — let it take the whole row instead, laid out as a
-   row so it does not grow tall. Odd wallet count: it fills the gap, untouched. */
-.wallet-card.add:nth-child(odd){grid-column:1 / -1;flex-direction:row;gap:8px;min-height:48px;padding:10px;}
-.wallet-card.add:nth-child(odd) .ic-svg{margin:0;}
+/* Ô "Thêm ví" trong thanh cuộn: xếp ngang cho thấp, và không cần rộng bằng
+   một thẻ ví. Luật trải-hết-hàng cho ô lẻ của thời lưới 2 cột đã
+   bỏ — trong một flex-row thì grid-column không có nghĩa gì, mà "ô lẻ đứng
+   một mình nửa hàng" cũng không còn là vấn đề nào cả. */
+.wallet-card.add{flex-direction:row;gap:8px;min-height:48px;padding:10px;}
+.wallet-card.add .ic-svg{margin:0;}
 .wallet-card.add .ic-svg{width:22px;height:22px;}
 .wallet-card.cc-mini{background:linear-gradient(135deg,#1E293B,#334155);color:#fff;border:none;}
 .wallet-card.cc-mini .wname,.wallet-card.cc-mini .wbal{color:#fff;}
@@ -407,6 +424,13 @@ html[data-theme="dark"] .type-select.active{color:var(--primary);}
   text-transform:uppercase;color:var(--muted);}
 .amt-from-card{display:flex;align-items:center;gap:10px;background:var(--card);
   border:1px solid var(--border);border-radius:16px;padding:12px;box-shadow:var(--shadow);}
+/* Thẻ ví ở đầu bàn phím là một NÚT: nó là chỗ người dùng nhìn vào để quyết
+   định gõ bao nhiêu, nên cũng phải là chỗ đổi được ví — thay vì thoát ra
+   form rồi mở lại bàn phím. Mũi tên ▾ là thứ duy nhất nói ra điều đó. */
+.wallet-selector-header-card{cursor:pointer;transition:border-color .2s ease,background-color .2s ease;}
+@media (hover:hover){ .wallet-selector-header-card:hover{border-color:var(--tcb-blue);background:var(--card-2);} }
+.wallet-selector-header-card:active{transform:scale(.995);background:var(--card-2);}
+.wallet-selector-header-card .wsel-caret{flex:0 0 auto;color:var(--muted);font-size:.8rem;margin-left:2px;}
 .amt-from-bal{flex:0 0 auto;text-align:right;}
 .amt-from-lbl{font-size:.64rem;font-weight:700;color:var(--muted);}
 .amt-from-val{font-size:.84rem;font-weight:800;}
@@ -649,7 +673,13 @@ html[data-theme="dark"] .progress-track{background:#0B1120;}
 .progress-fill{height:100%;border-radius:6px;transition:width .4s ease;}
 
 /* ---------- MODAL & SHEET ---------- */
-.modal{position:fixed;inset:0;background:rgba(15,23,42,.55);display:flex;align-items:flex-end;justify-content:center;z-index:100;animation:fadeIn .18s ease;backdrop-filter:blur(2px);}
+/* z-index 130, TRÊN #amount-sheet (120). Một modal luôn được mở TỪ một bề mặt
+   nào đó, nên nó phải nằm trên bề mặt đó — và bàn phím nhập tiền là bề mặt
+   duy nhất từng cao hơn nó. Hậu quả của lần đảo ngược ấy: bấm chip Danh mục
+   hay chip Ví trong màn ghi nhanh thì sheet mở RA SAU bàn phím, người dùng
+   không thấy gì và tưởng app đơ. jsdom không layout nên chỉ có assertion so
+   hai z-index trong CSS bắt được lỗi này. */
+.modal{position:fixed;inset:0;background:rgba(15,23,42,.55);display:flex;align-items:flex-end;justify-content:center;z-index:130;animation:fadeIn .18s ease;backdrop-filter:blur(2px);}
 @keyframes fadeIn{from{opacity:0}to{opacity:1}}
 @keyframes slideUp{from{transform:translateY(24px);opacity:.6}to{transform:translateY(0);opacity:1}}
 .sheet{background:var(--card);width:100%;max-width:520px;border-top-left-radius:22px;border-top-right-radius:22px;padding:18px 18px calc(18px + var(--safe-b));max-height:90vh;overflow-y:auto;animation:slideUp .22s ease;}
@@ -664,7 +694,7 @@ html[data-theme="dark"] .progress-track{background:#0B1120;}
 .search-bar input{border:none;outline:none;flex:1;font-size:.88rem;background:transparent;color:var(--text);}
 
 /* ---------- UPCOMING ---------- */
-.upcoming-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:13px;margin-bottom:12px;box-shadow:var(--shadow);}
+.upcoming-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:12px;margin-bottom:12px;box-shadow:var(--shadow);}
 .upcoming-card .uc-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;}
 .upcoming-row{display:flex;align-items:center;gap:10px;background:var(--card-2);border:1px solid var(--border);border-radius:13px;padding:9px 10px;margin-bottom:8px;}
 .upcoming-row:last-child{margin-bottom:0;}
@@ -1118,3 +1148,32 @@ html[data-theme="dark"] .chat-drawer{box-shadow:0 -4px 20px rgba(0,0,0,.55);}
   cursor:pointer;transition:.15s;}
 @media (hover:hover){ .chat-chip:hover{border-color:var(--primary);color:var(--primary);} }
 .chat-chip:active{transform:scale(.96);background:var(--primary-light);}
+
+/* ---------- TRUNG TÂM THÔNG BÁO ----------
+   Danh sách trong sheet chung (uiSheet). Thông báo chưa đọc có nền nhạt và
+   một chấm bên phải: chỉ in đậm thôi thì trên nền tối gần như không thấy. */
+.notif-list{display:flex;flex-direction:column;max-height:60vh;overflow-y:auto;margin:-4px -2px 0;}
+.notif-item{display:flex;align-items:flex-start;gap:10px;padding:11px 8px;cursor:pointer;
+  border-bottom:1px solid var(--border);border-radius:10px;transition:.15s;}
+.notif-item:last-child{border-bottom:none;}
+.notif-item:active{background:var(--card-2);}
+.notif-item.is-unread{background:var(--primary-soft);}
+.notif-ic{width:34px;height:34px;flex:0 0 auto;border-radius:11px;display:grid;place-items:center;
+  background:var(--card-2);color:var(--primary);}
+.notif-ic .ic-svg{width:18px;height:18px;}
+/* Màu theo loại tin: vượt ngân sách là chuyện khác với thẻ tới ngày trả. */
+.notif-ic.notif-budget_warning{background:var(--warn-bg);color:var(--warn);}
+.notif-ic.notif-debt_due{background:var(--expense-bg);color:var(--expense);}
+.notif-ic.notif-card_due{background:var(--primary-light);color:var(--primary);}
+.notif-title{font-size:.85rem;font-weight:700;line-height:1.3;}
+.notif-msg{font-size:.75rem;color:var(--muted);line-height:1.45;margin-top:2px;}
+.notif-time{font-size:.66rem;color:var(--muted);opacity:.8;margin-top:3px;}
+.notif-dot{width:8px;height:8px;border-radius:50%;background:var(--brand-red);flex:0 0 auto;margin-top:6px;}
+
+/* Thẻ "Giao dịch cũ" trong lịch sử hội thoại + nút Tạo lại. */
+.hist-badge{display:inline-block;font-size:.62rem;font-weight:800;padding:2px 8px;border-radius:20px;
+  background:var(--card-2);color:var(--muted);}
+.hist-amt{font-size:1.05rem;font-weight:800;letter-spacing:-.3px;margin:6px 0 2px;}
+.hist-note{font-size:.85rem;font-weight:700;}
+.hist-meta{font-size:.7rem;color:var(--muted);margin-top:2px;}
+.hist-clone{margin-top:10px;min-height:38px;font-size:.78rem;}
