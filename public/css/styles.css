@@ -1188,3 +1188,15 @@ html[data-theme="dark"] .chat-drawer{box-shadow:0 -4px 20px rgba(0,0,0,.55);}
 .wallet-strip,.chip-scroll,.scroll-x{touch-action:pan-x;}
 /* Bàn phím số và ngăn chat cuộn dọc bên trong, không liên quan tới đổi tab. */
 .amt-panel,.chat-body,.notif-list{touch-action:pan-y;}
+
+/* ---------- HÀNG DANH MỤC CÓ NGÂN SÁCH (Tổng quan) ----------
+   Một hàng, hai trạng thái: có ngân sách thì thanh nói về hạn mức và bên phải
+   là "Còn X"; không có thì thanh nói về tỷ trọng và bên phải là "26%". Cột
+   phải rộng CỐ ĐỊNH cho cả hai, không thì hai hàng cạnh nhau lệch nhau và cả
+   danh sách trông như bị xô. */
+.cat-remain{flex:0 0 84px;text-align:right;font-size:.68rem;font-weight:700;color:var(--muted);
+  line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.cat-budget-line{font-size:.66rem;color:var(--muted);margin:1px 0 3px;}
+/* Hàng có ngân sách cao hơn hàng thường một dòng chữ; cho cả hai loại thở
+   thêm để chúng không dính vào nhau. */
+.category-item{padding:2px 0;}

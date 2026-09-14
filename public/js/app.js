@@ -2138,20 +2138,25 @@ function renderDashboard(){
     </div>`;
   }).join('') + `<div class="wallet-card add ripple-host" onclick="openWalletModal()">${icon('plus')}<div class="text-xs">Thêm ví</div></div>`;
 
-  /* budget mini */
-  const bEl = document.getElementById('db-budget-mini');
-  const monthBudgets = getUserBudgets('monthly').filter(b=>effectivePeriodKey(b)===currentPeriodKey('monthly'));
-  if(monthBudgets.length===0){
-    bEl.innerHTML = `<div class="between"><span class="text-sm muted">Chưa đặt ngân sách nào</span><span class="link" onclick="switchTab('budget')">Đặt ngay</span></div>`;
-  } else {
-    bEl.innerHTML = monthBudgets.slice(0,3).map(b=>renderBudgetBar(b, true)).join('');
-  }
-
-  /* category mini (this month expense) */
+  /* Chi tiêu theo danh mục — và ngân sách nằm LUÔN trong đây. Khối "Ngân
+     sách tháng này" riêng đã bỏ: nó nói về cùng những danh mục này, chỉ khác
+     góc nhìn, nên hai khối cạnh nhau là đọc cùng một dữ liệu hai lần. */
   const catTotals = {};
   txs.filter(t=>t.type==='expense' && monthKey(t.date)===curMonth)
      .forEach(t=>{ catTotals[t.categoryId] = (catTotals[t.categoryId]||0) + txMain(t); });
-  const sorted = Object.entries(catTotals).sort((a,b)=>b[1]-a[1]).slice(0,4);
+  /* Danh mục CÓ ngân sách mà tháng này chưa chi đồng nào vẫn phải xuất hiện:
+     sau khi bỏ khối riêng, đây là chỗ duy nhất còn nói ra hạn mức của nó. Gán
+     0 để nó xếp cuối danh sách. */
+  dashboardMonthBudgets().forEach(b=>{
+    if(b.categoryId && b.categoryId !== '__all__' && catTotals[b.categoryId] == null) catTotals[b.categoryId] = 0;
+  });
+  const byAmount = Object.entries(catTotals).sort((a,b)=>b[1]-a[1]);
+  const top = byAmount.slice(0, 5);
+  /* Danh mục CÓ ngân sách luôn có mặt, kể cả khi chi ít hơn top 5 — cắt đúng
+     5 dòng thì một ngân sách chi ít sẽ biến mất khỏi Trang chủ, mà nó là thứ
+     người dùng tự tay đặt ra để theo dõi. */
+  const sorted = top.concat(byAmount.filter(([id])=>
+    budgetForCategory(id) && !top.some(t=>t[0] === id)));
   const miniEl = document.getElementById('db-cat-mini');
   miniEl.innerHTML = sorted.length===0
     ? `<p class="text-sm muted text-center">Chưa có chi tiêu tháng này</p>`
@@ -2159,6 +2164,11 @@ function renderDashboard(){
         const known = findCategory('expense',catId);
         const cat = known || {name:'Khác',icon:'📦',color:'#94A3B8'};
         const pct = exp ? Math.round(val/exp*100) : 0;
+        /* Có ngân sách thì thanh và phần trăm nói về HẠN MỨC (đã chi/hạn mức,
+           còn lại bao nhiêu) — đó là con số để ra quyết định. Không có thì nói
+           về TỶ TRỌNG trong tổng chi, như cũ. Hai nghĩa khác nhau trên cùng
+           một thanh, nên mỗi trạng thái phải có nhãn riêng bên phải. */
+        const bud = known ? budgetForCategory(catId) : null;
         /* Only a category that still exists can be filtered on. A row standing
            in for a deleted one stays inert: renderTransactionsList() drops a
            dangling catId back to "all", so tapping it would answer with every
@@ -2167,6 +2177,26 @@ function renderDashboard(){
           ? `class="row-c gap10 mb12 category-item ripple-host" data-cat-id="${esc(catId)}"
              onclick="jumpToCategoryThisMonth('${catId}')"`
           : `class="row-c gap10 mb12"`;
+        if(bud){
+          /* getBudgetSpent() chứ không phải `val`: một ngân sách có thể bị
+             giới hạn theo ví, và phép cộng của nó phải là phép cộng của màn
+             Ngân sách — hai chỗ ra hai con số thì không ai tin con nào. */
+          const spent = getBudgetSpent(bud);
+          const bpct = bud.limit ? Math.round(spent / bud.limit * 100) : 0;
+          const remain = bud.limit - spent;
+          return `<div ${attrs}>
+            <div class="cat-circle" style="width:32px;height:32px;font-size:.9rem;background:${cat.color}22;">${cat.icon}</div>
+            <div class="flex1">
+              <div class="between">
+                <span class="text-sm font-sb">${esc(cat.name)}</span>
+                <span class="text-xs font-bold" style="color:${budgetColor(bpct)};">${bpct}%</span>
+              </div>
+              <div class="cat-budget-line tabular">${fmt(spent)} / ${fmt(bud.limit)}</div>
+              <div class="progress-track"><div class="progress-fill" style="width:${Math.min(100,bpct)}%;background:${budgetColor(bpct)};"></div></div>
+            </div>
+            <span class="cat-remain ${remain >= 0 ? '' : 'c-expense'}">${remain >= 0 ? 'Còn ' + fmt(remain) : 'Vượt ' + fmt(-remain)}</span>
+          </div>`;
+        }
         return `<div ${attrs}>
           <div class="cat-circle" style="width:32px;height:32px;font-size:.9rem;background:${cat.color}22;">${cat.icon}</div>
           <div class="flex1">
@@ -2190,9 +2220,10 @@ function renderDashboard(){
 function syncAlertZone(){
   const zone = document.getElementById('db-alert-zone');
   if(!zone) return;
-  const hasUpcoming = getUpcomingItems(getUpcomingRange()).length > 0;
-  const hasBudget = getUserBudgets('monthly').some(b=>effectivePeriodKey(b)===currentPeriodKey('monthly'));
-  zone.classList.toggle('hidden', !hasUpcoming && !hasBudget);
+  /* Chỉ còn "Sắp đến hạn" trong cụm này: khối Ngân sách đã gộp vào danh sách
+     Chi tiêu theo danh mục, nên sự tồn tại của một ngân sách không còn là lý
+     do để giữ cụm cảnh báo mở. */
+  zone.classList.toggle('hidden', getUpcomingItems(getUpcomingRange()).length === 0);
 }
 /* ---------- GIAO DỊCH GẦN ĐÂY ----------
    Năm bản ghi mới nhất, ngay dưới lưới Tiện ích. */
@@ -3496,6 +3527,18 @@ function getBudgetSpent(b){
     (b.categoryId==='__all__' || t.categoryId===b.categoryId) &&
     (!b.walletId || b.walletId==='all' || t.walletId===b.walletId)
   ).reduce((s,t)=>s+txMain(t),0);
+}
+/* Ngân sách tháng này đang theo dõi — dùng cho cả hàng danh mục ở Tổng quan
+   lẫn syncAlertZone(), nên hai chỗ không thể hiểu "đang theo dõi" khác nhau. */
+function dashboardMonthBudgets(){
+  return getUserBudgets('monthly').filter(b=>effectivePeriodKey(b) === currentPeriodKey('monthly'));
+}
+/* Ngân sách của một danh mục. Một danh mục có thể có nhiều ngân sách (mỗi ví
+   một cái) — ưu tiên cái bao trùm mọi ví, vì đó mới là con số trả lời được
+   câu "danh mục này còn bao nhiêu". */
+function budgetForCategory(catId){
+  const all = dashboardMonthBudgets().filter(b=>b.categoryId === catId && b.limit > 0);
+  return all.find(b=>!b.walletId || b.walletId === 'all') || all[0] || null;
 }
 function budgetColor(pct){ return pct>=100 ? 'var(--expense)' : pct>=80 ? 'var(--warn)' : 'var(--primary)'; }
 function renderBudgetBar(b, compact){
@@ -7113,7 +7156,7 @@ const APK_URL = `https://github.com/${GH_REPO}/releases/latest/download/sofin.ap
 
 /* Stamped in at build time from package.json; the literal is only what runs
    when someone opens the folder without building. */
-const APP_VERSION = (window.__ENV__ && window.__ENV__.VERSION) || '5.1.9';
+const APP_VERSION = (window.__ENV__ && window.__ENV__.VERSION) || '5.2.0';
 /* Which version the user already said "để sau" to — device-local, so a
    dismissal does not sync to their other phone. */
 const UPDATE_SEEN_KEY = 'FINYOURTIN_UPDATE_DISMISSED';

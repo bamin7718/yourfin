@@ -3286,6 +3286,83 @@ async function boot(opts) {
     window.switchTab('dashboard'); await sleep(20);
   }
 
+  console.log('\n· Trang chủ: ngân sách gộp vào "Chi tiêu & ngân sách"');
+  {
+    const cat = 'c_food';
+    /* Ngân sách cho Ăn uống, hạn mức đủ lớn để còn dư — để kiểm cả con số
+       "Còn X" lẫn màu thanh ở ngưỡng an toàn. */
+    const spent = window.eval(`(function(){ const k = monthKey(todayISO());
+      return getUserTransactions().filter(t=>t.type==='expense' && t.categoryId==='${cat}'
+        && monthKey(t.date)===k).reduce((s,t)=>s+txMain(t),0); })()`);
+    const limit = Math.round(spent / 0.5);          /* dùng 50% hạn mức */
+    window.eval(`state.budgets = state.budgets.filter(b=>b.id!=='bg_cat');
+      state.budgets.push({id:'bg_cat', userId:state.currentUser, categoryId:'${cat}', walletId:'all',
+        period:'monthly', periodKey:currentPeriodKey('monthly'), limit:${limit}, repeat:true}); saveStorage();`);
+    window.switchTab('dashboard'); await sleep(40);
+
+    const rowOf = id => [...$('db-cat-mini').querySelectorAll('.category-item')]
+      .find(r => r.dataset.catId === id);
+    const foodRow = rowOf(cat);
+    check('hàng danh mục có ngân sách hiện đã chi / hạn mức', !!foodRow
+      && /\//.test(foodRow.querySelector('.cat-budget-line').textContent),
+      foodRow && foodRow.querySelector('.cat-budget-line').textContent);
+    check('… hiện số tiền còn lại', /Còn /.test(foodRow.querySelector('.cat-remain').textContent),
+      foodRow.querySelector('.cat-remain').textContent);
+    check('… và phần trăm là phần trăm HẠN MỨC, không phải tỷ trọng tổng chi',
+      /50%/.test(foodRow.textContent), foodRow.textContent.replace(/\s+/g, ' ').slice(0, 90));
+    /* Con số phải là con số của màn Ngân sách, không phải tổng theo danh mục
+       của Tổng quan — ngân sách có thể bị giới hạn theo ví. */
+    check('… và dùng đúng phép cộng của getBudgetSpent()',
+      foodRow.querySelector('.cat-budget-line').textContent.includes(
+        window.fmt(window.eval("getBudgetSpent(state.budgets.find(b=>b.id==='bg_cat'))"))));
+
+    /* Hàng không có ngân sách giữ nguyên kiểu cũ: tỷ trọng %, không có "Còn". */
+    const plain = [...$('db-cat-mini').querySelectorAll('.category-item')]
+      .find(r => r.dataset.catId !== cat);
+    check('hàng không có ngân sách vẫn hiện tỷ trọng như cũ', !!plain
+      && !plain.querySelector('.cat-remain') && /%/.test(plain.textContent),
+      plain && plain.textContent.replace(/\s+/g, ' ').slice(0, 70));
+
+    /* Vượt ngưỡng thì đổi màu và đổi chữ. */
+    window.eval(`state.budgets.find(b=>b.id==='bg_cat').limit = Math.round(${spent} * 0.8); saveStorage();`);
+    window.switchTab('dashboard'); await sleep(40);
+    const over = rowOf(cat);
+    check('vượt hạn mức thì báo "Vượt" thay vì "Còn"',
+      /Vượt /.test(over.querySelector('.cat-remain').textContent),
+      over.querySelector('.cat-remain').textContent);
+    check('… và thanh đổi sang màu vượt hạn mức',
+      /var\(--expense\)/.test(over.querySelector('.progress-fill').getAttribute('style')),
+      over.querySelector('.progress-fill').getAttribute('style'));
+    window.eval(`state.budgets.find(b=>b.id==='bg_cat').limit = Math.round(${spent} / 0.9); saveStorage();`);
+    window.switchTab('dashboard'); await sleep(40);
+    check('dùng 90% thì thanh chuyển màu cảnh báo',
+      /var\(--warn\)/.test(rowOf(cat).querySelector('.progress-fill').getAttribute('style')),
+      rowOf(cat).querySelector('.progress-fill').getAttribute('style'));
+
+    /* Danh mục có ngân sách mà chưa chi đồng nào vẫn phải xuất hiện: sau khi
+       bỏ khối riêng, đây là chỗ duy nhất còn nói ra hạn mức của nó. */
+    window.eval(`state.budgets.push({id:'bg_empty', userId:state.currentUser, categoryId:'c_edu',
+      walletId:'all', period:'monthly', periodKey:currentPeriodKey('monthly'), limit:500000, repeat:true});
+      state.transactions = state.transactions.filter(t=>t.categoryId!=='c_edu'); saveStorage();`);
+    window.switchTab('dashboard'); await sleep(40);
+    const eduRow = rowOf('c_edu');
+    check('danh mục có ngân sách nhưng chưa chi vẫn hiện, kèm hạn mức',
+      !!eduRow && /500\.000/.test(eduRow.textContent),
+      eduRow && eduRow.textContent.replace(/\s+/g, ' ').slice(0, 80));
+
+    /* Hàng vẫn bấm được để nhảy sang Giao dịch đã lọc — thêm ngân sách vào
+       không được làm mất cú chạm đó. */
+    check('hàng có ngân sách vẫn bấm được để xem giao dịch',
+      rowOf(cat).classList.contains('category-item')
+      && /jumpToCategoryThisMonth/.test(rowOf(cat).getAttribute('onclick')));
+    check('tiêu đề khối nói cả hai thứ', /Chi tiêu.*ngân sách/i.test(
+      $('view-dashboard').querySelector('.section-title h4:not([class])') ?
+      $('view-dashboard').textContent : $('view-dashboard').textContent));
+
+    window.eval(`state.budgets = state.budgets.filter(b=>b.id!=='bg_cat' && b.id!=='bg_empty'); saveStorage();`);
+    window.switchTab('dashboard'); await sleep(20);
+  }
+
   console.log('\n· Trang chủ: cụm cảnh báo tự thu gọn');
   {
     window.switchTab('dashboard'); await sleep(30);
@@ -3300,17 +3377,23 @@ async function boot(opts) {
     check('không còn gì để nhắc thì cụm cảnh báo tự ẩn', !visible('db-alert-zone'));
     /* Ẩn, KHÔNG xoá khỏi DOM: id và handler bên trong phải còn nguyên. */
     check('… nhưng vẫn còn trong DOM để lần vẽ sau hiện lại được',
-      !!$('upcoming-list') && !!$('db-budget-mini') && !!$('btn-view-all-upcoming'));
+      !!$('upcoming-list') && !!$('btn-view-all-upcoming'));
+    /* Khối "Ngân sách tháng này" riêng đã bỏ — hạn mức giờ hiện ngay trên
+       hàng danh mục tương ứng, nên không còn hai khối đọc cùng một dữ liệu. */
+    check('không còn khối Ngân sách riêng trên Trang chủ', !$('db-budget-mini'));
 
     window.getUpcomingItems = () => [{id:'x', kind:'tx', name:'Thử', amount:1000, dueDate:window.todayISO(), walletId:null}];
     window.syncAlertZone();
     check('có khoản sắp đến hạn thì hiện lại', visible('db-alert-zone'));
 
+    /* Ngân sách KHÔNG còn là lý do giữ cụm cảnh báo mở: nó đã gộp vào danh
+       sách Chi tiêu theo danh mục, nên cụm này chỉ còn nói về "Sắp đến hạn". */
     window.getUpcomingItems = () => [];
     window.getUserBudgets = () => [{id:'b', userId:S().currentUser, period:'monthly',
       periodKey:window.eval("currentPeriodKey('monthly')"), repeat:true, limit:1000000, categoryId:'__all__'}];
     window.syncAlertZone();
-    check('chỉ có ngân sách đang theo dõi cũng đủ để hiện', visible('db-alert-zone'));
+    check('có ngân sách nhưng không có khoản sắp đến hạn thì cụm vẫn ẩn',
+      !visible('db-alert-zone'));
 
     window.getUpcomingItems = realUpcoming;
     window.getUserBudgets = realBudgets;

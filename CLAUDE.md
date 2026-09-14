@@ -232,11 +232,17 @@ Cảnh báo không còn là banner trên Trang chủ. Banner ở đó vừa chi�
 
 ## Bố cục Trang chủ
 
-Thứ tự cố định, từ trên xuống: **Tổng tài sản ròng → Giao dịch gần đây → Tiện ích → Ví (thanh cuộn ngang) → cụm cảnh báo (Sắp đến hạn + Ngân sách) → Chi tiêu theo danh mục.** Smoke khoá đúng thứ tự này bằng vị trí trong `innerHTML`, vì nó là thứ vỡ âm thầm khi ai đó thêm một khối mới vào giữa.
+Thứ tự cố định, từ trên xuống: **Tổng tài sản ròng → Giao dịch gần đây → Tiện ích → Ví (thanh cuộn ngang) → Sắp đến hạn → Chi tiêu & ngân sách.** Smoke khoá đúng thứ tự này bằng vị trí trong `innerHTML`, vì nó là thứ vỡ âm thầm khi ai đó thêm một khối mới vào giữa.
 
 - **Biến động dòng tiền đọc được ngay**, không phải cuộn xuống cuối trang: Giao dịch gần đây ở vị trí 2, Tiện ích ở vị trí 3.
 - **Ví là thanh cuộn ngang** (`.wallet-strip`), và đây là **một lần đảo ngược quyết định cũ** — trước đây là lưới 2 cột với lý do "6 ví = 3 hàng, không phải vuốt". Lý do đảo: sau khi hai khối trên lên đầu, chiều dọc của màn hình đầu tiên đắt hơn chiều ngang. Cái giá của thanh cuộn là ví thứ ba trở đi nằm ngoài khung, nên **`flex: 0 0 46%` là con số có chủ đích**: hai thẻ vừa khung và luôn hở một phần thẻ kế tiếp. Mảnh hở đó là tín hiệu duy nhất nói rằng cuộn được — bỏ nó đi là quay lại đúng cái lỗi mà lưới 2 cột từng dựng lên để sửa.
-- **Cụm cảnh báo tự ẩn khi không có gì để nhắc** (`syncAlertZone()`, gọi từ `renderDashboard()`): không có khoản sắp đến hạn **và** không có ngân sách nào đang theo dõi thì ẩn cả `#db-alert-zone`. Hai thẻ rỗng ("Không có khoản nào sắp đến hạn 🎉" + "Chưa đặt ngân sách nào") chiếm đúng chỗ mà Giao dịch gần đây và Ví đang cần. **Ẩn, không xoá khỏi DOM** — id và handler bên trong phải còn nguyên để lần vẽ sau hiện lại được, và `check.js` cũng cần các id đó tồn tại.
+- **Ngân sách gộp vào danh sách "Chi tiêu & ngân sách"**, không còn khối riêng: hai khối nói về cùng những danh mục đó, chỉ khác góc nhìn, nên đứng cạnh nhau là đọc cùng một dữ liệu hai lần. Một hàng có **hai trạng thái**:
+  - **có ngân sách** → thanh và phần trăm nói về *hạn mức* (`đã chi / hạn mức`, `Còn X` / `Vượt X`, màu theo `budgetColor()`);
+  - **không có** → thanh và phần trăm nói về *tỷ trọng trong tổng chi*, như cũ.
+  Hai nghĩa khác nhau trên cùng một thanh, nên mỗi trạng thái phải có nhãn riêng ở cột phải — và cột đó **rộng cố định** (`.cat-remain`), không thì hai hàng cạnh nhau lệch và cả danh sách trông như bị xô.
+- **Con số của hàng có ngân sách lấy từ `getBudgetSpent()`**, không phải tổng theo danh mục của Tổng quan: một ngân sách có thể bị giới hạn theo ví, và hai chỗ ra hai con số thì không ai tin con nào.
+- **Danh mục có ngân sách luôn có mặt trong danh sách**, kể cả khi chi ít hơn top 5 hoặc chưa chi đồng nào (giá trị 0, xếp cuối): sau khi bỏ khối riêng, đây là chỗ duy nhất còn nói ra hạn mức của nó.
+- **Cụm cảnh báo tự ẩn khi không có gì để nhắc** (`syncAlertZone()`, gọi từ `renderDashboard()`): không có khoản nào sắp đến hạn thì ẩn cả `#db-alert-zone`. Một thẻ rỗng ("Không có khoản nào sắp đến hạn 🎉") chiếm đúng chỗ mà Giao dịch gần đây và Ví đang cần. Ngân sách **không còn** là lý do giữ cụm này mở — nó đã gộp vào danh sách danh mục. **Ẩn, không xoá khỏi DOM** — id và handler bên trong phải còn nguyên để lần vẽ sau hiện lại được, và `check.js` cũng cần các id đó tồn tại.
 - Padding `.card` là **14px** (không phải 16): năm khối trong một màn hình thì 2px mỗi thẻ nhân lên gần một dòng chữ.
 
 ## Báo cáo — biến động số dư

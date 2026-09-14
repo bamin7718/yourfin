@@ -242,11 +242,16 @@
       <div id="upcoming-list"></div>
     </div>
 
-    <div class="section-title"><h4>Ngân sách tháng này</h4><span class="link" onclick="switchTab('budget')">Chi tiết</span></div>
-    <div class="card" id="db-budget-mini"></div>
 
     </section>
-    <div class="section-title"><h4>Chi tiêu theo danh mục</h4><span class="link" onclick="switchTab('reports')">Báo cáo</span></div>
+    <!-- Gộp: khối "Ngân sách tháng này" riêng đã bỏ, hạn mức hiện ngay trên
+         hàng danh mục tương ứng. Hai link vì hai đích khác nhau: Ngân sách
+         để đặt hạn mức, Báo cáo để xem biểu đồ. -->
+    <div class="section-title"><h4>Chi tiêu &amp; ngân sách</h4>
+      <span class="st-links">
+        <span class="link" onclick="switchTab('budget')">Ngân sách</span>
+        <span class="link" onclick="switchTab('reports')">Báo cáo</span>
+      </span></div>
     <div class="card" id="db-cat-mini"></div>
 
 

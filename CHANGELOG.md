@@ -12,6 +12,27 @@ thứ khó tìm lại sau nửa năm.
 
 ---
 
+## [5.2.0] — 14/09/2026
+
+### Đổi
+
+- **Ngân sách gộp vào danh sách "Chi tiêu & ngân sách" trên Trang chủ**, bỏ
+  khối "Ngân sách tháng này" riêng. Hai khối nói về cùng những danh mục đó,
+  chỉ khác góc nhìn — đứng cạnh nhau là đọc cùng một dữ liệu hai lần và ăn hai
+  lần chiều dọc.
+
+  Một hàng danh mục giờ có hai trạng thái: **có ngân sách** thì thanh và phần
+  trăm nói về *hạn mức* (`2.602.000 đ / 3.000.000 đ`, `Còn 398.000 đ`, đổi màu
+  vàng/đỏ từ 80%/100%); **không có** thì vẫn là tỷ trọng trong tổng chi như cũ.
+
+  Ba chi tiết đáng nói: con số lấy từ `getBudgetSpent()` chứ không phải tổng
+  theo danh mục của Tổng quan (ngân sách có thể giới hạn theo ví, hai chỗ ra
+  hai con số thì không ai tin con nào); danh mục có ngân sách **luôn** có mặt
+  kể cả khi chưa chi đồng nào, vì đây là chỗ duy nhất còn nói ra hạn mức của
+  nó; và cột phải rộng cố định để hai loại hàng không lệch nhau.
+
+---
+
 ## [5.1.9] — 14/09/2026
 
 ### Sửa
