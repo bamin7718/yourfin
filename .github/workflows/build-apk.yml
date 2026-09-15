@@ -46,7 +46,16 @@ jobs:
           distribution: temurin
           java-version: 21
 
+      # `packages: ''` là bắt buộc, không phải tối ưu. Mặc định của
+      # setup-android@v3 là `packages: 'tools platform-tools'`, mà gói `tools`
+      # đã bị Google gỡ khỏi kho SDK — từ khi runner image nâng cmdline-tools
+      # lên 16.0 thì sdkmanager trả về exit 1 ("Failed to find package
+      # 'tools'") và cả job đỏ, dù code không đổi một dòng nào. Runner image
+      # đã có sẵn platform-tools; việc duy nhất còn cần ở action này là nhận
+      # license và đặt ANDROID_HOME cho Gradle.
       - uses: android-actions/setup-android@v3
+        with:
+          packages: ''
 
       # Tag phải khớp version trong package.json, nếu không app vừa cập nhật
       # xong đã tự thấy mình lỗi thời. Chặn ngay đây, trước khi tốn build.
