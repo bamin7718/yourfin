@@ -1575,7 +1575,8 @@ function renderAll(){
   const fn = VIEW_RENDERERS[currentTab];
   if(fn) fn();
 }
-/* ---------- VUỐT NGANG ĐỔI TAB ----------
+/* ============================================================
+   VUỐT NGANG ĐỔI TAB
    Bốn tab gốc xếp đúng thứ tự chúng nằm trên nav bar, nên chiều vuốt trùng
    với chiều mắt đọc: vuốt sang trái là đi tiếp sang phải.
 

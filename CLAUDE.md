@@ -74,9 +74,9 @@ Một bảng duy nhất: `public.user_state(user_id pk, data jsonb, device_id, u
 
 Anon key **cố ý** đi vào trình duyệt — RLS (`auth.uid() = user_id` trên cả 4 policy) mới là thứ bảo vệ dữ liệu.
 
-### Bố cục `app.js` (~5.500 dòng)
+### Bố cục `app.js` (~8.000 dòng)
 
-Chia bằng banner `/* ===== TÊN SECTION ===== */`, theo thứ tự: STATE · STORAGE · SEED DATA · HELPERS (dates / money / data access) · UI PRIMITIVES · THEME · PIN LOCK · AUTH · ONBOARDING · NAVIGATION · LỊCH SỬ ĐIỀU HƯỚNG · DASHBOARD · TRANSACTIONS · WALLETS · BUDGETS · DEBTS · RECURRING · EVENTS · CATEGORY MANAGEMENT · REPORTS · MORE · TRỢ LÝ CHAT & QUÉT BILL · SETTINGS · IMPORT/EXPORT · BOOTSTRAP. Thêm code vào đúng section, giữ banner.
+Chia bằng banner `/* ===== TÊN SECTION ===== */`, theo đúng thứ tự trong file: STATE · STORAGE · SEED DATA · HELPERS (dates / money / data access) · UI PRIMITIVES · THEME · PIN LOCK · AUTH · ONBOARDING · NAVIGATION · **VUỐT NGANG ĐỔI TAB** · **LỊCH SỬ ĐIỀU HƯỚNG TOÀN CỤC** · **TRUNG TÂM THÔNG BÁO** · DASHBOARD · TRANSACTION ROWS · TRANSACTIONS VIEW · TRANSACTION DETAIL · ADD / EDIT TRANSACTION (chứa cả *ghi nhanh* và *bàn phím số*) · WALLETS · BUDGETS · DEBTS & LOANS · RECURRING · EVENTS / TRIPS · CATEGORY MANAGEMENT · REPORTS · FEATURE TILES · ACCOUNT SUMMARY · **TRỢ LÝ CHAT & QUÉT BILL** (chứa cả bộ bóc tách biên lai và hoá đơn in nhiệt) · SETTINGS · PWA · IMPORT / EXPORT · BOOTSTRAP. Thêm code vào đúng section, giữ banner.
 
 ## Tên thương hiệu vs khoá lưu trữ
 
@@ -158,7 +158,7 @@ Nút **[+]** giữa nav bar mở thẳng `#amount-sheet` ở chế độ `amtKin
 - **Toàn bộ trạng thái trợ lý là UI state** (`chatDrafts`, `chatKwIndex`, `chatBusy`, cờ OCR): `let` ở top-level, không nằm trong `state`, nên không vào localStorage và không ride theo snapshot Supabase. `resetSessionFilters()` gọi `resetChatAssistant()` — hội thoại của người vừa đăng xuất không được nằm lại chờ người sau đọc.
 - **Ma trận từ khoá tự học.** `buildHistoryMappingIndex()` quét `getAllUserTransactions()`, tách unigram + bigram từ `note` rồi cộng điểm về `(type, categoryId, subcategoryId)` **và** đếm tần suất `walletId` (`walletStats`). Trọng số: lịch sử 3 > tên danh mục con 2 > tên danh mục 1; bigram nhân đôi. Tên danh mục có mặt trong ma trận **cố ý** — tài khoản mới chưa có lịch sử nào mà "ăn uống" thì vẫn phải ra Ăn uống. Cache đọc theo `state.updatedAt` + `currentUser`; đổi cách vô hiệu cache thì nhớ cả hai. **Một hàm, hai bản đồ** — đừng tách thành hai index trên cùng nguồn dữ liệu: lệch nhau nghĩa là bot đề nghị danh mục của khoản này và ví của khoản khác.
 - **Gợi ý ví thông minh.** `matchWalletAndCategory()` (tên cũ `matchCategoryFromInput` đã bỏ) trả thêm `walletId` + `walletMatched`: ví mà lịch sử nói người dùng hay trả khoản NÀY bằng — "xăng" ra ví tiền mặt, "Netflix" ra thẻ. `walletStats` **chỉ** được nuôi bằng lịch sử, không bằng tên danh mục (tên danh mục không nói gì về việc tiền ra từ ví nào), và ví đã bị xoá thì không bao giờ được đề nghị. Không đủ dữ liệu thì `walletId: null` và chỗ gọi tự lấy `chatDefaultWallet()` — **đừng bịa ra một ví "trông có lý"**.
-- **Từ khoá học từ chi tiêu không được trả về cho khoản thu** (và ngược lại) — `matchCategoryFromInput()` lọc theo `type`. Không có ràng buộc đó thì "lương" sẽ ra Ăn uống chỉ vì hai chữ từng nằm chung một câu.
+- **Từ khoá học từ chi tiêu không được trả về cho khoản thu** (và ngược lại) — `matchWalletAndCategory()` lọc theo `type`. Không có ràng buộc đó thì "lương" sẽ ra Ăn uống chỉ vì hai chữ từng nằm chung một câu.
 - **Không khớp từ nào ⇒ "Khác", và phải NÓI RA.** `matched:false` là thứ bật dòng "Chưa nhận diện được, bấm để đổi" trên thẻ. Im lặng nhận bừa thì người dùng không bao giờ sửa, và ma trận học luôn cái sai đó.
 - **Ghi chú giữ nguyên câu người dùng gõ, cả dấu.** Đừng "dọn" số tiền ra khỏi nó: chính chuỗi đó là dữ liệu học cho lần sau, và nó cũng là thứ hiện trong sổ giao dịch.
 - **Ngày bị bóc ra TRƯỚC số tiền** (`chatExtractDate()` trả cả `rest`). Để nguyên "12/03/2026" thì 2026 là con số lớn nhất trong câu và nó thắng "35k". Ngày dựng bằng `isoOf()`, ngày trong tháng bị kẹp theo độ dài tháng — `new Date(2026,1,31)` âm thầm nhảy sang tháng 3.

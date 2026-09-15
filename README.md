@@ -11,16 +11,16 @@
 ```
 SoFin/
 ├── public/                     ← thư mục được deploy
-│   ├── index.html              giao diện (800 dòng)
+│   ├── index.html              giao diện (~1.200 dòng)
 │   ├── manifest.json           PWA manifest
 │   ├── js/vendor/supabase.js   client Supabase vendor sẵn (npm run vendor:supabase)
 │   ├── sw.js                   service worker (cache-first, bỏ qua Supabase)
 │   ├── icons/                  icon 192/512 + maskable + apple-touch
 │   ├── css/
-│   │   ├── styles.css          design tokens + component (316 dòng)
+│   │   ├── styles.css          design tokens + component (~1.200 dòng)
 │   │   └── shell.css           khung mobile 480px + màn hình mới
 │   └── js/
-│       ├── app.js              toàn bộ nghiệp vụ (~3.000 dòng)
+│       ├── app.js              toàn bộ nghiệp vụ (~8.000 dòng)
 │       ├── sync.js             Supabase client + auth + đồng bộ
 │       └── env.js              ⚙️ sinh tự động, KHÔNG commit
 ├── supabase/
@@ -30,11 +30,11 @@ SoFin/
 │   ├── generate-env.js         build: env → public/js/env.js (kèm BUILD stamp)
 │   ├── generate-icons.js       vẽ bộ icon PWA bằng zlib, không cần thư viện ảnh
 │   ├── check.js                kiểm tra wiring HTML ↔ JS + manifest/sw
-│   ├── smoke.js                chạy thật app bằng jsdom (350 assertion)
+│   ├── smoke.js                chạy thật app bằng jsdom (969 assertion)
 │   ├── sync-test.js            hợp đồng đồng bộ: giữ mạng treo để soi UI (20 assertion)
 │   ├── transfer-test.js        hợp đồng chuyển ví: hai ví luôn khớp nhau (23 assertion)
 │   ├── chart-test.js           canvas giả để chạy thật hit-test biểu đồ (44 assertion)
-│   └── header-test.js          app bar đồng nhất trên mọi màn hình (22 assertion)
+│   └── header-test.js          app bar đồng nhất trên mọi màn hình (32 assertion)
 ├── legacy/
 │   └── index.offline-v4.html   bản single-file cũ, vẫn chạy độc lập
 ├── capacitor.config.json       cấu hình bản Android/iOS (webDir = public/)
@@ -291,7 +291,7 @@ npm install jsdom --no-save && npm test   # smoke 296 + sync 20 + transfer 23 + 
 
 Lịch sử thay đổi từng bản: [CHANGELOG.md](CHANGELOG.md).
 
-**v5.1.3** · 11/09/2026 · Static web app + Supabase cloud sync
+**v5.2.2** · 15/09/2026 · Static web app + Supabase cloud sync
 Tiền thân: v4.0 single-file offline (`legacy/`)
 
 Số ở đây chỉ để đọc; nguồn duy nhất là `package.json`, và tag `v*` phải bằng
