@@ -2809,6 +2809,154 @@ async function boot(opts) {
 
 
 
+  console.log('\n· OCR: phát hiện quét thất bại và nói rõ phải làm gì');
+  {
+    const V = window.validateOCRResult;
+    check('không đọc được chữ nào → no-text',
+      V({amount:0}, '   \n  ').reason === 'no-text' && V({amount:0}, 'ab').reason === 'no-text');
+    check('đọc được chữ nhưng không có số tiền → no-amount',
+      V({amount:0}, 'TIEM BANH NGOT HOA LAN Nguyen Trai').reason === 'no-amount');
+    /* Số to bất thường mà không nằm cạnh nhãn nào: rất có thể là mã hoá đơn
+       hay số điện thoại bị đọc thành tiền. Vẫn cho lưu, nhưng phải nói ra. */
+    check('số tiền lớn bất thường và không do nhãn nào chỉ ra → suspicious',
+      V({amount:900000000, amountFromLabel:false}, 'HOA DON SO 0901234567').reason === 'suspicious');
+    check('… nhưng có nhãn chỉ ra thì tin, dù số lớn',
+      V({amount:900000000, amountFromLabel:true}, 'Tong cong 900.000.000').reason === null);
+    check('quét tốt thì ok và không có vấn đề gì',
+      V({amount:95000, amountFromLabel:true}, 'QUAN COM Tong cong 95.000').ok === true);
+
+    /* Luồng thật: OCR trả về chuỗi không có số tiền nào. */
+    const realOcr = window.chatOcrImage;
+    window.closeChatDrawer(true);
+    window.openChatDrawer(); await sleep(20);
+    window.chatOcrImage = async () => 'TIEM BANH NGOT HOA LAN\n123 Nguyen Trai Q5\nCam on quy khach';
+    const nBefore = S().transactions.length;
+    await window.chatHandle('', {name:'bill.jpg', type:'image/jpeg'}); await sleep(80);
+    let last = [...$('chat-body').children].pop();
+    check('quét không ra số tiền thì KHÔNG dựng thẻ xác nhận',
+      !last.querySelector('.bca-btns'), last.textContent.slice(0, 60));
+    check('… nói rõ đọc được chữ nhưng không thấy dòng số tiền',
+      /không thấy/i.test(last.textContent) && /số tiền/i.test(last.textContent),
+      last.textContent.slice(0, 90));
+    check('… và nêu lại thứ ĐÃ đọc được để không phải gõ lại',
+      /TIEM BANH NGOT HOA LAN/.test(last.textContent));
+    const chips = [...last.querySelectorAll('.chat-chip')].map(c => c.textContent.trim());
+    check('… kèm ba đường đi tiếp: nhập tay, chọn ảnh khác, form đầy đủ',
+      chips.length === 3 && /Nhập số tiền/.test(chips[0]) && /ảnh khác/.test(chips[1]),
+      chips.join(' | '));
+    check('… và chưa ghi gì vào sổ', S().transactions.length === nBefore);
+
+    /* Bấm "Nhập số tiền": điền tay rồi ra thẻ xác nhận đầy đủ, giữ nguyên
+       tên cửa hàng và ngày mà OCR đã đọc được. */
+    last.querySelector('.chat-chip').click(); await sleep(20);
+    check('bấm "Nhập số tiền" thì mở ô nhập', visible('modal-sheet') && !!$('chat-amt-input'));
+    window.writeMoney('chat-amt-input', 95000);
+    $('sheet-body').querySelector('.btn-primary').click(); await sleep(40);
+    const card = [...$('chat-body').querySelectorAll('.bot-card-action')].pop();
+    check('nhập tay xong thì ra thẻ xác nhận đầy đủ', !!card && !!card.querySelector('.bca-btns'));
+    check('… đúng số tiền vừa nhập', /95\.000/.test(card.textContent), card.textContent.slice(0, 60));
+    check('… và giữ tên cửa hàng OCR đã đọc',
+      /TIEM BANH NGOT HOA LAN/.test(card.textContent), card.textContent.slice(0, 90));
+    card.querySelector('.btn-primary').click(); await sleep(40);
+    check('lưu được bình thường sau khi sửa tay',
+      S().transactions.length === nBefore + 1
+      && S().transactions[S().transactions.length - 1].amount === 95000);
+
+    /* Không đọc được chữ nào: câu trả lời phải khác — đây là chuyện ảnh/mạng,
+       không phải chuyện thiếu dòng tổng. */
+    window.chatOcrImage = async () => '';
+    await window.chatHandle('', {name:'blur.jpg', type:'image/jpeg'}); await sleep(80);
+    last = [...$('chat-body').children].pop();
+    check('không đọc được chữ nào thì nói đúng lý do đó',
+      /không đọc được chữ nào|chưa bật được/i.test(last.textContent), last.textContent.slice(0, 90));
+    check('… vẫn có đường chọn ảnh khác', /ảnh khác/.test(last.textContent));
+
+    /* Số đáng ngờ: vẫn hiện thẻ, nhưng có cảnh báo. */
+    window.chatOcrImage = async () => 'HOA DON BAN HANG\nSo hoa don 0901234567\nMa 987654321';
+    await window.chatHandle('', {name:'weird.jpg', type:'image/jpeg'}); await sleep(80);
+    const body = $('chat-body').textContent;
+    check('số đáng ngờ thì cảnh báo trước khi lưu, không im lặng nhận',
+      /đọc nhầm|bất thường|không thấy/i.test(body));
+
+    window.chatOcrImage = realOcr;
+    window.closeChatDrawer(true);
+    window.switchTab('dashboard'); await sleep(20);
+  }
+
+  console.log('\n· hoá đơn in nhiệt (quán ăn, cửa hàng tiện lợi)');
+  {
+    /* Bill nhiệt thật: nhiều dòng tiền, và con số LỚN NHẤT là tiền khách đưa,
+       con số CUỐI CÙNG là tiền thối lại. Cả hai đều không phải số phải trả. */
+    const BILL = 'QUAN COM TAM BA MAP\n123 Nguyen Trai, Q5\nHOA DON BAN HANG\nSo HD: 000123\n'
+      + 'Com tam bi cha  2 x 45.000   90.000\nTra da  2 x 5.000   10.000\n'
+      + 'Tong tien hang           100.000\nGiam gia                   5.000\n'
+      + 'Tong cong                 95.000\nTien khach tra           200.000\n'
+      + 'Tien thoi lai            105.000\nCam on quy khach!';
+    const th = window.parseThermalReceiptOCR(BILL);
+    check('bill nhiệt: lấy "Tổng cộng", không lấy số lớn nhất (tiền khách đưa)',
+      th.amount === 95000, String(th.amount));
+    check('… và không lấy số cuối cùng (tiền thối lại)', th.amount !== 105000);
+    check('… ghi chú là tên quán, không phải "HOA DON BAN HANG"',
+      th.note === 'QUAN COM TAM BA MAP', JSON.stringify(th.note));
+    check('… đánh dấu nguồn là bill nhiệt', th.sourceType === 'thermal_receipt');
+    check('… danh mục ra Ăn uống', th.categoryId === 'c_food', th.categoryId);
+
+    /* "Tổng tiền hàng" đứng trước "Tổng cộng": nhãn tổng ở dòng SAU mới là số
+       phải trả (bill nhiệt hay in tổng hàng → giảm giá → tổng cộng). */
+    check('nhãn tổng ở dòng sau thắng nhãn tổng ở dòng trước', th.amount !== 100000);
+
+    /* OCR in nhiệt rất hay đọc dấu ngăn nghìn thành dấu cách. */
+    const spaced = window.parseThermalReceiptOCR('CIRCLE K\nTong cong 95 000\nTien khach 100 000');
+    check('gộp được "95 000" thành 95.000', spaced.amount === 95000, String(spaced.amount));
+    /* Nhưng không được dán hai con số cạnh nhau thành một. */
+    const two = window.parseThermalReceiptOCR('QUAN NUOC\nTong cong 95.000 200.000');
+    check('không dán hai số cạnh nhau thành một số khổng lồ',
+      two.amount === 200000 || two.amount === 95000, String(two.amount));
+
+    /* Các nhãn khác của máy in nhiệt. */
+    check('"Cần trả" cũng là nhãn tổng',
+      window.parseThermalReceiptOCR('QUAN PHO\nCan tra: 125.000').amount === 125000);
+    check('"T.Tien" cũng vậy',
+      window.parseThermalReceiptOCR('BANH MI\nT.Tien 35.000').amount === 35000);
+
+    /* Không nhãn nào đọc được: lấy số lớn nhất NHƯNG bỏ dòng tiền khách/thối. */
+    const noLabel = window.parseThermalReceiptOCR('QUAN OC\nOc huong 120.000\nTien khach dua 500.000');
+    check('không có nhãn tổng thì bỏ qua dòng tiền khách đưa',
+      noLabel.amount === 120000, String(noLabel.amount));
+
+    /* Bảng từ khoá cửa hàng chỉ để tờ bill ĐẦU TIÊN có chỗ đậu. */
+    check('cửa hàng tiện lợi → Mua sắm',
+      window.parseThermalReceiptOCR('WINMART+ CN 3\nTong cong 250.000').categoryId === 'c_shopping');
+    check('cây xăng → Di chuyển',
+      window.parseThermalReceiptOCR('PETROLIMEX 05\nTong cong 100.000').categoryId === 'c_transport');
+    check('nhà thuốc → Sức khoẻ',
+      window.parseThermalReceiptOCR('NHA THUOC LONG CHAU\nCan tra 87.000').categoryId === 'c_health');
+    /* …và lịch sử của người dùng luôn thắng bảng đoán sẵn. */
+    window.eval(`state.transactions.push({id:'t_th', userId:state.currentUser, type:'expense',
+      amount:50000, walletId:getUserWallets()[0].id, categoryId:'c_fun', subcategoryId:null,
+      note:'Circle K bia lon', date:todayISO(), status:'completed', createdAt:new Date().toISOString()});
+      saveStorage();`);
+    check('lịch sử người dùng thắng bảng từ khoá cửa hàng',
+      window.parseThermalReceiptOCR('CIRCLE K Q1\nTong cong 60.000\nBia lon').categoryId === 'c_fun',
+      window.parseThermalReceiptOCR('CIRCLE K Q1\nTong cong 60.000\nBia lon').categoryId);
+    window.eval(`state.transactions = state.transactions.filter(t=>t.id!=='t_th'); saveStorage();`);
+
+    /* Danh mục gợi ý phải còn tồn tại: người dùng xoá danh mục là chuyện
+       thường, gán một id không có thật thì mọi phép cộng bỏ sót bản ghi đó. */
+    check('danh mục gợi ý luôn là một danh mục có thật', (() => {
+      const r = window.parseThermalReceiptOCR('PETROLIMEX\nTong cong 100.000');
+      return !!window.eval(`findCategory('expense','${r.categoryId}')`);
+    })());
+
+    /* Ảnh bill nhiệt đi qua cùng một cửa với biên lai ngân hàng. */
+    const viaBank = window.parseBankReceiptOCR(BILL);
+    check('parseBankReceiptOCR tự chuyển sang luật bill nhiệt khi không phải biên lai NH',
+      viaBank.amount === 95000 && viaBank.bank === 'Khác', viaBank.amount + '/' + viaBank.bank);
+    check('… và vẫn là khoản chi', viaBank.type === 'expense');
+
+    check('rỗng thì không đoán bừa', window.parseThermalReceiptOCR('').amount === 0);
+  }
+
   console.log('\n· biên lai: chiều tiền do TỜ GIẤY quyết, không do từ khoá');
   {
     /* Đây là ca người dùng báo: giao dịch MoMo bị ghi thành khoản THU.
@@ -3620,7 +3768,17 @@ async function boot(opts) {
   check('export CSV không ném lỗi', !csvErr, csvErr);
   check('export JSON không ném lỗi', !jsonErr, jsonErr);
   await sleep(30);
-  const [csvFile, jsonFile] = window.__downloads;
+  /* Chọn theo TÊN FILE, không theo vị trí: harness bắt file tải bằng cách
+     stub URL.createObjectURL, mà ảnh bill gửi trong chat cũng đi qua đúng hàm
+     đó — nên mỗi tấm ảnh trong một test phía trên sẽ đẩy lệch chỉ số. */
+  /* Chọn theo MIME của blob, không theo vị trí trong mảng: harness bắt file
+     tải bằng cách stub URL.createObjectURL, mà ảnh bill gửi trong chat cũng
+     đi qua đúng hàm đó — nên mỗi tấm ảnh ở một test phía trên đẩy lệch chỉ
+     số, và cả bốn assertion dưới đây đỏ vì một lý do không liên quan gì tới
+     backup. */
+  const pick = re => window.__downloads.filter(d => re.test((d.blob && d.blob.type) || '')).pop();
+  const csvFile = pick(/text\/csv/);
+  const jsonFile = pick(/application\/json/);
   check('CSV mở đầu bằng BOM UTF-8 (Excel đọc đúng tiếng Việt)',
     !!csvFile && !!csvFile.bytes && csvFile.bytes[0] === 0xEF && csvFile.bytes[1] === 0xBB && csvFile.bytes[2] === 0xBF,
     csvFile && csvFile.bytes && Array.from(csvFile.bytes.slice(0, 3)).join(','));

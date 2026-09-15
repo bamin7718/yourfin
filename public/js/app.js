@@ -5258,6 +5258,11 @@ const KW_W_HISTORY = 3;
 const KW_W_SUBNAME = 2;
 const KW_W_CATNAME = 1;
 const KW_BIGRAM_BOOST = 2;
+/* "Khớp MẠNH" = khớp được một CỤM TỪ học từ lịch sử ("circle k", "bún bò"),
+   không phải một từ đơn. Đây là tiêu chí đúng bản chất, chứ không phải ngưỡng
+   điểm: điểm cộng dồn theo số lần xuất hiện, nên một chữ tầm thường lặp lại
+   ba lần cũng vượt mọi ngưỡng. Ca thật: sau khi bỏ dấu, "QUÁN cơm tấm" dùng
+   chung chữ 'quan' với ghi chú "Quần áo" của một giao dịch khác. */
 
 /* Một lần quét lịch sử, ra HAI bản đồ: từ khoá → danh mục, và từ khoá → ví
    hay dùng cho đúng khoản đó. Gộp vào một hàm chứ không tách hai index trên
@@ -5268,37 +5273,45 @@ const KW_BIGRAM_BOOST = 2;
    danh mục không nói gì về việc tiền ra từ ví nào. */
 function buildHistoryMappingIndex(){
   const idx = new Map();          /* token -> Map('type/catId' -> {type, catId, score, subs:Map, walletStats:Map}) */
-  const bump = (token, type, catId, subId, walletId, w)=>{
+  const bump = (token, type, catId, subId, walletId, w, fromHistory, isPhrase)=>{
     if(!token || token.length < 2 || !catId) return;
     let byCat = idx.get(token);
     if(!byCat){ byCat = new Map(); idx.set(token, byCat); }
     const key = type + '/' + catId;
     let rec = byCat.get(key);
-    if(!rec){ rec = {type, catId, score:0, subs:new Map(), walletStats:new Map()}; byCat.set(key, rec); }
+    if(!rec){ rec = {type, catId, score:0, hist:0, phrase:0, subs:new Map(), walletStats:new Map()}; byCat.set(key, rec); }
     rec.score += w;
+    /* Trọng số đến TỪ LỊCH SỬ được đếm riêng. Một khớp chỉ vì trùng tên danh
+       mục thì yếu, và có ca sai rõ ràng: bỏ dấu xong "quán" (quán ăn) trùng
+       "quần" (Quần áo), nên "QUAN COM TAM" khớp vào Mua sắm. Chỗ gọi cần biết
+       để quyết xem có nên tin phỏng đoán đó hay không. */
+    if(fromHistory){
+      rec.hist += w;
+      if(isPhrase) rec.phrase += w;   /* cụm hai từ, xem KW ghi chú ở trên */
+    }
     if(subId) rec.subs.set(subId, (rec.subs.get(subId)||0) + w);
     if(walletId) rec.walletStats.set(walletId, (rec.walletStats.get(walletId)||0) + w);
   };
-  const feed = (text, type, catId, subId, walletId, w)=>{
+  const feed = (text, type, catId, subId, walletId, w, fromHistory)=>{
     if(!text) return;
     const {uni, bi} = chatTokens(text);
-    uni.forEach(t=>bump(t, type, catId, subId, walletId, w));
-    bi.forEach(t=>bump(t, type, catId, subId, walletId, w * KW_BIGRAM_BOOST));
+    uni.forEach(t=>bump(t, type, catId, subId, walletId, w, fromHistory, false));
+    bi.forEach(t=>bump(t, type, catId, subId, walletId, w * KW_BIGRAM_BOOST, fromHistory, true));
   };
   /* 1. Lịch sử — tín hiệu thật. getAllUserTransactions() chứ không phải
      getUserTransactions(): một khoản dự kiến người dùng đã chọn danh mục cho
      nó thì cũng là một lần dạy, dù tiền chưa đi. */
   getAllUserTransactions().forEach(t=>{
     if(t.type !== 'expense' && t.type !== 'income') return;   /* chuyển ví không có danh mục để học */
-    feed(t.note, t.type, t.categoryId, t.subcategoryId, t.walletId, KW_W_HISTORY);
+    feed(t.note, t.type, t.categoryId, t.subcategoryId, t.walletId, KW_W_HISTORY, true);
   });
   /* 2. Tên danh mục và danh mục con — để tin nhắn ĐẦU TIÊN cũng có chỗ đậu:
      tài khoản mới chưa có lịch sử nào, mà "ăn uống" thì vẫn phải ra Ăn uống.
      Không kèm ví: xem ghi chú ở đầu hàm. */
   ['expense','income'].forEach(type=>{
     getCats(type).forEach(c=>{
-      feed(c.name, type, c.id, null, null, KW_W_CATNAME);
-      (c.subs||[]).forEach(s=>feed(s.name, type, c.id, s.id, null, KW_W_SUBNAME));
+      feed(c.name, type, c.id, null, null, KW_W_CATNAME, false);
+      (c.subs||[]).forEach(s=>feed(s.name, type, c.id, s.id, null, KW_W_SUBNAME, false));
     });
   });
   return idx;
@@ -5349,9 +5362,11 @@ function matchWalletAndCategory(userText, type){
       if(rec.type !== type) return;
       if(!cats.some(c=>c.id === rec.catId)) return;        /* danh mục đã bị xoá */
       let t = tally.get(rec.catId);
-      if(!t){ t = {catId:rec.catId, score:0, best:0, via:token, subs:new Map(), wallets:new Map()}; tally.set(rec.catId, t); }
+      if(!t){ t = {catId:rec.catId, score:0, hist:0, phrase:0, best:0, via:token, subs:new Map(), wallets:new Map()}; tally.set(rec.catId, t); }
       const w = rec.score * mult;
       t.score += w;
+      t.hist += (rec.hist || 0) * mult;
+      t.phrase += (rec.phrase || 0) * mult;
       if(w > t.best){ t.best = w; t.via = token; }
       rec.subs.forEach((sw, sid)=>t.subs.set(sid, (t.subs.get(sid)||0) + sw*mult));
       /* Ví chỉ tính khi nó còn tồn tại: `recurring`/lịch sử vẫn giữ id của ví
@@ -5379,7 +5394,13 @@ function matchWalletAndCategory(userText, type){
     if(subId && cat && !(cat.subs||[]).some(s=>s.id === subId)) subId = null;
     const walletId = pickTop(winner.wallets);
     return {catId:winner.catId, subId, walletId, walletMatched: !!walletId,
-            score:winner.score, via:winner.via, matched:true};
+            score:winner.score, via:winner.via, matched:true,
+            /* Có lịch sử thật đứng sau phỏng đoán này, hay chỉ là trùng tên
+               danh mục? Chỗ gọi cần phân biệt — xem ghi chú ở bump(). */
+            fromHistory: winner.hist > 0,
+            /* Khớp được một CỤM TỪ từ lịch sử — bằng chứng mạnh hơn nhiều so
+               với một từ đơn tình cờ trùng. Xem ghi chú ở bump(). */
+            fromPhrase: winner.phrase > 0};
   }
   /* Không khớp từ nào: về "Khác". Một danh mục sai dễ sửa hơn là một giao dịch
      không có danh mục — chỗ nào cộng tiền theo danh mục cũng sẽ bỏ sót nó. */
@@ -5388,7 +5409,7 @@ function matchWalletAndCategory(userText, type){
     catId: other ? other.id : null,
     subId: other && other.subs && other.subs.length ? other.subs[0].id : null,
     walletId: null, walletMatched: false,
-    score: 0, via: null, matched: false
+    score: 0, via: null, matched: false, fromHistory: false, fromPhrase: false
   };
 }
 
@@ -5678,7 +5699,7 @@ function receiptDirection(t, signHead){
 
 function parseBankReceiptOCR(rawText){
   const out = {amount:0, bank:'Khác', note:'', date:null, walletId:null,
-               categoryId:null, subId:null, matched:false, type:'expense'};
+               categoryId:null, subId:null, matched:false, type:'expense', amountFromLabel:false};
   const raw = String(rawText == null ? '' : rawText);
   if(!raw.trim()) return out;
   /* Gộp mọi khoảng trắng: OCR hay cắt một dòng thành hai, và cái nhãn
@@ -5697,6 +5718,7 @@ function parseBankReceiptOCR(rawText){
       const v = parseInt(m[1].replace(/[.,+\-]/g, ''), 10);
       if(v > 0){
         out.amount = v;
+        out.amountFromLabel = true;     /* có nhãn chỉ ra, xem validateOCRResult */
         /* Dấu có thể đứng trước số HOẶC trước đơn vị: "-VND 262,000". Lấy
            rộng ra 8 ký tự để bắt được cả hai chỗ. */
         const head = t.slice(Math.max(0, m.index - 8), m.index + m[0].indexOf(m[1]) + 2);
@@ -5706,12 +5728,20 @@ function parseBankReceiptOCR(rawText){
       }
     }
   }
-  /* Không có nhãn nào đọc được thì về luật chung của hoá đơn (dòng "tổng
-     cộng", rồi con số lớn nhất) — cùng một hàm mà bill quán ăn đang dùng. */
+  /* Không phải biên lai chuyển tiền: thử luật của HOÁ ĐƠN IN NHIỆT (quán ăn,
+     cửa hàng tiện lợi) — nó biết loại bỏ dòng "tiền khách đưa"/"tiền thối
+     lại", thứ mà luật chung "lấy số lớn nhất" luôn đọc nhầm. */
   if(!out.amount){
-    const generic = parseBillText(raw);
-    out.amount = generic.amount;
-    if(!out.note) out.note = generic.note;
+    const th = parseThermalReceiptOCR(raw);
+    out.amount = th.amount;
+    out.amountFromLabel = th.amountFromLabel;
+    out.sourceType = th.sourceType;
+    if(!out.note) out.note = th.note;
+    if(!out.categoryId && th.categoryId){
+      out.categoryId = th.categoryId;
+      out.subId = th.subId;
+      out.matched = th.matched;
+    }
     out.type = receiptDirection(t, '');
   }
 
@@ -5762,6 +5792,136 @@ function parseBankReceiptOCR(rawText){
     out.subId = m2.subId;
     out.matched = m2.matched;
   }
+  return out;
+}
+
+/* ---------- HOÁ ĐƠN IN NHIỆT (quán ăn, cửa hàng tiện lợi, siêu thị) ----------
+   Khác biên lai ngân hàng ở hai điểm quyết định cách bóc tách:
+
+   1. Một tờ bill nhiệt có RẤT NHIỀU con số tiền, và con số LỚN NHẤT thường
+      KHÔNG phải tổng phải trả: khách đưa 200.000 cho hoá đơn 95.000. Con số
+      CUỐI CÙNG cũng không phải — sau dòng tổng còn "Tiền khách trả" và "Tiền
+      thối lại", rồi số điện thoại ở chân bill. Nên luật ở đây là: đi theo
+      NHÃN, và có một danh sách nhãn bị loại thẳng.
+   2. Chữ in nhiệt đơn sắc, mờ, và OCR rất hay đọc dấu ngăn nghìn thành dấu
+      cách ("95.000" → "95 000"). Phải gộp lại trước khi đọc số, nhưng chỉ khi
+      cụm đó thật sự đứng riêng — không thì hai con số cạnh nhau ("95.000
+      200.000") bị dán thành một. */
+const THERMAL_TOTAL_RE = new RegExp('(tong cong|tong thanh toan|tong tien|tong cong tien|t tien|t\\.tien|can tra|phai tra|thanh toan|tong so tien|thanh tien|grand total|total|amount due)');
+/* Nhãn bị loại THẲNG: đây là tiền khách đưa và tiền thối, không phải tiền
+   phải trả. Thiếu danh sách này thì "lấy số lớn nhất" luôn ra tiền khách đưa. */
+const THERMAL_REJECT_RE = new RegExp('(tien khach|khach tra|khach dua|tien dua|thoi lai|tien thoi|tra lai|tien thua|con lai|tien mat nhan)');
+/* Từ khoá cửa hàng → danh mục, để tờ bill ĐẦU TIÊN của một quán lạ cũng có
+   chỗ đậu. Chỉ dùng khi ma trận từ khoá học từ lịch sử không khớp gì: lịch sử
+   của chính người dùng luôn thắng một bảng đoán sẵn. */
+const THERMAL_CATEGORY_HINTS = [
+  {cat:'c_food',      re:new RegExp('(com|pho|bun|mi|banh|chao|lau|nuong|quan an|nha hang|cafe|coffee|ca phe|tra sua|milk tea|highlands|phuc long|starbucks|the coffee house|trung nguyen|bia|nuoc ngot|kem)')},
+  {cat:'c_transport', re:new RegExp('(xang|dau nhot|petrolimex|pvoil|gui xe|do xe|ve xe|grab|gojek|\\bbe\\b|taxi|vé xe|rua xe|va lop)')},
+  {cat:'c_shopping',  re:new RegExp('(sieu thi|\\bmart\\b|winmart|vinmart|co\\.?opmart|lotte|aeon|big c|bach hoa|circle k|familymart|gs25|7-eleven|guardian|pharmacity)')},
+  {cat:'c_bill',      re:new RegExp('(hoa don dien|tien dien|tien nuoc|hoa don nuoc|internet|truyen hinh|cuoc dien thoai|nap the)')},
+  {cat:'c_health',    re:new RegExp('(nha thuoc|benh vien|phong kham|thuoc tay|long chau|an khang)')}
+];
+
+/* Gộp "95 000" thành "95000" — nhưng chỉ khi cụm đó đứng riêng. Không dùng
+   lookbehind: một regex literal có lookbehind là lỗi CÚ PHÁP trên Safari cũ,
+   và lỗi cú pháp thì cả app.js không nạp được, không phải chỉ hàm này. */
+function thermalJoinSpacedNumbers(s){
+  return String(s == null ? '' : s).replace(/\d{1,3}(?: \d{3})+/g, (m, off, str)=>{
+    const before = str[off - 1] || '', after = str[off + m.length] || '';
+    if(/[\d.,]/.test(before) || /[\d.,]/.test(after)) return m;   /* dính vào một số khác */
+    return m.replace(/ /g, '');
+  });
+}
+/* Số tiền lớn nhất trên một dòng, bỏ qua dòng mang nhãn bị loại. */
+function thermalLineAmount(line){
+  const t = thermalJoinSpacedNumbers(deaccent(line));
+  if(THERMAL_REJECT_RE.test(t)) return null;
+  const cands = chatAmountCandidates(chatExtractDate(t).rest)
+    .filter(c=>c.value >= 1000);        /* bill nhiệt không có khoản dưới nghìn */
+  if(!cands.length) return null;
+  return cands.reduce((a, b)=>b.value > a.value ? b : a).value;
+}
+
+function parseThermalReceiptOCR(rawText){
+  const out = {amount:0, note:'', categoryId:null, subId:null, date:null,
+               sourceType:'thermal_receipt', matched:false, amountFromLabel:false};
+  const raw = String(rawText == null ? '' : rawText);
+  if(!raw.trim()) return out;
+  const lines = raw.split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
+  const flat = deaccent(raw.replace(/\s+/g, ' '));
+
+  /* 1. SỐ TIỀN — theo nhãn trước, và nhãn tổng ở DÒNG CUỐI thắng: bill nhiệt
+     hay in "Tổng tiền hàng" rồi giảm giá rồi "Tổng cộng", nên cái sau mới là
+     số phải trả. */
+  lines.forEach(line=>{
+    const t = deaccent(line);
+    if(!THERMAL_TOTAL_RE.test(t) || THERMAL_REJECT_RE.test(t)) return;
+    const v = thermalLineAmount(line);
+    if(v){ out.amount = v; out.amountFromLabel = true; }
+  });
+  /* Nhãn và con số bị OCR cắt thành hai dòng. */
+  if(!out.amount){
+    lines.forEach((line, i)=>{
+      const t = deaccent(line);
+      if(!THERMAL_TOTAL_RE.test(t) || THERMAL_REJECT_RE.test(t)) return;
+      const v = lines[i + 1] ? thermalLineAmount(lines[i + 1]) : null;
+      if(v){ out.amount = v; out.amountFromLabel = true; }
+    });
+  }
+  /* Không đọc được nhãn nào: lấy số lớn nhất trong những dòng KHÔNG mang nhãn
+     bị loại. Cố ý không lấy "số cuối cùng" — sau dòng tổng còn tiền khách đưa,
+     tiền thối và số điện thoại ở chân bill. */
+  if(!out.amount){
+    let best = 0;
+    lines.forEach(line=>{ const v = thermalLineAmount(line); if(v && v > best) best = v; });
+    out.amount = best;
+  }
+
+  /* 2. GHI CHÚ — dòng đầu tiên có chữ thật, tức tên quán. Không lấy "4 từ đầu
+     của cả tờ bill": sau khi gộp dòng thì bốn từ đó thường là "HOA DON BAN
+     HANG", chẳng nói gì về việc đã mua ở đâu. */
+  const nameLine = lines.find(l=>{
+    const t = deaccent(l);
+    return /[a-z]{3,}/.test(t) && !THERMAL_TOTAL_RE.test(t) && !THERMAL_REJECT_RE.test(t)
+      && !/hoa don|phieu thanh toan|bill|invoice|so hd|ngay|gio|thu ngan|ban so|dia chi/.test(t);
+  });
+  out.note = nameLine ? nameLine.replace(/\s+/g, ' ').slice(0, 60) : 'Hoá đơn in nhiệt';
+
+  /* 3. DANH MỤC — lịch sử của chính người dùng trước, bảng từ khoá cửa hàng
+     sau. Bảng đó chỉ để tờ bill đầu tiên của một quán lạ có chỗ đậu; từ lần
+     thứ hai thì ghi chú đã vào sổ và ma trận tự học sẽ thắng. */
+  const learned = matchWalletAndCategory(out.note + ' ' + flat, 'expense');
+  /* Danh mục gợi ý phải CÒN TỒN TẠI: người dùng xoá hoặc đổi danh mục là
+     chuyện thường, mà gán một categoryId không có thật thì mọi phép cộng theo
+     danh mục sẽ bỏ sót bản ghi đó. */
+  const hintCat = re => {
+    const h = THERMAL_CATEGORY_HINTS.find(x=>x.re.test(re));
+    return h ? findCategory('expense', h.cat) : null;
+  };
+  const take = (catId, subId, matched)=>{ out.categoryId = catId; out.subId = subId; out.matched = matched; };
+  /* Thứ tự tin cậy, và mỗi bậc có một ca thật đứng sau:
+     1. Cụm từ học được từ lịch sử (fromPhrase) — "circle k" đã
+        từng vào Giải trí thì lần này cũng vậy, bảng đoán sẵn không được lấn.
+     2. Từ khoá cửa hàng khớp ngay TRONG TÊN QUÁN — "COM TAM" nằm trong tên
+        thì đó là bằng chứng trực tiếp, mạnh hơn một chữ 'quan' tình cờ trùng
+        với ghi chú "Quần áo" của một giao dịch khác.
+     3. Bất kỳ khớp nào từ lịch sử.
+     4. Từ khoá cửa hàng ở bất kỳ đâu trên tờ bill.
+     5. Khớp theo tên danh mục — vẫn hơn là bỏ vào "Khác".
+     6. "Khác", và nói rõ là chưa nhận diện được. */
+  const strong = learned.matched && learned.fromPhrase;
+  const byName = hintCat(deaccent(out.note));
+  const byBill = hintCat(flat);
+  if(strong) take(learned.catId, learned.subId, true);
+  else if(byName) take(byName.id, null, true);
+  else if(learned.matched && learned.fromHistory) take(learned.catId, learned.subId, true);
+  else if(byBill) take(byBill.id, null, true);
+  else if(learned.matched) take(learned.catId, learned.subId, true);
+  else {
+    const other = fallbackCategory('expense');
+    take(other ? other.id : null, null, false);
+  }
+  out.date = chatExtractDate(raw).date;
   return out;
 }
 
@@ -6120,6 +6280,52 @@ function chatMergeContext(text){
   return d;
 }
 
+/* ---------- ĐỘ TIN CẬY CỦA MỘT LẦN QUÉT ----------
+   Ba kiểu thất bại, và mỗi kiểu cần một câu trả lời khác nhau. Gộp cả ba vào
+   một câu "không đọc được ảnh" là đẩy người dùng vào chỗ không biết phải làm
+   gì tiếp: chụp lại? bật mạng? hay gõ tay?
+
+   · no-text     — không đọc được chữ nào: ảnh mờ, nền tối, hoặc engine OCR
+                   chưa tải được (mất mạng / người dùng từ chối tải).
+   · no-amount   — đọc được chữ nhưng không thấy số tiền: ảnh cắt mất dòng
+                   tổng, hoặc con số bị nhoè thành chữ.
+   · suspicious  — có số tiền nhưng KHÔNG do nhãn nào chỉ ra và lớn bất
+                   thường: rất có thể đó là một dãy số khác trên tờ giấy (mã
+                   hoá đơn, số điện thoại). Vẫn cho lưu, nhưng phải nói ra. */
+const OCR_MIN_TEXT = 12;                 /* ký tự chữ-số; ít hơn coi như trắng */
+const OCR_SUSPICIOUS_FROM = 500000000;   /* 500 triệu mà không có nhãn nào */
+
+function validateOCRResult(res, rawText){
+  const solid = String(rawText == null ? '' : rawText).replace(/[^0-9A-Za-zÀ-ỹ]/g, '');
+  if(solid.length < OCR_MIN_TEXT) return {ok:false, reason:'no-text'};
+  if(!res || !(res.amount > 0)) return {ok:false, reason:'no-amount'};
+  if(res.amount >= OCR_SUSPICIOUS_FROM && !res.amountFromLabel) return {ok:true, reason:'suspicious'};
+  return {ok:true, reason:null};
+}
+
+/* Trạng thái thất bại: KHÔNG dựng thẻ xác nhận (một thẻ không có số tiền thì
+   nút "Tự động lưu" trên đó chỉ toast một câu rồi đứng im), thay bằng một câu
+   nói rõ chuyện gì xảy ra và ba đường đi tiếp. Những gì ĐÃ đọc được (tên
+   cửa hàng, ngày) vẫn được nêu ra và giữ trong draft — người dùng chỉ phải
+   điền đúng phần còn thiếu. */
+function showOCRErrorFallbackState(d, reason){
+  const gotSomething = d && (d.note && d.note !== 'Hoá đơn' && d.note !== 'Hoá đơn in nhiệt');
+  const lead = reason === 'no-text'
+    ? (ocrDeclined
+        ? 'Mình chưa bật được công cụ đọc ảnh nên không đọc được gì trên tấm này.'
+        : 'Mình không đọc được chữ nào trên ảnh — thường là do ảnh mờ, chụp nghiêng hoặc nền quá tối.')
+    : 'Mình đọc được chữ trên ảnh nhưng <b>không thấy dòng số tiền</b> — có thể ảnh bị cắt mất phần tổng cộng.';
+  const read = gotSomething
+    ? `<span class="chat-hint">Mình có đọc được: <b>${esc(d.note)}</b>${d.date ? ' · ' + fmtDate(d.date) : ''} — giữ lại rồi, bạn chỉ cần điền số tiền.</span>`
+    : '';
+  chatAppend('bot', lead + read
+    + `<div class="chat-chip-row">`
+    + (d ? `<button type="button" class="chat-chip" onclick="chatEditAmount('${d.id}')">✍️ Nhập số tiền</button>` : '')
+    + `<button type="button" class="chat-chip" onclick="chatPickImage()">📷 Chọn ảnh khác</button>`
+    + (d ? `<button type="button" class="chat-chip" onclick="chatCustomize('${d.id}')">Mở form đầy đủ</button>` : '')
+    + `</div>`, 'has-card');
+}
+
 /* ---------- DRAFT ----------
    Draft sống trong RAM. KHÔNG đẩy vào state.transactions: một giao dịch chỉ
    ra đời khi người dùng bấm, cùng lý do với các mục dự kiến "ảo". */
@@ -6185,6 +6391,10 @@ async function processChatMessage(userInput, imageFile){
     draft.note = [text, bill.note].filter(Boolean).join(' — ') || (bill.bank !== 'Khác' ? 'Chuyển khoản ' + bill.bank : 'Hoá đơn');
     /* Chiều tiền và danh mục lấy thẳng từ tờ giấy — xem chỗ gán draft.type
        bên dưới để biết vì sao KHÔNG đoán lại trên toàn văn OCR. */
+    /* Độ tin cậy của lần quét — quyết định có dựng thẻ xác nhận hay không. */
+    const v = validateOCRResult(bill, ocr);
+    draft.ocrOk = v.ok;
+    draft.ocrIssue = v.reason;
     draft.billType = bill.type;
     draft.billSigned = !!bill.typeFromSign;
     draft.catId = bill.categoryId;
@@ -6867,9 +7077,14 @@ async function chatHandle(text, file){
 }
 function chatReply(draft){
   if(draft && draft.kind && draft.kind !== 'SINGLE_TRANSACTION') return renderBotInteractiveCard(draft);
-  /* Thiếu số tiền: hỏi lại và GIỮ phần đã hiểu được. Ảnh bill thì không hỏi
-     kiểu này — ở đó thẻ vẫn hiện vì người dùng còn muốn thấy app đã đọc được
-     gì từ tờ giấy, và dòng "Số tiền" bấm được để nhập tay. */
+  /* Ảnh mà quét không ra số tiền: trạng thái thất bại có đường đi tiếp, KHÔNG
+     phải một thẻ xác nhận thiếu số tiền — nút "Tự động lưu" trên thẻ đó chỉ
+     toast một câu rồi đứng im. */
+  if(draft && draft.source === 'bill' && draft.ocrOk === false){
+    showOCRErrorFallbackState(draft, draft.ocrIssue);
+    return;
+  }
+  /* Thiếu số tiền ở tin nhắn chữ: hỏi lại và GIỮ phần đã hiểu được. */
   if(draft && draft.source !== 'bill' && validateChatPayload(draft).includes('amount')){
     pendingChatContext = {draft, at: Date.now()};
     chatAppend('bot', generateMissingInfoPrompt('amount', draft));
@@ -6889,6 +7104,10 @@ function chatReply(draft){
     lead = `“${esc(draft.via)}” trước giờ bạn ghi vào <b>${esc(cat ? cat.name : '')}</b>, mình dùng lại nhé:`;
   } else {
     lead = 'Mình chưa nhận ra khoản này thuộc đâu, tạm để vào “Khác”:';
+  }
+  if(draft.ocrIssue === 'suspicious'){
+    lead += `<span class="chat-hint">⚠ Con số này không nằm cạnh dòng "tổng cộng" nào và lớn bất thường —`
+      + ` rất có thể mình đọc nhầm một dãy số khác trên tờ giấy. Kiểm lại giúp mình trước khi lưu.</span>`;
   }
   if(draft.walletMatched) lead += `<span class="chat-hint">Ví thì mình lấy ví bạn hay dùng cho khoản này.</span>`;
   if(draft.amountGuess) lead += `<span class="chat-hint">Mình hiểu con số bạn gõ là hàng nghìn.</span>`;
@@ -6914,6 +7133,10 @@ function renderChatCard(id){
         d.amount ? esc((d.type==='income'?'+':'-') + chatAmountText(d.amount, w)) : 'chưa rõ — bấm để nhập'
       }</span>
     </div>
+    ${d.note ? `<div class="bca-row pointer" onclick="chatEditNote('${id}')">
+      <span class="bca-lbl">📝 Ghi chú</span>
+      <span class="bca-val">${esc(d.note)}</span>
+    </div>` : ''}
     <div class="bca-row pointer" onclick="chatToggleType('${id}')">
       <span class="bca-lbl">↕️ Loại</span>
       <span class="bca-val">${d.type==='income' ? 'Thu nhập' : 'Chi tiêu'}</span>
@@ -7023,6 +7246,33 @@ function chatEditAmount(id){
   const el = document.getElementById('chat-amt-input');
   if(el) el.focus();
 }
+/* Sửa ghi chú ngay trên thẻ. Ghi chú là thứ đi vào sổ VÀ đi vào ma trận từ
+   khoá, nên một chuỗi OCR đọc sai mà lưu luôn thì nó dạy sai cho cả lần sau.
+   Cùng khuôn với chatEditAmount(): sheet chung + một ô nhập. */
+function chatEditNote(id){
+  const d = chatDrafts.get(id);
+  if(!d) return;
+  uiSheet('Ghi chú', `
+    <div class="form-group">
+      <label>Nội dung giao dịch</label>
+      <input type="text" class="input" id="chat-note-input" autocomplete="off" placeholder="VD: Cơm trưa">
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-secondary" onclick="closeSheet()">Hủy</button>
+      <button class="btn btn-primary" onclick="chatSaveNote('${id}')">Xong</button>
+    </div>`);
+  const el = document.getElementById('chat-note-input');
+  if(el){ el.value = d.note || ''; el.focus(); }
+}
+function chatSaveNote(id){
+  const d = chatDrafts.get(id);
+  if(!d) return;
+  const el = document.getElementById('chat-note-input');
+  d.note = el ? el.value.trim() : d.note;
+  closeSheet();
+  if(document.getElementById('chat-card-' + id)) renderChatCard(id);
+  else chatReply(d);
+}
 function chatSaveAmount(id){
   const d = chatDrafts.get(id);
   if(!d) return;
@@ -7030,8 +7280,13 @@ function chatSaveAmount(id){
   if(!v || v <= 0) return toast('Nhập số tiền hợp lệ','err');
   d.amount = v;
   d.amountGuess = false;
+  d.ocrOk = true;
+  d.ocrIssue = null;
   closeSheet();
-  renderChatCard(id);
+  /* Trạng thái thất bại không dựng thẻ, nên có thể chưa có hộp nào để vẽ lại
+     — lúc đó dựng một thẻ mới thay vì ghi vào hư không. */
+  if(document.getElementById('chat-card-' + id)) renderChatCard(id);
+  else chatReply(d);
 }
 
 /* [ Tự động lưu ] — đường ghi vẫn là state.transactions.push() + saveStorage(),
@@ -7156,7 +7411,7 @@ const APK_URL = `https://github.com/${GH_REPO}/releases/latest/download/sofin.ap
 
 /* Stamped in at build time from package.json; the literal is only what runs
    when someone opens the folder without building. */
-const APP_VERSION = (window.__ENV__ && window.__ENV__.VERSION) || '5.2.0';
+const APP_VERSION = (window.__ENV__ && window.__ENV__.VERSION) || '5.2.1';
 /* Which version the user already said "để sau" to — device-local, so a
    dismissal does not sync to their other phone. */
 const UPDATE_SEEN_KEY = 'FINYOURTIN_UPDATE_DISMISSED';

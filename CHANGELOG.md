@@ -12,6 +12,44 @@ thứ khó tìm lại sau nửa năm.
 
 ---
 
+## [5.2.1] — 15/09/2026
+
+### Thêm
+
+- **Đọc hoá đơn in nhiệt** (`parseThermalReceiptOCR`) — tầng giữa giữa biên
+  lai ngân hàng và luật chung. Hai đặc thù quyết định cách bóc tách:
+
+  *Con số lớn nhất không phải tổng phải trả* (khách đưa 200.000 cho hoá đơn
+  95.000), và con số **cuối cùng** cũng không (sau dòng tổng còn "Tiền khách
+  trả", "Tiền thối lại", rồi số điện thoại ở chân bill). Nên nó đi theo nhãn —
+  và nhãn ở dòng *sau* thắng, vì bill in "Tổng tiền hàng" → giảm giá → "Tổng
+  cộng" — cộng một danh sách nhãn **bị loại thẳng**.
+
+  *OCR in nhiệt hay đọc dấu ngăn nghìn thành dấu cách* ("95 000"), nên có bước
+  gộp lại — nhưng chỉ khi cụm đó đứng riêng, không thì hai số cạnh nhau bị dán
+  thành một.
+
+  Danh mục suy từ tên cửa hàng (quán ăn, cây xăng, siêu thị, nhà thuốc…) theo
+  một thang 6 bậc, trong đó **lịch sử của người dùng luôn thắng** bảng đoán
+  sẵn — nhưng chỉ khi nó khớp được một **cụm từ**, không phải một từ đơn: bỏ
+  dấu xong "QUÁN cơm tấm" dùng chung chữ "quan" với "QUẦN áo", và dữ liệu mẫu
+  có đúng ghi chú đó.
+
+- **Phát hiện quét thất bại và nói rõ phải làm gì** (`validateOCRResult`). Ba
+  kiểu thất bại, ba câu trả lời: không đọc được chữ nào · đọc được chữ nhưng
+  không thấy dòng số tiền · số tiền đáng ngờ (to bất thường và không nằm cạnh
+  nhãn nào — rất có thể là mã hoá đơn hay số điện thoại). Hai kiểu đầu **không
+  dựng thẻ xác nhận** nữa: một thẻ thiếu số tiền thì nút "Tự động lưu" trên đó
+  chỉ toast một câu rồi đứng im. Thay vào đó là trạng thái thất bại có nêu lại
+  thứ đã đọc được và ba đường đi tiếp: nhập tay số tiền · chọn ảnh khác · mở
+  form đầy đủ.
+
+- Thẻ xác nhận **hiện cả ghi chú** và cho sửa tại chỗ. Ghi chú đi vào sổ *và*
+  vào ma trận từ khoá, nên một chuỗi OCR đọc sai mà lưu luôn thì nó dạy sai
+  cho cả lần sau.
+
+---
+
 ## [5.2.0] — 14/09/2026
 
 ### Đổi
