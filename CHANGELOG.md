@@ -12,6 +12,24 @@ thứ khó tìm lại sau nửa năm.
 
 ---
 
+## [5.2.2] — 15/09/2026
+
+### Sửa
+
+- **CI đỏ mà code không đổi một dòng.** Runner image của GitHub nâng
+  `cmdline-tools` lên 16.0, và trong kho SDK không còn gói `tools` nữa — mà
+  `setup-android@v3` lại mặc định `packages: 'tools platform-tools'`, nên
+  `sdkmanager` trả exit 1 ("Failed to find package 'tools'") và job dừng ở
+  bước thứ 5, trước cả khi chạm tới Gradle. Đặt `packages: ''`: runner đã có
+  sẵn platform-tools, việc duy nhất còn cần ở action đó là nhận license và
+  đặt `ANDROID_HOME`.
+
+  Tag `v5.2.1` đã đẩy lên nhưng build đỏ nên **không có release nào** —
+  `checkAppUpdate()` đọc release mới nhất, nên với người dùng thì tag đó không
+  tồn tại. Nội dung của nó phát hành lại ở bản này.
+
+---
+
 ## [5.2.1] — 15/09/2026
 
 ### Thêm
