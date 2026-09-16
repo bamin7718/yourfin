@@ -183,7 +183,7 @@ async function boot(opts) {
   console.log('\n· giao diện màn đăng nhập');
   {
     check('tên thương hiệu đầy đủ', txt('view-login').includes('SoFin Finance'));
-    check('có slogan', d.querySelector('.auth-tagline').textContent.includes('an toàn'));
+    check('có slogan', d.querySelector('.auth-tagline').textContent.includes('Thông minh'));
     check('thẻ đăng nhập dùng lớp auth-card', !!d.querySelector('.card.auth-card'));
     check('hai tab đăng nhập / tạo tài khoản', $('auth-segment').children.length === 2);
 
@@ -217,7 +217,7 @@ async function boot(opts) {
     check('đổi tab thì đổi dòng gợi ý trong thẻ', txt('auth-hint').includes('tối thiểu 6 ký tự'));
     check('… và KHÔNG đụng vào dòng bảo mật', !!note.querySelector('.security-icon .ic-svg'));
     window.setAuthMode('login', $('auth-segment').children[0]);
-    check('quay lại tab đăng nhập thì gợi ý trở lại', txt('auth-hint').includes('offline'));
+    check('quay lại tab đăng nhập thì gợi ý trở lại', txt('auth-hint').includes('đồng bộ'));
     check('dòng bảo mật vẫn nguyên vẹn', !!note.querySelector('.security-icon .ic-svg'));
 
     const shell = fs.readFileSync(path.join(PUBLIC, 'css', 'shell.css'), 'utf8');
@@ -417,8 +417,11 @@ async function boot(opts) {
     window.jumpToWallet(w1.id); await sleep(30);
     check('nhảy sang tab giao dịch', window.eval('currentTab') === 'transactions' && visible('view-transactions'));
     check('select ví hiện đúng ví vừa chọn', $('tx-filter-wallet').value === w1.id);
-    check('select ví nằm ngoài panel lọc ẩn', !$('tx-filter-wallet').closest('#tx-advanced-filters'));
+    /* Ví/Trạng thái/Danh mục/Sự kiện đã chuyển vào bottom sheet #tx-advanced-filters.
+       Mitigation cho việc giấu bộ lọc: badge trên nút 🎛️ báo "đang lọc". */
+    check('select ví nằm trong bottom sheet lọc', !!$('tx-filter-wallet').closest('#tx-advanced-filters'));
     check('thanh lọc ví được đánh dấu đang bật', $('tx-wallet-bar').classList.contains('on'));
+    check('nút 🎛️ báo có bộ lọc đang bật', $('tx-filter-toggle').classList.contains('has-filters'));
     check('các bộ lọc khác được dọn', window.eval('JSON.stringify(txFilters)')
       === JSON.stringify({ type: 'all', walletId: w1.id, catId: 'all', eventId: 'all', range: 'all', status: 'all' }),
       window.eval('JSON.stringify(txFilters)'));
@@ -468,18 +471,19 @@ async function boot(opts) {
     check('nhảy sang tab giao dịch', window.eval('currentTab') === 'transactions' && visible('view-transactions'));
     check('select danh mục hiện đúng danh mục vừa bấm', $('tx-filter-cat').value === catId,
       $('tx-filter-cat').value);
-    check('panel lọc nâng cao mở ra để thấy bộ lọc đang bật',
-      !$('tx-advanced-filters').classList.contains('hidden'));
+    /* Không tự bật sheet đè lên list khi nhảy — badge trên nút 🎛️ báo "đang lọc". */
+    check('nút 🎛️ báo có bộ lọc đang bật sau khi nhảy theo danh mục',
+      $('tx-filter-toggle').classList.contains('has-filters'));
     check('mang theo phạm vi tháng này, khoản chi, đã chốt',
       window.eval('JSON.stringify(txFilters)') === JSON.stringify(
         { type: 'expense', walletId: 'all', catId, eventId: 'all', range: 'thismonth', status: 'completed' }),
       window.eval('JSON.stringify(txFilters)'));
-    check('chip "Tháng này" sáng',
-      d.querySelector('#tx-filter-range .chip[data-val="thismonth"]').classList.contains('active'));
+    check('ô chọn thời gian hiện "Tháng này"',
+      $('tx-range-select').value === 'thismonth');
     /* Tổng Chi trên màn Giao dịch phải khớp con số vừa bấm — đây mới là điều
-       người dùng kiểm chứng được bằng mắt. */
+       người dùng kiểm chứng được bằng mắt. Pill: children[2] là mục "Chi". */
     check('tổng Chi khớp đúng con số trên thẻ danh mục',
-      $('tx-summary').children[1].textContent.includes(shown), shown + ' ≠ ' + $('tx-summary').children[1].textContent);
+      $('tx-summary').children[2].textContent.includes(shown), shown + ' ≠ ' + $('tx-summary').children[2].textContent);
 
     /* Danh mục đã bị xoá: renderTransactionsList() sẽ hạ bộ lọc về "all", nên
        một hàng bấm được lúc đó là lời hứa sai — nó phải trơ. */
@@ -774,7 +778,7 @@ async function boot(opts) {
     window.toggleReportPending(); await sleep(30);
     check('báo cáo mặc định bỏ qua khoản dự kiến',
       repExpense() === withoutPending + 900000, withoutPending + ' → ' + repExpense());
-    check('chip "Gồm dự kiến" sáng khi bật', $('report-pending-chip').classList.contains('active'));
+    check('toggle "Gồm dự kiến" bật', $('report-pending-toggle').checked);
     window.toggleReportPending(); await sleep(30);
     check('tắt lại thì báo cáo trở về số thực tế', repExpense() === withoutPending);
 
@@ -823,8 +827,8 @@ async function boot(opts) {
     check('lọc "Dự kiến" chỉ còn khoản dự kiến', $('tx-list-container').innerHTML.includes('Vé máy bay')
       && !$('tx-list-container').innerHTML.includes('Cà phê'));
     window.resetTxFilters(); await sleep(20);
-    check('bộ lọc trạng thái nằm ngoài panel lọc ẩn',
-      !$('tx-filter-status').closest('#tx-advanced-filters'));
+    check('bộ lọc trạng thái nằm trong bottom sheet lọc',
+      !!$('tx-filter-status').closest('#tx-advanced-filters'));
 
     // "Xem tất cả ›" ở khối Sắp đến hạn
     window.switchTab('dashboard'); await sleep(20);
@@ -1074,9 +1078,10 @@ async function boot(opts) {
     $('confirm-yes').click(); await sleep(30);
     check('đồng ý thì ví bị xoá thật', !window.getUserWallets().some(w => w.id === 'w_menu'));
 
-    check('nút tạo ví trên tiêu đề là nút tròn, không phải khối xanh đặc',
-      !!$('btn-add-wallet') && $('btn-add-wallet').classList.contains('icon-btn')
-      && !$('btn-add-wallet').classList.contains('btn-primary'),
+    /* Chuẩn tạo mới đồng nhất: nút Primary pill "+ Thêm ví" trên mọi màn con. */
+    check('nút tạo ví là pill Primary "+ Thêm ví"',
+      !!$('btn-add-wallet') && $('btn-add-wallet').classList.contains('btn-primary')
+      && $('btn-add-wallet').classList.contains('btn-pill'),
       $('btn-add-wallet') && $('btn-add-wallet').className);
     $('btn-add-wallet').click(); await sleep(20);
     check('… và vẫn mở được form tạo ví', visible('modal-wallet') && $('mw-wallet-id').value === '');
@@ -1086,7 +1091,7 @@ async function boot(opts) {
   console.log('\n· giao diện: màu, nav, icon SVG');
   {
     const css = fs.readFileSync(path.join(PUBLIC, 'css', 'styles.css'), 'utf8');
-    check('primary là xanh VietinBank #00529C', /--primary:#00529C/.test(css));
+    check('primary là navy Priority #0A2540', /--primary:#0A2540/.test(css));
     /* ĐÃ ĐẢO NGƯỢC quyết định cũ (lưới 2 cột): từ khi Giao dịch gần đây và
        Tiện ích lên đầu trang chủ, chiều dọc đắt hơn chiều ngang. Thứ phải
        khoá lại là mảnh hở của thẻ thứ ba — không có nó thì không ai biết là
@@ -1107,14 +1112,14 @@ async function boot(opts) {
       /\.category-item\{[^}]*cursor:pointer/.test(css) && /\.category-item:active\{[^}]*transform:scale\(\.98\)/.test(css));
     check('hàng chip chọn loại ví đủ chỗ cho 5 loại',
       /\.type-select-row\{display:grid;grid-template-columns:repeat\(3,1fr\)/.test(css));
-    check('có đỏ VietinBank #ED1C24 làm màu nhấn', /--brand-red:#ED1C24/.test(css));
-    check('nền light là xám xanh #F4F7FA', /--bg:#F4F7FA/.test(css));
+    check('có đỏ Priority #E30613 làm màu nhấn', /--brand-red:#E30613/.test(css));
+    check('nền light là #F8F9FA', /--bg:#F8F9FA/.test(css));
     check('gradient header đúng công thức',
-      /--gradient:linear-gradient\(135deg,#003B70 0%,#00529C 50%,#0073E6 100%\)/.test(css));
+      /--gradient:linear-gradient\(135deg,#06192E 0%,#0A2540 55%,#123A5E 100%\)/.test(css));
     check('gradient thẻ ví đúng công thức',
-      /--gradient-card:linear-gradient\(110deg,#00529C 0%,#1A75D2 100%\)/.test(css));
-    check('card có shadow nổi 0 8px 24px rgba(0,82,156,.12)',
-      /--shadow-lift:0 8px 24px rgba\(0,82,156,\.12\)/.test(css));
+      /--gradient-card:linear-gradient\(135deg,#0A2540 0%,#123A5E 55%,#1B4C78 100%\)/.test(css));
+    check('card có shadow nổi 0 8px 24px rgba(10,37,64,.12)',
+      /--shadow-lift:0 8px 24px rgba\(10,37,64,\.12\)/.test(css));
     check('header là app bar gradient', /header\{[^}]*background:var\(--gradient\)/.test(css));
     // App bar ghim ở đỉnh khi cuộn.
     const zHeader = Number((/header\{[^}]*z-index:(\d+)/.exec(css) || [])[1]);
@@ -1245,7 +1250,7 @@ async function boot(opts) {
     check('webDir trỏ vào public — một nguồn duy nhất cho web lẫn mobile',
       cap.webDir === 'public', cap.webDir);
     check('StatusBar dùng xanh VietinBank',
-      cap.plugins.StatusBar.backgroundColor === '#00529C' && cap.plugins.StatusBar.style === 'LIGHT');
+      cap.plugins.StatusBar.backgroundColor === '#0A2540' && cap.plugins.StatusBar.style === 'LIGHT');
     check('Keyboard resize body', cap.plugins.Keyboard.resize === 'body');
 
     const ignore = fs.readFileSync(path.join(ROOT, '.gitignore'), 'utf8');
@@ -1439,7 +1444,7 @@ async function boot(opts) {
     check('có apple-touch-icon', /rel="apple-touch-icon"/.test(head));
     check('có meta apple-mobile-web-app-capable', /apple-mobile-web-app-capable/.test(head));
     check('có meta theme-color đúng màu SoFin',
-      d.querySelector('meta[name="theme-color"]').content === '#00529C');
+      d.querySelector('meta[name="theme-color"]').content === '#0A2540');
     check('favicon trỏ vào icon thương hiệu, không phải emoji',
       /rel="icon"[^>]*icons\/icon-192\.png/.test(head) && !/font-size='90'/.test(head));
     check('có thẻ OpenGraph + Twitter card',
@@ -1516,12 +1521,14 @@ async function boot(opts) {
   console.log('\n· Báo cáo: bộ lọc, thẻ tổng quan, xếp hạng');
   {
     window.switchTab('reports'); await sleep(40);
-    const chips = [...d.querySelectorAll('#report-range-seg .chip')];
-    check('có đủ 5 mốc thời gian',
-      chips.map(c => c.dataset.val).join() === 'thismonth,lastmonth,3months,thisyear,custom',
-      chips.map(c => c.dataset.val).join());
+    /* Bộ lọc kỳ nay là dropdown gọn (#report-range-select) + mũi tên chuyển tháng,
+       thay cho dãy chip #report-range-seg cũ. */
+    const rangeSel = $('report-range-select');
+    check('có đủ 5 mốc thời gian trong dropdown',
+      [...rangeSel.options].map(o => o.value).join() === 'thismonth,lastmonth,3months,thisyear,custom',
+      [...rangeSel.options].map(o => o.value).join());
     check('mặc định là Tháng này',
-      chips[0].classList.contains('active') && window.eval('reportRangeKey') === 'thismonth');
+      rangeSel.value === 'thismonth' && window.eval('reportRangeKey') === 'thismonth');
     check('nhãn kỳ hiện đúng tháng hiện tại',
       txt('report-period-label') === 'Tháng ' + (new Date().getMonth() + 1) + '/' + new Date().getFullYear(),
       txt('report-period-label'));
@@ -1570,14 +1577,14 @@ async function boot(opts) {
     }
 
     // đổi mốc thời gian
-    window.setReportRange('lastmonth', chips[1]); await sleep(40);
+    window.setReportRange('lastmonth'); await sleep(40);
     check('chọn Tháng trước thì nhãn đổi theo',
       txt('report-period-label') !== 'Tháng ' + (new Date().getMonth() + 1) + '/' + new Date().getFullYear(),
       txt('report-period-label'));
-    check('chip Tháng trước sáng, Tháng này tắt',
-      chips[1].classList.contains('active') && !chips[0].classList.contains('active'));
+    check('dropdown hiện Tháng trước',
+      rangeSel.value === 'lastmonth' && window.eval('reportRangeKey') === 'lastmonth');
 
-    window.setReportRange('custom', chips[4]); await sleep(30);
+    window.setReportRange('custom'); await sleep(30);
     check('chọn Tùy chỉnh thì hiện 2 ô ngày', visible('report-custom-range'));
     check('ô ngày được điền sẵn', !!$('rep-from').value && !!$('rep-to').value);
     // đảo ngược ngày vẫn phải ra kết quả, không phải khoảng rỗng
@@ -1587,7 +1594,7 @@ async function boot(opts) {
     check('nhập ngược ngày vẫn tính đúng khoảng',
       window.parseAmount(txt('rep-expense')) > 0, txt('rep-expense'));
 
-    window.setReportRange('thismonth', chips[0]); await sleep(40);
+    window.setReportRange('thismonth'); await sleep(40);
     check('quay lại Tháng này thì ẩn ô ngày', !visible('report-custom-range'));
 
     // xếp hạng chi tiêu
@@ -1625,10 +1632,10 @@ async function boot(opts) {
 
     // đổi bộ lọc nhiều lần không được làm bitmap phình ra
     const w0 = donut.width;
-    window.setReportRange('thisyear', chips[3]); await sleep(30);
+    window.setReportRange('thisyear'); await sleep(30);
     window.setDonutMode('income', $('seg-donut-income')); await sleep(30);
     window.setDonutMode('expense', $('seg-donut-expense')); await sleep(30);
-    window.setReportRange('thismonth', chips[0]); await sleep(30);
+    window.setReportRange('thismonth'); await sleep(30);
     check('vẽ lại nhiều lần: bitmap giữ nguyên kích thước, không cộng dồn',
       donut.width === w0, w0 + ' → ' + donut.width);
 
@@ -3564,7 +3571,8 @@ async function boot(opts) {
     check('bấm [+] là bàn phím số hiện ra ngay', visible('amount-sheet'));
     check('… ở chế độ ghi nhanh', window.eval('amtKind') === 'quick', String(window.eval('amtKind')));
     check('… có thanh ghi chú + hai chip', visible('qe-inputs') && !!$('qe-chip-wallet') && !!$('qe-chip-cat'));
-    check('… có công tắc Chi/Thu', visible('qe-type') && $('qe-type').children.length === 2);
+    check('… có công tắc Chi/Thu/Chuyển ví', visible('qe-type') && $('qe-type').children.length === 3
+      && !!d.querySelector('#qe-type .qe-t[data-val="transfer"]'));
     check('… phím hành động là "Lưu", không phải "Tiếp tục"', txt('amt-next') === 'Lưu', txt('amt-next'));
     check('… số tiền bắt đầu từ 0', window.eval('amtValue()') === 0);
     check('… và dùng lại đúng một bàn phím của app (không dựng bàn phím thứ hai)',
@@ -3617,6 +3625,24 @@ async function boot(opts) {
     check('… và dọn sạch số tiền cho lần sau',
       window.eval('amtValue()') === 0 && window.eval('txAmount') === 0 && $('qe-note').value === '');
 
+    /* Ghi nhanh CHUYỂN VÍ: ô thứ hai thành "ví đích", lưu ra một cặp transfer. */
+    window.openQuickEntry(); await sleep(20);
+    window.setQuickType('transfer'); await sleep(10);
+    check('chuyển ví: chip thứ hai là "ví đích" và ẩn "Thêm chi tiết"',
+      /Đến/.test($('qe-chip-cat').textContent) && $('qe-more').classList.contains('hidden'),
+      $('qe-chip-cat').textContent);
+    window.quickSetWallet(w1); await sleep(10);
+    window.quickSetTransferTo(w2); await sleep(10);
+    window.amtKey('2'); window.amtKey('0'); window.amtKey('000'); await sleep(10);   /* 20.000 */
+    $('amt-next').click(); await sleep(40);
+    const tout = S().transactions.filter(x => x.type === 'transfer_out').slice(-1)[0];
+    const tin = S().transactions.filter(x => x.type === 'transfer_in').slice(-1)[0];
+    check('ghi nhanh chuyển ví tạo cặp transfer_out + transfer_in chung transferId',
+      !!tout && !!tin && tout.transferId === tin.transferId
+      && tout.walletId === w1 && tin.walletId === w2 && tout.amount === 20000,
+      tout && tin ? (tout.walletId + '→' + tin.walletId + ' ' + tout.amount) : 'thiếu chân');
+    check('ghi nhanh chuyển ví: lưu xong đóng bàn phím', !visible('amount-sheet'));
+
     /* Chi/Thu: đổi loại thì danh mục phải sang bảng của loại đó */
     window.openQuickEntry(); await sleep(20);
     window.setQuickType('income'); await sleep(10);
@@ -3658,16 +3684,18 @@ async function boot(opts) {
       && zModal < zOf(/#toast-wrap\{[^}]*z-index:(\d+)/));
 
     window.openQuickEntry(); await sleep(20);
-    /* Thẻ ví ở đầu bàn phím phải là một nút, và phải nói ra điều đó bằng ▾ */
-    const wcard = $('amt-from').querySelector('.amt-from-card');
-    check('thẻ ví ở đầu bàn phím bấm được',
-      wcard.classList.contains('wallet-selector-header-card')
-      && /quickPickWallet\(\)/.test(wcard.getAttribute('onclick') || ''), wcard.className);
-    check('… có mũi tên ▾ để thấy là đổi được', !!wcard.querySelector('.wsel-caret'));
+    /* Ghi nhanh: ô chọn ví là CHIP (đã bỏ thẻ "Trừ vào ví" trùng lặp bên dưới
+       con số — dedup theo yêu cầu). Chip mang số dư ví và mũi tên ▾. */
+    const wchip = $('qe-chip-wallet');
+    check('chip ví ở ghi nhanh bấm được',
+      /quickPickWallet\(\)/.test(wchip.getAttribute('onclick') || ''), wchip.getAttribute('onclick'));
+    check('… có mũi tên ▾ để thấy là đổi được', !!wchip.querySelector('.qe-caret'));
+    check('… không còn thẻ "Trừ vào ví" trùng lặp bên dưới con số',
+      !$('amt-from').querySelector('.amt-from-card'));
 
     const other = S().wallets.find(w => w.id !== window.eval('txSelectedWalletId'));
-    wcard.click(); await sleep(20);
-    check('bấm thẻ ví thì mở danh sách ví', visible('modal-sheet')
+    wchip.click(); await sleep(20);
+    check('bấm chip ví thì mở danh sách ví', visible('modal-sheet')
       && $('sheet-body').querySelectorAll('.pick-item').length === S().wallets.length);
     $('sheet-body').querySelectorAll('.pick-item').forEach(el => {
       if (el.textContent.includes(other.name)) el.click();
@@ -3675,7 +3703,7 @@ async function boot(opts) {
     await sleep(20);
     check('chọn ví khác thì bàn phím cập nhật ngay',
       window.eval('txSelectedWalletId') === other.id
-      && $('amt-from').textContent.includes(other.name), window.eval('txSelectedWalletId'));
+      && $('qe-chip-wallet').textContent.includes(other.name), window.eval('txSelectedWalletId'));
     check('… và đóng sheet, bàn phím vẫn mở', !visible('modal-sheet') && visible('amount-sheet'));
     /* Đóng sheet mở TỪ bàn phím thì lịch sử phải biết bên dưới vẫn còn bàn
        phím, không thì cú Back kế tiếp đóng nhầm một lớp. */

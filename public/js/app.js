@@ -964,7 +964,7 @@ function applyTheme(){
   try{ localStorage.setItem(THEME_KEY, t); }catch(e){}
   const dark = t==='dark' || (t==='auto' && window.matchMedia('(prefers-color-scheme: dark)').matches);
   document.documentElement.setAttribute('data-theme', dark?'dark':'light');
-  document.getElementById('meta-theme-color').setAttribute('content', dark?'#08101C':'#00529C');
+  document.getElementById('meta-theme-color').setAttribute('content', dark?'#08101C':'#0A2540');
   const btn = document.getElementById('btn-theme');
   if(btn) btn.innerHTML = icon(dark ? 'sun' : 'moon');
   document.querySelectorAll('#theme-seg .seg').forEach((s,i)=>s.classList.toggle('active', ['light','dark','auto'][i]===t));
@@ -1195,14 +1195,25 @@ function setAuthMode(mode, el){
   authMode = mode;
   el.parentNode.querySelectorAll('.seg').forEach(s=>s.classList.remove('active'));
   el.classList.add('active');
-  document.getElementById('auth-submit').textContent = mode==='login' ? 'Đăng nhập' : 'Tạo tài khoản';
+  document.getElementById('auth-submit').textContent = mode==='login' ? 'ĐĂNG NHẬP AN TOÀN' : 'MỞ TÀI KHOẢN';
   document.getElementById('auth-forgot').classList.toggle('hidden', mode!=='login');
+  /* Đăng nhập nhanh chỉ có nghĩa ở tab Đăng nhập */
+  const bio = document.getElementById('auth-biometric');
+  if(bio) bio.classList.toggle('hidden', mode!=='login');
+  const or = document.querySelector('#view-login .auth-or');
+  if(or) or.classList.toggle('hidden', mode!=='login');
   /* Ghi vào #auth-hint chứ KHÔNG phải khối bảo mật dưới thẻ: khối đó có icon
      bên trong, gán textContent lên nó là xoá sạch cấu trúc. */
   document.getElementById('auth-hint').textContent = mode==='login'
-    ? 'Dữ liệu được đồng bộ qua Supabase và lưu bản sao trên máy này để dùng offline.'
+    ? 'Dữ liệu được bảo mật mã hóa & đồng bộ đa thiết bị tức thì'
     : 'Mật khẩu tối thiểu 6 ký tự. Tuỳ cấu hình dự án, Supabase có thể gửi email xác nhận trước khi đăng nhập được.';
   document.getElementById('auth-error').textContent = '';
+}
+/* Đăng nhập nhanh bằng sinh trắc học / PIN. Chưa có tích hợp WebAuthn thật —
+   PIN là lớp khoá của một PHIÊN đã đăng nhập, không thay cho đăng nhập lần đầu.
+   Nói thẳng điều đó thay vì giả vờ có nút bấm được. */
+function quickBiometricLogin(){
+  toast('Đăng nhập nhanh sẽ khả dụng sau khi bạn đăng nhập lần đầu và bật khoá PIN trong Cài đặt','err');
 }
 
 /* Con mắt trong ô mật khẩu. Đổi cả aria-label chứ không chỉ hình: với trình
@@ -1220,7 +1231,7 @@ function setAuthBusy(busy, label){
   authBusy = busy;
   const btn = document.getElementById('auth-submit');
   btn.disabled = busy;
-  btn.textContent = busy ? (label || 'Đang xử lý…') : (authMode==='login' ? 'Đăng nhập' : 'Tạo tài khoản');
+  btn.textContent = busy ? (label || 'Đang xử lý…') : (authMode==='login' ? 'ĐĂNG NHẬP AN TOÀN' : 'MỞ TÀI KHOẢN');
 }
 function authError(msg){
   document.getElementById('auth-error').textContent = msg;
@@ -1415,6 +1426,9 @@ function initUserSession(){
   document.getElementById('view-login').classList.add('hidden');
   document.getElementById('main-header').classList.remove('hidden');
   document.getElementById('user-display-name').textContent = displayName();
+  /* Avatar "Priority": chữ cái đầu của tên hiển thị */
+  const avatarEl = document.getElementById('header-avatar');
+  if(avatarEl){ const nm = (displayName()||'U').trim(); avatarEl.textContent = (nm[0]||'U'); }
   syncHeaderHeight();
   const h = new Date().getHours();
   /* no trailing emoji: the greeting shares one compact line with the name */
@@ -1765,7 +1779,8 @@ function navRestoreFilters(f){
 function navSyncFilterChips(){
   syncTxFilterChips();
   const mark = (sel, val)=>document.querySelectorAll(sel).forEach(c=>c.classList.toggle('active', c.dataset.val === val));
-  mark('#report-range-seg .chip', reportRangeKey);
+  const rSel = document.getElementById('report-range-select');
+  if(rSel) rSel.value = (reportRangeKey==='custom' ? 'custom' : reportRangeKey);
   mark('#upcoming-filter .chip', upcomingFilter);
   mark('#debt-seg .seg', debtFilter);
   mark('#budget-period-seg .seg', budgetPeriodView);
@@ -2371,8 +2386,8 @@ function resetSessionFilters(){
   document.getElementById('tx-advanced-filters').classList.add('hidden');
   document.querySelectorAll('#upcoming-filter .chip').forEach(c=>c.classList.toggle('active', c.dataset.val==='thismonth'));
   document.querySelectorAll('#debt-seg .seg').forEach((s,i)=>s.classList.toggle('active', i===0));
-  document.querySelectorAll('#report-range-seg .chip').forEach(c=>
-    c.classList.toggle('active', c.dataset.val==='thismonth'));
+  const rSel = document.getElementById('report-range-select');
+  if(rSel) rSel.value = 'thismonth';
   document.getElementById('report-custom-range').classList.add('hidden');
   document.getElementById('seg-donut-expense').classList.add('active');
   document.getElementById('seg-donut-income').classList.remove('active');
@@ -2535,25 +2550,66 @@ function renderTransactionsList(rebuild){
   document.getElementById('tx-wallet-bar').classList.toggle('on', txFilters.walletId!=='all');
   document.getElementById('tx-status-bar').classList.toggle('on', txFilters.status!=='all');
 
+  /* Đồng bộ ô chọn khoảng thời gian ở top bar + hiện/ẩn ô ngày tùy chọn */
+  const rSel = document.getElementById('tx-range-select');
+  if(rSel) rSel.value = txFilters.range;
+  document.getElementById('tx-custom-range').classList.toggle('hidden', txFilters.range!=='custom');
+
+  /* Badge "đang lọc": đếm các bộ lọc ẩn trong bottom sheet đang bật. Đây là
+     mitigation cho việc giấu Ví/Trạng thái/Danh mục/Sự kiện — người dùng vẫn
+     thấy danh sách đang bị thu hẹp và biết vào đâu để gỡ. */
+  const hiddenActive = ['walletId','status','catId','eventId'].filter(k=> txFilters[k] && txFilters[k]!=='all').length;
+  const badge = document.getElementById('tx-filter-badge');
+  if(badge){ badge.textContent = hiddenActive || ''; badge.classList.toggle('hidden', hiddenActive===0); }
+  const fBtn = document.getElementById('tx-filter-toggle');
+  if(fBtn) fBtn.classList.toggle('has-filters', hiddenActive>0);
+
+  /* Badge tổng tiền trên mỗi chip loại: tính theo phạm vi lọc hiện tại NHƯNG
+     bỏ qua chính bộ lọc "loại" (mỗi chip nói tổng của riêng nó). Tái dùng đúng
+     filteredTransactions() để không có nguồn số thứ hai. */
+  const savedType = txFilters.type;
+  txFilters.type = 'all';
+  const base = filteredTransactions();
+  txFilters.type = savedType;
+  let cExp=0, cInc=0, cTf=0;
+  base.forEach(t=>{
+    if(t.type==='income') cInc += txMain(t);
+    else if(t.type==='expense') cExp += txMain(t);
+    else if(t.type==='transfer_out') cTf += txMain(t);   /* chỉ đếm một chân để không nhân đôi */
+  });
+  const setChip = (id,val)=>{ const e=document.getElementById(id); if(e) e.textContent = val; };
+  setChip('tx-chip-amt-all', String(base.length));
+  setChip('tx-chip-amt-expense', shortMoney(cExp));
+  setChip('tx-chip-amt-income', shortMoney(cInc));
+  setChip('tx-chip-amt-transfer', shortMoney(cTf));
+
   const txs = filteredTransactions();
   let inc=0, exp=0;
   txs.forEach(t=>{ if(t.type==='income') inc+=txMain(t); else if(t.type==='expense') exp+=txMain(t); });
   document.getElementById('tx-summary').innerHTML = `
-    <div><div class="text-xs muted">Thu</div><div class="text-sm font-bold c-income tabular">${fmt(inc)}</div></div>
-    <div><div class="text-xs muted">Chi</div><div class="text-sm font-bold c-expense tabular">${fmt(exp)}</div></div>
-    <div><div class="text-xs muted">Còn lại</div><div class="text-sm font-bold tabular ${inc-exp>=0?'c-income':'c-expense'}">${fmt(inc-exp)}</div></div>
-    <div><div class="text-xs muted">Số GD</div><div class="text-sm font-bold tabular">${txs.length}</div></div>`;
+    <span class="tsp-item"><i class="tsp-dot in"></i>Thu <b class="c-income tabular">${fmt(inc)}</b></span>
+    <span class="tsp-sep"></span>
+    <span class="tsp-item"><i class="tsp-dot out"></i>Chi <b class="c-expense tabular">${fmt(exp)}</b></span>
+    <span class="tsp-sep"></span>
+    <span class="tsp-item">Còn <b class="tabular ${inc-exp>=0?'c-income':'c-expense'}">${fmt(inc-exp)}</b></span>
+    <span class="tsp-sep"></span>
+    <span class="tsp-item">${txs.length} GD</span>`;
 
   const container = document.getElementById('tx-list-container');
   if(!txs.length){ container.innerHTML = `<div class="empty-state"><div class="ic">${icon('search')}</div><div class="text-sm">Không tìm thấy giao dịch</div><div class="es-sub">Thử đổi bộ lọc hoặc từ khóa khác</div></div>`; return; }
 
+  /* Gom giao dịch cùng ngày vào MỘT grouped-transaction-card (bo 20px, hairline
+     giữa các dòng). Tiêu đề ngày + tổng ròng nằm trên thẻ. */
   const groups = {};
   txs.forEach(t=>{ (groups[t.date] = groups[t.date]||[]).push(t); });
   container.innerHTML = Object.keys(groups).map(date=>{
     let net = 0;
     groups[date].forEach(t=>{ if(t.type==='income') net += txMain(t); else if(t.type==='expense') net -= txMain(t); });
     const label = parseISO(date).toLocaleDateString('vi-VN',{weekday:'short', day:'2-digit', month:'2-digit', year:'numeric'});
-    return `<div class="day-header"><span class="dtitle">${label}</span><span class="dtotal ${net>=0?'c-income':'c-expense'}">${net>=0?'+':''}${fmt(net)}</span></div>` + renderTxRows(groups[date]);
+    return `<div class="tx-day-group">
+      <div class="tx-day-head"><span>${label}</span><span class="${net>=0?'c-income':'c-expense'}">${net>=0?'+':''}${fmt(net)}</span></div>
+      <div class="grouped-transaction-card tx-day-card">${renderTxRows(groups[date])}</div>
+    </div>`;
   }).join('');
 }
 
@@ -3011,6 +3067,9 @@ function renderAmountSheet(){
     target.innerHTML = to
       ? amtPartyHtml(to.icon, to.name, walletMeta(to).label + ' · ' + to.currency)
       : amtPartyHtml('🏦', 'Chưa chọn ví đích', '');
+  } else if(quick && currentTxType === 'transfer'){
+    hello.textContent = 'Ghi nhanh chuyển ví';
+    target.innerHTML = '';   /* nguồn/đích đã nằm ở hai chip bên dưới */
   } else {
     const type = currentTxType === 'income' ? 'income' : 'expense';
     const c = findCategory(type, txSelectedCatId);
@@ -3023,9 +3082,11 @@ function renderAmountSheet(){
       : amtPartyHtml('📦', 'Chưa chọn danh mục', '');
   }
 
-  /* ví nguồn + số dư khả dụng */
+  /* ví nguồn + số dư khả dụng.
+     Chế độ ghi nhanh ĐÃ có chip ví (kèm số dư) ở hàng chips, nên bỏ thẻ này đi
+     để không lặp ô chọn ví hai lần trên cùng màn hình. */
   const from = document.getElementById('amt-from');
-  if(w){
+  if(w && !quick){
     const card = isCreditCard(w);
     /* Chuyển ví thì ví nguồn do <select> trong form quyết, đổi ở đây sẽ lệch
        với form — nên chỉ hai chế độ kia mới bấm được. */
@@ -3074,6 +3135,8 @@ function renderAmountSheet(){
    lẫn ví nhảy theo lịch sử. Nhưng tay người dùng luôn thắng — chọn chip rồi
    thì phỏng đoán không được ghi đè nữa. */
 let qeWalletPicked = false, qeCatPicked = false;
+/* Ví đích cho chế độ ghi nhanh CHUYỂN VÍ (currentTxType === 'transfer'). */
+let qeTransferTo = null;
 
 function openQuickEntry(type){
   const ws = getUserWallets();
@@ -3086,6 +3149,11 @@ function openQuickEntry(type){
     const w = chatDefaultWallet(currentTxType);
     txSelectedWalletId = w ? w.id : ws[0].id;
   }
+  /* Ví đích mặc định: ví khác ví nguồn đầu tiên tìm được. */
+  if(!qeTransferTo || !getWallet(qeTransferTo) || qeTransferTo === txSelectedWalletId){
+    const other = ws.find(w=>w.id !== txSelectedWalletId);
+    qeTransferTo = other ? other.id : null;
+  }
   ensureQuickCategory();
   const note = document.getElementById('qe-note');
   if(note) note.value = '';
@@ -3095,6 +3163,7 @@ function openQuickEntry(type){
 /* Danh mục phải luôn thuộc ĐÚNG loại đang chọn: catId của khoản chi không tồn
    tại trong bảng danh mục thu, và một chip trống thì không lưu được. */
 function ensureQuickCategory(){
+  if(currentTxType === 'transfer') return;   /* chuyển ví không có danh mục */
   const type = currentTxType === 'income' ? 'income' : 'expense';
   const cats = getCats(type);
   if(!txSelectedCatId || !cats.some(c=>c.id === txSelectedCatId)){
@@ -3103,12 +3172,13 @@ function ensureQuickCategory(){
   }
 }
 function setQuickType(type){
-  currentTxType = type === 'income' ? 'income' : 'expense';
+  currentTxType = type === 'transfer' ? 'transfer' : (type === 'income' ? 'income' : 'expense');
   qeCatPicked = false;                 /* danh mục cũ thuộc loại kia */
   ensureQuickCategory();
-  /* Khớp lại theo loại mới: "lương" ra Lương khi là khoản thu, chứ không giữ
-     nguyên phỏng đoán của chiều tiền cũ. */
-  onQuickNote(document.getElementById('qe-note') ? document.getElementById('qe-note').value : '');
+  /* Khớp lại theo loại mới: "lương" ra Lương khi là khoản thu. Chuyển ví thì
+     không đoán danh mục — nó không có danh mục. */
+  if(currentTxType !== 'transfer')
+    onQuickNote(document.getElementById('qe-note') ? document.getElementById('qe-note').value : '');
   renderAmountSheet();
 }
 /* Gõ ghi chú → tự gán danh mục + ví từ lịch sử. KHÔNG debounce: cả hai phép
@@ -3123,14 +3193,28 @@ function onQuickNote(text){
   renderQuickChips();
 }
 function renderQuickChips(){
+  const transfer = currentTxType === 'transfer';
   const type = currentTxType === 'income' ? 'income' : 'expense';
   const w = getWallet(txSelectedWalletId);
-  const c = findCategory(type, txSelectedCatId);
   const wc = document.getElementById('qe-chip-wallet');
   const cc = document.getElementById('qe-chip-cat');
-  if(wc) wc.innerHTML = `<span class="truncate">${w ? esc(w.icon) + ' ' + esc(w.name) : 'Chọn ví'}</span><span class="qe-caret">▾</span>`;
-  if(cc) cc.innerHTML = `<span class="truncate">${c ? esc(c.icon) + ' ' + esc(c.name) : 'Chọn danh mục'}</span><span class="qe-caret">▾</span>`;
-  document.querySelectorAll('#qe-type .qe-t').forEach(b=>b.classList.toggle('active', b.dataset.val === type));
+  /* Số dư ví hiện luôn trong chip nguồn — bù cho việc đã bỏ thẻ "Trừ vào ví"
+     trùng lặp bên dưới con số. */
+  const wbal = w ? ' · ' + fmtW(getWalletBalance(w.id), w) : '';
+  if(wc) wc.innerHTML = `<span class="qe-chip-lead">${transfer?'Từ':''}</span><span class="truncate">${w ? esc(w.icon)+' '+esc(w.name)+wbal : 'Chọn ví'}</span><span class="qe-caret">▾</span>`;
+  if(cc){
+    if(transfer){
+      const to = getWallet(qeTransferTo);
+      cc.innerHTML = `<span class="qe-chip-lead">Đến</span><span class="truncate">${to ? esc(to.icon)+' '+esc(to.name) : 'Chọn ví đích'}</span><span class="qe-caret">▾</span>`;
+    } else {
+      const c = findCategory(type, txSelectedCatId);
+      cc.innerHTML = `<span class="truncate">${c ? esc(c.icon)+' '+esc(c.name) : 'Chọn danh mục'}</span><span class="qe-caret">▾</span>`;
+    }
+  }
+  /* Chuyển ví không có "Thêm chi tiết" (không danh mục/sự kiện) — ẩn link đó. */
+  const more = document.getElementById('qe-more');
+  if(more) more.classList.toggle('hidden', transfer);
+  document.querySelectorAll('#qe-type .qe-t').forEach(b=>b.classList.toggle('active', b.dataset.val === currentTxType));
 }
 function quickPickWallet(){
   uiSheet('Chọn ví',
@@ -3152,6 +3236,18 @@ function quickSetWallet(id){
   if(currentTab === 'add') renderAddForm();
 }
 function quickPickCategory(){
+  /* Ở chế độ chuyển ví, ô thứ hai chọn VÍ ĐÍCH chứ không phải danh mục. */
+  if(currentTxType === 'transfer'){
+    uiSheet('Chọn ví đích',
+      `<div class="pick-list">` + getUserWallets().filter(w=>w.id !== txSelectedWalletId).map(w=>
+        `<div class="pick-item" onclick="quickSetTransferTo('${w.id}')">
+           <span class="pi-ic">${esc(w.icon)}</span>
+           <span class="flex1">${esc(w.name)}<div class="text-xs muted">${fmtW(getWalletBalance(w.id), w)}</div></span>
+           ${w.id === qeTransferTo ? '<span class="c-primary">✓</span>' : ''}
+         </div>`).join('')
+      + `</div><button class="btn btn-ghost mt12" onclick="closeSheet()">Đóng</button>`);
+    return;
+  }
   const type = currentTxType === 'income' ? 'income' : 'expense';
   uiSheet(type === 'income' ? 'Danh mục thu nhập' : 'Danh mục chi tiêu',
     `<div class="pick-list">` + getCats(type).map(c=>
@@ -3161,6 +3257,11 @@ function quickPickCategory(){
          ${c.id === txSelectedCatId ? '<span class="c-primary">✓</span>' : ''}
        </div>`).join('')
     + `</div><button class="btn btn-ghost mt12" onclick="closeSheet()">Đóng</button>`);
+}
+function quickSetTransferTo(id){
+  qeTransferTo = id;
+  closeSheet();
+  if(amtKind) renderAmountSheet();
 }
 function quickSetCategory(id){
   const type = currentTxType === 'income' ? 'income' : 'expense';
@@ -3204,6 +3305,27 @@ function navCloseSilentlyAmountSheet(){
 function saveQuickTransaction(){
   const v = amtValue();
   if(v <= 0) return toast('Nhập số tiền lớn hơn 0','err');
+  /* Chuyển ví: trừ ví nguồn, cộng ví đích qua commitTransfer() — cùng đường ghi
+     với form chuyển ví, nên không đổi Tổng tài sản ròng. */
+  if(currentTxType === 'transfer'){
+    const fromW = getWallet(txSelectedWalletId), toW = getWallet(qeTransferTo);
+    if(!fromW) return toast('Chọn ví nguồn','err');
+    if(!toW) return toast('Chọn ví đích','err');
+    if(fromW.id === toW.id) return toast('Ví nguồn và ví đích phải khác nhau','err');
+    /* Khác tiền tệ thì auto quy đổi (form đầy đủ mới sửa được số nhận chính xác). */
+    const received = fromW.currency === toW.currency ? v
+      : toMain(v, fromW.currency) / rateOf(toW.currency) * rateOf(mainCurrency());
+    const noteEl0 = document.getElementById('qe-note');
+    const res = commitTransfer({fromId:fromW.id, toId:toW.id, amount:v, received, fee:0,
+      note: noteEl0 ? noteEl0.value.trim() : '', date: todayISO()});
+    if(!res) return toast('Ví không hợp lệ','err');
+    hapticOk();
+    toast('Đã chuyển tiền thành công','ok');
+    amtBuf = ''; if(noteEl0) noteEl0.value = '';
+    closeAmountSheet();
+    renderAll();
+    return;
+  }
   const w = getWallet(txSelectedWalletId);
   if(!w) return toast('Chọn ví trước khi lưu','err');
   if(!txSelectedCatId) return toast('Chọn danh mục trước khi lưu','err');
@@ -3237,6 +3359,63 @@ function hapticOk(){
 /* ============================================================
    WALLETS
    ============================================================ */
+/* ============================================================
+   VUỐT THẺ LỘ SỬA/XÓA (swipe-to-reveal) — dùng chung cho các màn con
+   ============================================================ */
+/* Bọc nội dung một thẻ vào khung vuốt: kéo trái lộ [Sửa][Xóa], chạm cả thẻ để
+   mở sửa/chi tiết. MỌI nút hành động bên trong thẻ (Trả nợ, ✓, công tắc) phải
+   tự event.stopPropagation() để cú chạm không lây sang hành động mở-sửa. */
+function swipeCard(foreClass, tap, edit, del, inner){
+  return `<div class="swipe-wrap">
+    <div class="swipe-actions">
+      <button class="swipe-edit" onclick="event.stopPropagation();${edit}"><span class="sa-ic">✎</span>Sửa</button>
+      <button class="swipe-del" onclick="event.stopPropagation();${del}"><span class="sa-ic">🗑</span>Xóa</button>
+    </div>
+    <div class="swipe-fore ${foreClass}" onclick="${tap}">${inner}</div>
+  </div>`;
+}
+let swWrap=null, swX0=0, swY0=0, swDX=0, swMoved=false, swHoriz=false;
+function closeAllSwipes(except){
+  document.querySelectorAll('.swipe-wrap.open').forEach(w=>{ if(w!==except) w.classList.remove('open'); });
+}
+function swSuppressClick(e){ e.stopPropagation(); e.preventDefault(); }
+const SWIPE_OPEN_PX = 132;   /* bề rộng hai nút Sửa+Xóa */
+function initSwipeCards(){
+  document.addEventListener('touchstart', e=>{
+    const fore = e.target.closest ? e.target.closest('.swipe-fore') : null;
+    if(!fore){ closeAllSwipes(); swWrap=null; return; }
+    swWrap = fore.parentNode; swX0 = e.touches[0].clientX; swY0 = e.touches[0].clientY;
+    swDX = 0; swMoved = false; swHoriz = false;
+    closeAllSwipes(swWrap);
+  }, {passive:true});
+  document.addEventListener('touchmove', e=>{
+    if(!swWrap) return;
+    const dx = e.touches[0].clientX - swX0, dy = e.touches[0].clientY - swY0;
+    if(!swHoriz && Math.abs(dx) <= Math.abs(dy)){ swWrap = null; return; }  /* cuộn dọc: nhả thẻ */
+    swHoriz = true;
+    const startX = swWrap.classList.contains('open') ? -SWIPE_OPEN_PX : 0;
+    swDX = Math.max(-SWIPE_OPEN_PX, Math.min(0, startX + dx));
+    if(Math.abs(dx) > 6) swMoved = true;
+    const fore = swWrap.querySelector('.swipe-fore');
+    fore.style.transition = 'none';
+    fore.style.transform = `translateX(${swDX}px)`;
+  }, {passive:true});
+  document.addEventListener('touchend', ()=>{
+    if(!swWrap) return;
+    const fore = swWrap.querySelector('.swipe-fore');
+    fore.style.transition = ''; fore.style.transform = '';
+    if(swHoriz){
+      swWrap.classList.toggle('open', swDX < -SWIPE_OPEN_PX/2);
+      /* vuốt thật sự thì nuốt cú click theo sau, không thì thẻ tự mở form sửa */
+      if(swMoved){
+        fore.addEventListener('click', swSuppressClick, {capture:true, once:true});
+        setTimeout(()=>fore.removeEventListener('click', swSuppressClick, true), 400);
+      }
+    }
+    swWrap = null;
+  });
+}
+
 function renderWalletsView(){
   const wallets = getUserWallets();
   const assets = wallets.filter(w=>!isCreditCard(w) && !w.excludeFromTotal).reduce((s,w)=>s+getWalletBalanceMain(w.id),0);
@@ -3304,7 +3483,9 @@ function openWalletMenu(walletId){
 }
 function renderCreditCard(w){
   const used = getCardUsedAmount(w), avail = getCardAvailableLimit(w), pct = getCardUsagePct(w);
-  return `<div class="cc-visual">
+  /* Sửa/Xóa chuyển sang cử chỉ vuốt; chạm cả thẻ để mở sửa. Trên bề mặt chỉ còn
+     hai hành động chính: Thanh toán thẻ và Báo cáo. */
+  const inner = `
     <div class="cc-top">
       <div><div class="cc-name">${w.icon} ${esc(w.name)}</div><div class="cc-tag">#${w.displayOrder||'?'} · Thẻ tín dụng · ${w.currency}</div></div>
       <div class="cc-badge">${icon('card')}</div>
@@ -3317,12 +3498,10 @@ function renderCreditCard(w){
     <div class="progress-track"><div class="progress-fill" style="width:${pct}%;background:${pct>=90?'#F43F5E':pct>=70?'#FBBF24':'#34D399'};"></div></div>
     <div class="cc-due">📅 Chốt sao kê ngày ${w.statementDate||'-'} · Hạn thanh toán ngày ${w.paymentDueDate||'-'} hàng tháng</div>
     <div class="cc-actions">
-      <button class="btn-cc-pay" onclick="openCardPaymentModal('${w.id}')">Thanh toán thẻ</button>
-      <button class="btn-cc-edit" onclick="openWalletReport('${w.id}')">Báo cáo</button>
-      <button class="btn-cc-edit" onclick="openWalletModal('${w.id}')">Sửa</button>
-      <button class="btn-cc-edit" onclick="deleteWallet('${w.id}')">Xóa</button>
-    </div>
-  </div>`;
+      <button class="btn-cc-pay" onclick="event.stopPropagation();openCardPaymentModal('${w.id}')">Thanh toán thẻ</button>
+      <button class="btn-cc-edit" onclick="event.stopPropagation();openWalletReport('${w.id}')">Báo cáo</button>
+    </div>`;
+  return swipeCard('cc-visual', `openWalletModal('${w.id}')`, `openWalletModal('${w.id}')`, `deleteWallet('${w.id}')`, inner);
 }
 function selectWalletType(type){
   mwSelectedType = type;
@@ -3516,7 +3695,7 @@ function budgetName(b){
   return c ? c.name : 'Danh mục đã xóa';
 }
 function budgetIcon(b){
-  if(b.categoryId==='__all__') return {icon:'🎯', color:'#00529C'};
+  if(b.categoryId==='__all__') return {icon:'🎯', color:'#0A2540'};
   const c = findCategory('expense', b.categoryId);
   return c ? {icon:c.icon, color:c.color} : {icon:'📦', color:'#94A3B8'};
 }
@@ -3692,7 +3871,9 @@ function renderDebtsView(){
     const settled = remain <= 0;
     const due = d.dueDate ? relDueLabel(d.dueDate) : null;
     const isBorrow = d.kind==='borrow';
-    return `<div class="card">
+    /* Sửa/Xóa chuyển sang cử chỉ vuốt; chạm cả thẻ để mở sửa. Chỉ còn nút hành
+       động chính "Trả nợ / Thu nợ" trên bề mặt. */
+    const inner = `
       <div class="row-c gap10 mb8">
         <div class="w-avatar" style="background:${isBorrow?'var(--expense-bg)':'var(--income-bg)'};">${icon(isBorrow?'download':'upload')}</div>
         <div class="flex1">
@@ -3710,16 +3891,12 @@ function renderDebtsView(){
       <div class="progress-track"><div class="progress-fill" style="width:${pct}%;background:${settled?'var(--income)':'var(--primary)'};"></div></div>
       <div class="between mt8">
         <span class="text-xs ${due&&due.overdue&&!settled?'c-expense font-bold':'muted'}">${d.dueDate?(settled?'Hạn '+fmtDate(d.dueDate):due.text):'Không có hạn'}</span>
-        <div class="row gap6">
-          ${settled?'':`<button class="btn btn-success btn-xs" onclick="openDebtPayModal('${d.id}')">${isBorrow?'Trả nợ':'Thu nợ'}</button>`}
-          <button class="btn btn-secondary btn-xs" onclick="openDebtModal('${d.id}')">Sửa</button>
-          <button class="btn btn-danger btn-xs" onclick="deleteDebt('${d.id}')">Xóa</button>
-        </div>
+        ${settled?'':`<button class="btn btn-success btn-xs" onclick="event.stopPropagation();openDebtPayModal('${d.id}')">${isBorrow?'Trả nợ':'Thu nợ'}</button>`}
       </div>
       ${(d.payments||[]).length?`<div class="divider"></div><div class="text-xs muted mb4">Lịch sử thanh toán</div>` +
         d.payments.map(p=>`<div class="between text-xs" style="padding:3px 0;"><span class="muted">${fmtDate(p.date)}</span><span class="font-sb tabular">${fmtCur(p.amount, debtCurrency(d))}</span></div>`).join('') : ''}
-      ${d.note?`<div class="text-xs muted mt8">📝 ${esc(d.note)}</div>`:''}
-    </div>`;
+      ${d.note?`<div class="text-xs muted mt8">📝 ${esc(d.note)}</div>`:''}`;
+    return swipeCard('card', `openDebtModal('${d.id}')`, `openDebtModal('${d.id}')`, `deleteDebt('${d.id}')`, inner);
   }).join('');
 }
 function setDebtKind(kind){
@@ -3983,7 +4160,10 @@ function renderRecurringView(){
     const every = (r.interval>1?`${r.interval} `:'') + FREQ_LABEL[r.frequency];
     const ended = recurEnded(r);
     const broken = !w;
-    return `<div class="list-row" ${ended?'style="opacity:.6;"':''}>
+    /* ✓ chỉ hiện khi ĐẾN HẠN hoặc QUÁ HẠN (dueDate <= hôm nay) — kỳ còn ở tương
+       lai thì chưa có gì để xác nhận. Sửa/Xóa chuyển sang cử chỉ vuốt. */
+    const showPay = !ended && r.dueDate <= todayISO();
+    const inner = `
       <div class="lr-ic" style="background:${cat.color}22;">${cat.icon}</div>
       <div class="lr-mid">
         <div class="lr-title">${esc(r.name)} <span class="${r.type==='income'?'c-income':'c-expense'}">${r.type==='income'?'+':'-'}${fmtW(r.amount,w)}</span>
@@ -3992,14 +4172,11 @@ function renderRecurringView(){
         <div class="lr-sub ${(due.overdue && !ended)?'up-overdue':''}">${ended?'Kết thúc '+fmtDate(r.endDate):due.text+' ('+fmtDate(r.dueDate)+')'+(r.endDate?' · đến '+fmtDate(r.endDate):'')}</div>
       </div>
       <div class="lr-actions" style="flex-direction:column;">
-        <label class="switch" title="Tự động"><input type="checkbox" ${r.autoProcess?'checked':''} ${ended||broken?'disabled':''} onchange="toggleRecurAuto('${r.id}',this.checked)"><span class="slider"></span></label>
-        <div class="row gap6">
-          ${ended?'':`<button class="btn-pay" title="${broken?'Ghi nhận và chọn ví khác':'Ghi nhận ngay'}" onclick="payRecurring('${r.id}')">✓</button>`}
-          <button class="icon-btn" style="width:30px;height:30px;font-size:.8rem;" onclick="openRecurringModal('${r.id}')">✎</button>
-          <button class="icon-btn" style="width:30px;height:30px;font-size:.8rem;" onclick="deleteRecurring('${r.id}')">🗑</button>
-        </div>
-      </div>
-    </div>`;
+        <label class="switch" title="Tự động" onclick="event.stopPropagation();"><input type="checkbox" ${r.autoProcess?'checked':''} ${ended||broken?'disabled':''} onchange="toggleRecurAuto('${r.id}',this.checked)"><span class="slider"></span></label>
+        ${showPay?`<button class="btn-pay" title="${broken?'Ghi nhận và chọn ví khác':'Ghi nhận ngay'}" onclick="event.stopPropagation();payRecurring('${r.id}')">✓</button>`:''}
+      </div>`;
+    return swipeCard('list-row'+(ended?' is-ended':''), `openRecurringModal('${r.id}')`,
+      `openRecurringModal('${r.id}')`, `deleteRecurring('${r.id}')`, inner);
   }).join('');
 }
 function setRecurType(type){
@@ -4201,10 +4378,10 @@ function viewAllUpcoming(){
   document.getElementById('tx-from').value = '';
   document.getElementById('tx-to').value = getUpcomingRange();
   jumpToTransactions({status:'pending', range:'custom'});
-  /* syncTxFilterChips() vừa gập hai khối lọc lại. Mở ra, không thì danh sách
-     ngắn đi mà chẳng có gì trên màn hình giải thích tại sao. */
+  /* Ô ngày tùy chọn nằm ngay dưới top bar (không còn trong sheet ẩn), hiện ra
+     để thấy phạm vi. Bộ lọc Trạng thái="Dự kiến" nằm trong sheet nhưng badge
+     trên nút 🎛️ đã báo có bộ lọc đang bật, nên không cần bật sheet đè lên list. */
   document.getElementById('tx-custom-range').classList.remove('hidden');
-  document.getElementById('tx-advanced-filters').classList.remove('hidden');
   renderTransactionsList(true);
 }
 function getUpcomingItems(rangeEnd){
@@ -4525,7 +4702,14 @@ function reportRange(){
       const to   = t || todayISO();
       /* tolerate the two dates being entered the wrong way round */
       const lo = from <= to ? from : to, hi = from <= to ? to : from;
-      return {start: lo, end: hi, label: `${fmtDate(lo)} – ${fmtDate(hi)}`};
+      /* Khoảng đúng bằng trọn một tháng (do mũi tên chuyển tháng đặt) → nhãn
+         "Tháng M/YYYY" đọc tự nhiên hơn dải ngày. */
+      const d1 = parseISO(lo), d2 = parseISO(hi);
+      const fullMonth = d1.getDate()===1 && d1.getFullYear()===d2.getFullYear()
+        && d1.getMonth()===d2.getMonth()
+        && d2.getDate()===new Date(d2.getFullYear(), d2.getMonth()+1, 0).getDate();
+      return {start: lo, end: hi,
+        label: fullMonth ? `Tháng ${d1.getMonth()+1}/${d1.getFullYear()}` : `${fmtDate(lo)} – ${fmtDate(hi)}`};
     }
     default:
       start = new Date(y, m, 1); end = new Date(y, m+1, 0);
@@ -4541,9 +4725,12 @@ function monthWindow(back){
   return {start:isoOf(start), end:isoOf(end),
           shortLabel:`${start.getMonth()+1}/${String(start.getFullYear()).slice(2)}`};
 }
+/* `el` giữ lại cho tương thích (các nơi cũ truyền chip vào); nay dropdown gọi
+   setReportRange(this.value) không kèm el. */
 function setReportRange(key, el){
   reportRangeKey = key;
-  if(el){ el.parentNode.querySelectorAll('.chip').forEach(c=>c.classList.remove('active')); el.classList.add('active'); }
+  const sel = document.getElementById('report-range-select');
+  if(sel) sel.value = (key==='custom' ? 'custom' : key);
   const custom = document.getElementById('report-custom-range');
   custom.classList.toggle('hidden', key!=='custom');
   if(key==='custom'){
@@ -4551,6 +4738,19 @@ function setReportRange(key, el){
     if(!f.value) f.value = isoOf(new Date(new Date().getFullYear(), new Date().getMonth(), 1));
     if(!t.value) t.value = todayISO();
   }
+  renderReportsView();
+}
+/* Mũi tên chuyển tháng: dịch kỳ đi một tháng bằng cách đặt khoảng = trọn tháng
+   đích (reportRange() tự nhận diện "trọn một tháng" và in nhãn "Tháng M/YYYY").
+   Ô ngày tùy chỉnh vẫn ẩn — nó chỉ hiện khi người dùng chọn "Tùy chỉnh" ở dropdown. */
+function stepReportMonth(dir){
+  const base = parseISO(reportRange().start);
+  const t = new Date(base.getFullYear(), base.getMonth()+dir, 1);
+  document.getElementById('rep-from').value = isoOf(new Date(t.getFullYear(), t.getMonth(), 1));
+  document.getElementById('rep-to').value   = isoOf(new Date(t.getFullYear(), t.getMonth()+1, 0));
+  reportRangeKey = 'custom';
+  const sel = document.getElementById('report-range-select'); if(sel) sel.value = 'custom';
+  document.getElementById('report-custom-range').classList.add('hidden');
   renderReportsView();
 }
 /* Wallets currently in scope for the report — one wallet, or every wallet that counts
@@ -4633,14 +4833,14 @@ function openWalletReport(walletId){
   reportWalletId = walletId;
   reportRangeKey = 'thismonth';
   switchTab('reports');
-  document.querySelectorAll('#report-range-seg .chip').forEach(c=>
-    c.classList.toggle('active', c.dataset.val==='thismonth'));
+  const rSel = document.getElementById('report-range-select');
+  if(rSel) rSel.value = 'thismonth';
   document.getElementById('report-custom-range').classList.add('hidden');
 }
 
 function renderReportsView(){
   if(reportWalletId!=='all' && !getWallet(reportWalletId)) reportWalletId = 'all';
-  document.getElementById('report-pending-chip').classList.toggle('active', reportIncludePending);
+  document.getElementById('report-pending-toggle').checked = reportIncludePending;
   /* one owner for the switcher's lit state, so it can never drift from donutMode */
   document.getElementById('seg-donut-expense').classList.toggle('active', donutMode==='expense');
   document.getElementById('seg-donut-income').classList.toggle('active', donutMode==='income');
@@ -4661,6 +4861,13 @@ function renderReportsView(){
   const netRow = document.getElementById('rep-net-card');
   netRow.classList.toggle('pos', net>=0);
   netRow.classList.toggle('neg', net<0);
+  /* Badge nổi bật cho dòng tiền ròng: dương → "Dòng tiền dương", âm → "Bội chi" */
+  const netBadge = document.getElementById('rep-net-badge');
+  if(netBadge){
+    netBadge.textContent = net>=0 ? 'Dòng tiền dương' : 'Bội chi';
+    netBadge.classList.toggle('pos', net>=0);
+    netBadge.classList.toggle('neg', net<0);
+  }
   /* Làm tròn trước khi so 0: số lẻ do quy đổi tiền tệ sẽ bật dòng này lên với
      một con số hiển thị ra đúng "0 đ" — trông như lỗi. */
   const tfRow = document.getElementById('rep-transfer-row');
@@ -4678,12 +4885,27 @@ function renderReportsView(){
     const c = findCategory(mode, cid) || {name:'Khác', color:'#94A3B8', icon:'📦'};
     return {label:c.name, value:val, color:c.color, icon:c.icon};
   });
+  donutHighlightIndex = -1;   /* dữ liệu mới thì bỏ mọi highlight cũ */
   safeDraw('cơ cấu danh mục', ()=>{
     drawDonut('chart-donut', data, total, mode==='expense'?'Tổng chi':'Tổng thu');
     bindDonutTip('chart-donut', 'tip-donut');
   });
-  document.getElementById('donut-legend').innerHTML = data.slice(0,8).map(d=>
-    `<div class="legend-item"><span class="legend-dot" style="background:${d.color};"></span>${esc(d.label)} ${total?Math.round(d.value/total*100):0}%</div>`).join('');
+  /* Legend danh mục: chấm màu + tên + % + số tiền + progress bar tỷ trọng.
+     Hover/tap một dòng → tô đậm lát tương ứng trên donut, làm mờ các lát kia. */
+  document.getElementById('donut-legend').innerHTML = data.length
+    ? data.slice(0,8).map((d,i)=>{
+        const pct = total ? Math.round(d.value/total*100) : 0;
+        return `<div class="legend-row" data-idx="${i}"
+            onmouseenter="setDonutHighlight(${i})" onmouseleave="setDonutHighlight(-1)"
+            onclick="toggleDonutHighlight(${i})">
+          <span class="legend-dot" style="background:${d.color};"></span>
+          <span class="legend-name">${esc(d.label)}</span>
+          <span class="legend-pct">${pct}%</span>
+          <span class="legend-amt tabular">${fmt(d.value)}</span>
+          <div class="legend-bar"><div class="legend-bar-fill" style="width:${pct}%;background:${d.color};"></div></div>
+        </div>`;
+      }).join('')
+    : '';
 
   /* category detail list */
   /* ranked list — bars are relative to the biggest category, not to the total,
@@ -4758,6 +4980,32 @@ function renderReportsView(){
       <span class="text-xs muted" style="width:32px;text-align:right;">${pct}%</span>
     </div>`;
   }).join('') : `<p class="text-sm muted text-center">Không có chi tiêu trong kỳ này</p>`;
+
+  /* Financial Insight: so sánh tổng chi THÁNG NÀY với THÁNG TRƯỚC (độc lập với
+     kỳ đang chọn) rồi đưa ra một câu nhận xét. Tính bằng chính getUserTransactions()
+     + txMain() như báo cáo, tôn trọng phạm vi ví đang lọc. */
+  const insEl = document.getElementById('rep-insight');
+  if(insEl){
+    const monthExp = back=>{
+      const wnd = monthWindow(back); let s = 0;
+      getUserTransactions().forEach(t=>{
+        if(t.type==='expense' && t.date>=wnd.start && t.date<=wnd.end && inReportScope(t)) s += txMain(t);
+      });
+      return s;
+    };
+    const eThis = monthExp(0), eLast = monthExp(1);
+    let msg, cls='';
+    if(eThis===0 && eLast===0){ msg = 'Chưa có chi tiêu nào trong hai tháng gần đây để phân tích.'; }
+    else if(eLast===0){ msg = `Tháng này bạn đã chi ${fmt(eThis)}. Chưa có dữ liệu tháng trước để so sánh xu hướng.`; }
+    else {
+      const diff = eThis - eLast, pct = Math.round(Math.abs(diff)/eLast*100);
+      if(diff>0){ cls='warn'; msg = `Tháng này bạn đang chi nhiều hơn tháng trước ${pct}% (${fmt(eThis)} so với ${fmt(eLast)}). Cân nhắc siết lại các khoản chưa cần thiết.`; }
+      else if(diff<0){ cls='good'; msg = `Làm tốt lắm! Tháng này bạn chi ít hơn tháng trước ${pct}% (${fmt(eThis)} so với ${fmt(eLast)}).`; }
+      else { msg = `Chi tiêu tháng này ngang bằng tháng trước (${fmt(eThis)}).`; }
+    }
+    insEl.className = 'insight-card' + (cls ? ' '+cls : '');
+    insEl.innerHTML = `<span class="insight-ic">💡</span><div class="insight-text">${esc(msg)}</div>`;
+  }
 }
 /* Land on the Giao dịch tab with exactly one filter applied. Everything else —
    chips, search box, the other selects — is reset, so the list can never
@@ -4774,15 +5022,15 @@ function syncTxFilterChips(){
   const s = document.getElementById('tx-search');
   if(s) s.value = '';
   document.querySelectorAll('#tx-filter-type .chip').forEach(c=>c.classList.toggle('active', c.dataset.val===txFilters.type));
-  document.querySelectorAll('#tx-filter-range .chip').forEach(c=>c.classList.toggle('active', c.dataset.val===txFilters.range));
-  document.getElementById('tx-custom-range').classList.add('hidden');
+  const rSel = document.getElementById('tx-range-select');
+  if(rSel) rSel.value = txFilters.range;
+  document.getElementById('tx-custom-range').classList.toggle('hidden', txFilters.range!=='custom');
 }
 function jumpToWallet(walletId){ jumpToTransactions({walletId}); }
 function jumpToCategory(catId, patch){
   jumpToTransactions(Object.assign({catId}, patch||{}));
-  /* the category select still lives in the collapsed panel — open it so the
-     active filter is visible */
-  document.getElementById('tx-advanced-filters').classList.remove('hidden');
+  /* Bộ lọc danh mục nằm trong bottom sheet ẩn, nhưng badge trên nút 🎛️ đã báo
+     "đang lọc" nên không cần bật sheet đè lên danh sách khi vừa điều hướng tới. */
 }
 /* The dashboard block is explicitly "chi tiêu tháng này", counted from settled
    expenses only. Carrying that scope across means the Chi figure on the
@@ -4853,10 +5101,37 @@ function setupCanvas(id){
    move never has to recompute — or redraw — anything. */
 let chartHit = {donut:null, bars:null};
 
+/* Highlight liên kết Legend ↔ Canvas: lát đang chọn vẽ đậm, các lát kia mờ.
+   lastDonutArgs giữ tham số lần vẽ gần nhất để vẽ lại nhanh khi hover, không
+   phải chạy lại cả renderReportsView. */
+let donutHighlightIndex = -1, lastDonutArgs = null;
+function setDonutHighlight(idx){
+  donutHighlightIndex = Number(idx);
+  redrawDonutHighlight();
+}
+function toggleDonutHighlight(idx){
+  idx = Number(idx);
+  donutHighlightIndex = (donutHighlightIndex === idx) ? -1 : idx;
+  redrawDonutHighlight();
+}
+function redrawDonutHighlight(){
+  if(lastDonutArgs) safeDraw('donut highlight', ()=>{
+    drawDonut(lastDonutArgs.id, lastDonutArgs.data, lastDonutArgs.total, lastDonutArgs.centerLabel);
+    bindDonutTip(lastDonutArgs.id, 'tip-donut');
+  });
+  document.querySelectorAll('#donut-legend .legend-row').forEach(el=>{
+    const i = Number(el.dataset.idx);
+    el.classList.toggle('is-active', donutHighlightIndex >= 0 && i === donutHighlightIndex);
+    el.classList.toggle('is-dim', donutHighlightIndex >= 0 && i !== donutHighlightIndex);
+  });
+}
 function drawDonut(id, data, total, centerLabel){
   const c = setupCanvas(id); if(!c) return;
   const {ctx,w,h} = c;
-  const cx = w/2, cy = h/2, rOuter = Math.min(w,h)/2 - 8, rInner = rOuter*0.62;
+  lastDonutArgs = {id, data, total, centerLabel};
+  /* rOuter giữ nguyên (chart-test khoá = w/2 - 8). rInner tăng lên 0.72 cho
+     vòng MỎNG hơn theo phong cách fintech hiện đại. */
+  const cx = w/2, cy = h/2, rOuter = Math.min(w,h)/2 - 8, rInner = rOuter*0.72;
   const cardBg = cssVar('--card') || '#fff';
   if(!total || !data.length){
     /* Drop the previous chart's geometry. Leaving it meant switching to a mode
@@ -4870,10 +5145,16 @@ function drawDonut(id, data, total, centerLabel){
     ctx.fillText('Không có dữ liệu', cx, cy+5);
     return;
   }
+  /* Đổ bóng nhẹ dưới cả vòng donut cho cảm giác nổi khối */
+  ctx.save();
+  ctx.shadowColor = 'rgba(10,37,64,0.16)';
+  ctx.shadowBlur = 12; ctx.shadowOffsetY = 4;
   let start = -Math.PI/2;
   const slices = [];
-  data.forEach(d=>{
+  data.forEach((d,i)=>{
     const angle = (d.value/total)*2*Math.PI;
+    /* Có highlight thì lát được chọn giữ nguyên độ đậm, các lát khác mờ đi. */
+    ctx.globalAlpha = (donutHighlightIndex < 0 || donutHighlightIndex === i) ? 1 : 0.28;
     /* a soft gradient per slice reads less flat than one solid fill */
     const g = ctx.createLinearGradient(cx-rOuter, cy-rOuter, cx+rOuter, cy+rOuter);
     g.addColorStop(0, d.color);
@@ -4886,10 +5167,14 @@ function drawDonut(id, data, total, centerLabel){
                  pct: Math.round(d.value/total*100), color:d.color, icon:d.icon});
     start += angle;
   });
+  ctx.globalAlpha = 1;
+  ctx.restore();   /* tắt bóng trước khi khoét lỗ + vẽ chữ ở tâm */
   ctx.beginPath(); ctx.arc(cx,cy,rInner,0,2*Math.PI); ctx.fillStyle = cardBg; ctx.fill();
 
   chartHit.donut = {cx, cy, rOuter, rInner, slices, total, centerLabel};
-  paintDonutCentre(ctx, chartHit.donut, null);
+  /* Tâm hiện lát đang highlight (nếu có), không thì hiện tổng. */
+  const hlSlice = donutHighlightIndex >= 0 && slices[donutHighlightIndex] ? slices[donutHighlightIndex] : null;
+  paintDonutCentre(ctx, chartHit.donut, hlSlice);
 }
 
 /* The hole doubles as the readout: the total by default, the touched slice's
@@ -5044,7 +5329,7 @@ function drawBars(id, series){
     ctx.fillText(shortMoney(maxVal*i/3), padL-5, y+3);
   }
   /* brand blue for money in, brand red for money out */
-  const cIn = cssVar('--primary') || '#00529C', cOut = cssVar('--brand-red') || '#ED1C24';
+  const cIn = cssVar('--primary') || '#0A2540', cOut = cssVar('--brand-red') || '#E30613';
   const groupW = chartW/series.length;
   const STUB = 3;   /* a month with no money still gets a mark on the baseline */
   const faint = cssVar('--border') || '#E5E9F0';   /* same fallback habit as cIn/cOut */
@@ -5086,7 +5371,7 @@ function drawLine(id, points){
     ctx.beginPath(); ctx.moveTo(padL,yy); ctx.lineTo(w-padR,yy); ctx.stroke();
     ctx.fillText(shortMoney(minV + span*i/3), padL-5, yy+3);
   }
-  const primary = cssVar('--primary') || '#00529C';
+  const primary = cssVar('--primary') || '#0A2540';
   const grad = ctx.createLinearGradient(0,padT,0,padT+chartH);
   grad.addColorStop(0, primary+'55'); grad.addColorStop(1, primary+'00');
   ctx.beginPath();
@@ -6183,7 +6468,7 @@ function chatNavigate(filter){
     if(to) to.value = todayISO();
   }
   switchTab('reports');
-  setReportRange(p.report, document.querySelector(`#report-range-seg .chip[data-val="${p.report}"]`));
+  setReportRange(p.report);
 }
 
 /* Thẻ kết quả truy vấn: con số + các dòng chi tiết + một hyperlink sang đúng
@@ -7996,6 +8281,7 @@ document.getElementById('mc-sub-name').addEventListener('keydown', e=>{ if(e.key
 /* Wrap every static input.money with its 000 shortcut. Dynamically rendered
    fields call attachMoneyButtons(container) themselves. */
 attachMoneyButtons();
+initSwipeCards();              /* vuốt thẻ lộ Sửa/Xóa ở các màn con */
 initNavigationHistory();       /* mốc gốc của history, trước cả màn đăng nhập */
 renderChatChrome();            /* icon SVG cho nút nổi, avatar và nút 📎 */
 renderVersionLine('login-version');

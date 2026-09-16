@@ -2,25 +2,29 @@
    SoFin — Design tokens
    ============================================================ */
 :root{
-  /* VietinBank iPay palette */
-  --primary:#00529C; --primary-dark:#003B70; --primary-light:#DCEBFA; --primary-soft:#EFF6FD;
-  --brand-red:#ED1C24; --brand-red-soft:#FEE9EA;
+  /* Techcombank Priority palette — Navy #0A2540 + Gold accent, Red #E30613 */
+  --primary:#0A2540; --primary-dark:#06192E; --primary-light:#E3E9F1; --primary-soft:#F1F4F8;
+  --brand-red:#E30613; --brand-red-soft:#FDE7E8;
+  /* Gold — chỉ dùng cho viền avatar và điểm nhấn "Priority" trên thẻ số dư.
+     Là một điểm nhấn kim loại, không phải màu thương hiệu chính. */
+  --gold:#C9A24B; --gold-soft:#EAD9A6; --gold-line:rgba(201,162,75,.55);
+  /* Đường kẻ hairline giữa các dòng trong grouped card */
+  --hairline:#F1F5F9;
   --on-primary:#FFFFFF;
-  --gradient:linear-gradient(135deg,#003B70 0%,#00529C 50%,#0073E6 100%);   /* header */
-  --gradient-card:linear-gradient(110deg,#00529C 0%,#1A75D2 100%);          /* balance & wallet cards */
-  --gradient-fab:linear-gradient(135deg,#00529C 0%,#0073E6 55%,#ED1C24 160%);
-  --primary-glow:rgba(0,82,156,.38);
+  --gradient:linear-gradient(135deg,#06192E 0%,#0A2540 55%,#123A5E 100%);   /* header */
+  --gradient-card:linear-gradient(135deg,#0A2540 0%,#123A5E 55%,#1B4C78 100%); /* balance & wallet cards */
+  --gradient-fab:linear-gradient(135deg,#0A2540 0%,#123A5E 55%,#E30613 165%);
+  --primary-glow:rgba(10,37,64,.34);
   --income:#10B981; --income-bg:#E4F8F1;
-  --expense:#ED1C24; --expense-bg:#FEE9EA;
-  /* the brand owns this blue too — transfers read as "bank blue", which is
-     exactly how iPay presents them */
-  --transfer:#00529C; --transfer-bg:#E4EFFA;
+  --expense:#EF4444; --expense-bg:#FDECEC;
+  /* the brand owns navy too — transfers read as "priority navy" */
+  --transfer:#0A2540; --transfer-bg:#E9EDF3;
   --warn:#F59E0B; --warn-bg:#FEF3C7;
-  --bg:#F4F7FA; --bg-soft:#FAFCFE; --card:#FFFFFF; --card-2:#F6F9FC;
-  --text:#0E1C2B; --muted:#65788F; --border:#E5E9F0;
-  --shadow:0 2px 8px rgba(0,82,156,.07);
-  --shadow-lift:0 8px 24px rgba(0,82,156,.12);
-  --radius:18px; --radius-sm:12px; --radius-xs:10px;
+  --bg:#F8F9FA; --bg-soft:#FFFFFF; --card:#FFFFFF; --card-2:#F5F7FA;
+  --text:#0E1C2B; --muted:#65788F; --border:#E8ECF2;
+  --shadow:0 2px 8px rgba(10,37,64,.07);
+  --shadow-lift:0 8px 24px rgba(10,37,64,.12);
+  --radius:18px; --radius-sm:12px; --radius-xs:10px; --radius-xl:24px;
   --safe-b:env(safe-area-inset-bottom,0px);
   --nav-h:64px;
   /* Màn nhập số tiền mượn bảng màu bàn phím của Techcombank — cố ý KHÔNG dùng
@@ -33,16 +37,18 @@
   --tcb-quick-bg:#E2E8F0; --tcb-quick-line:#CBD5E1;
 }
 html[data-theme="dark"]{
-  --primary:#4A9EE8; --primary-dark:#7FBDF2; --primary-light:#12325A; --primary-soft:#0C2340;
+  --primary:#5E8CBF; --primary-dark:#8FB3D6; --primary-light:#12304A; --primary-soft:#0C2033;
   --brand-red:#FF5A61; --brand-red-soft:#3A1417;
+  --gold:#D4B15E; --gold-soft:#5A4A20; --gold-line:rgba(212,177,94,.5);
+  --hairline:#1B2A3D;
   --on-primary:#04182C;
-  --gradient:linear-gradient(135deg,#00284F 0%,#013A6E 50%,#005AA8 100%);
-  --gradient-card:linear-gradient(110deg,#013A6E 0%,#1160A8 100%);
-  --gradient-fab:linear-gradient(135deg,#0B5FA8 0%,#1E86DE 55%,#D8323A 160%);
-  --primary-glow:rgba(74,158,232,.38);
+  --gradient:linear-gradient(135deg,#04101E 0%,#0A2540 55%,#123A5E 100%);
+  --gradient-card:linear-gradient(135deg,#0A2540 0%,#123A5E 55%,#1B4C78 100%);
+  --gradient-fab:linear-gradient(135deg,#0A2540 0%,#123A5E 55%,#D8323A 165%);
+  --primary-glow:rgba(94,140,191,.38);
   --income:#3DD98B; --income-bg:#0C2B1E;
-  --expense:#FF5A61; --expense-bg:#3A1417;
-  --transfer:#4A9EE8; --transfer-bg:#0C2A47;
+  --expense:#FF6B6B; --expense-bg:#3A1417;
+  --transfer:#5E8CBF; --transfer-bg:#0C2A47;
   --warn:#FBBF24; --warn-bg:#3B2C08;
   --bg:#08101C; --bg-soft:#0D1826; --card:#132132; --card-2:#18293D;
   --text:#E7EEF6; --muted:#8FA3BA; --border:#22364F;
@@ -110,6 +116,13 @@ header{position:fixed;top:0;left:50%;transform:translateX(-50%);
   transition:padding-bottom .2s ease;}
 header::after{content:'';position:absolute;right:-30px;top:-60px;width:180px;height:180px;
   border-radius:50%;background:rgba(255,255,255,.07);pointer-events:none;}
+/* Avatar tròn viền gold ("Priority"): chữ cái đầu của tên hiển thị. Nằm ngoài
+   cùng bên trái app bar, đứng trước lời chào. */
+header .hd-avatar{flex:0 0 auto;width:36px;height:36px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;font-weight:800;font-size:.92rem;
+  color:#fff;background:linear-gradient(135deg,#123A5E,#0A2540);
+  border:2px solid var(--gold);box-shadow:0 0 0 1px rgba(201,162,75,.35),0 2px 6px rgba(0,0,0,.25);
+  text-transform:uppercase;user-select:none;}
 /* Greeting and name share the line; the name gives up space first. */
 header .hd-who{display:flex;align-items:baseline;gap:6px;min-width:0;flex:1;}
 header .greet{font-size:.74rem;color:rgba(255,255,255,.80);white-space:nowrap;flex:0 0 auto;}
@@ -182,19 +195,31 @@ select.input{appearance:none;background-image:linear-gradient(45deg,transparent 
 /* The dashboard card: white, lifted, riding on top of the blue app bar. */
 /* Sits below the bar like every other screen's title — no negative margin,
    no overlap to compensate for. */
-.hero{background:var(--card);border:1px solid var(--border);border-radius:16px;
-  padding:16px;margin-top:0;margin-bottom:14px;position:relative;box-shadow:var(--shadow-lift);}
-.hero .lbl{font-size:.72rem;color:var(--muted);font-weight:700;}
+/* Main Asset Card — glassmorphism metallic Gold/Navy "Priority".
+   padding:16px;margin-top:0 giữ nguyên (smoke khoá: thẻ nằm dưới header, không
+   margin âm). Nền kim loại navy + một vệt gold chéo mờ và hairline gold ở mép
+   trên; chữ trắng vì nền đã tối. box-shadow theo chuẩn thiết kế Priority. */
+.hero{background:var(--gradient-card);border:1px solid var(--gold-line);border-radius:24px;
+  padding:16px;margin-top:0;margin-bottom:14px;position:relative;overflow:hidden;
+  box-shadow:0 10px 30px rgba(0,0,0,.05);color:#fff;-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);}
+/* Vệt kim loại gold quét chéo + đốm sáng góc, tạo cảm giác thẻ ánh kim */
+.hero::before{content:'';position:absolute;inset:0;pointer-events:none;
+  background:linear-gradient(120deg,transparent 0%,rgba(201,162,75,.16) 42%,rgba(255,255,255,.10) 50%,transparent 66%);}
+.hero::after{content:'';position:absolute;top:0;left:0;right:0;height:2px;pointer-events:none;
+  background:linear-gradient(90deg,transparent,var(--gold),transparent);opacity:.85;}
+.hero > *{position:relative;z-index:1;}
+.hero .lbl{font-size:.72rem;color:rgba(255,255,255,.78);font-weight:700;letter-spacing:.2px;}
 .hero .amt-row{display:flex;align-items:center;gap:10px;margin:4px 0 12px;}
-.hero .amt{font-size:2rem;font-weight:800;letter-spacing:-1px;color:var(--text);
+.hero .amt{font-size:2rem;font-weight:800;letter-spacing:-1px;color:#fff;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .hero .hrow{display:flex;gap:10px;}
-.hero .stat{flex:1;background:var(--card-2);border:1px solid var(--border);border-radius:13px;padding:10px 12px;}
-.hero .stat .stitle{font-size:.66rem;color:var(--muted);font-weight:700;display:flex;align-items:center;gap:5px;}
+.hero .stat{flex:1;background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.16);border-radius:14px;padding:10px 12px;
+  -webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px);}
+.hero .stat .stitle{font-size:.66rem;color:rgba(255,255,255,.72);font-weight:700;display:flex;align-items:center;gap:5px;}
 .hero .stat .stitle .ic-svg{width:14px;height:14px;}
-.hero .stat.in .stitle{color:var(--income);}
-.hero .stat.out .stitle{color:var(--expense);}
-.hero .stat .sval{font-size:1.08rem;font-weight:800;margin-top:3px;letter-spacing:-.3px;}
+.hero .stat.in .stitle{color:#6EE7B7;}
+.hero .stat.out .stitle{color:#FCA5A5;}
+.hero .stat .sval{font-size:1.08rem;font-weight:800;margin-top:3px;letter-spacing:-.3px;color:#fff;}
 .eye-btn{background:var(--primary-soft);border:none;color:var(--primary);border-radius:50%;
   width:30px;height:30px;flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;
   cursor:pointer;padding:0;overflow:hidden;transition:.15s;}
@@ -1120,6 +1145,165 @@ html[data-theme="dark"] .chat-drawer{box-shadow:0 -4px 20px rgba(0,0,0,.55);}
 .recent-tx-card .tx-row{margin-bottom:6px;box-shadow:none;}
 .recent-tx-card .tx-row:last-child{margin-bottom:0;}
 .recent-tx-card .empty-state{padding:20px 12px;}
+
+/* ---------- GROUPED TRANSACTION CARD ----------
+   Gom nhiều giao dịch vào MỘT thẻ trắng bo 20px, các dòng phẳng và phân cách
+   bằng hairline #F1F5F9 (var(--hairline)) thay vì mỗi dòng một thẻ riêng.
+   Dùng cho "Giao dịch gần đây" (Tổng quan) và danh sách tab Giao dịch. */
+.grouped-transaction-card{padding:2px 14px;border-radius:20px;background:var(--card);
+  border:1px solid var(--border);box-shadow:0 6px 18px rgba(10,37,64,.05);}
+.grouped-transaction-card .tx-row{margin:0;border:0;border-radius:0;box-shadow:none;
+  background:transparent;padding-left:0;padding-right:0;
+  border-bottom:1px solid var(--hairline);}
+.grouped-transaction-card .tx-row:last-child{border-bottom:0;}
+.grouped-transaction-card .empty-state{padding:20px 12px;}
+/* Tiêu đề ngày trong nhóm theo ngày (tab Giao dịch) */
+.tx-day-head{display:flex;align-items:center;justify-content:space-between;
+  padding:10px 2px 6px;font-size:.72rem;font-weight:800;color:var(--muted);letter-spacing:.2px;}
+.tx-day-card{margin-bottom:12px;}
+/* Icon danh mục dạng tròn pastel (Circle Icon) trong mọi hàng giao dịch */
+.tx-row .tx-ic{border-radius:50%;}
+
+/* ---------- TAB GIAO DỊCH: top bar + bộ lọc ---------- */
+.tx-topbar{display:flex;align-items:center;gap:8px;margin-bottom:10px;}
+.tx-topbar .search-bar{flex:1;margin-bottom:0;}
+.tx-range-select{flex:0 0 auto;max-width:120px;border:1px solid var(--border);border-radius:14px;
+  background:var(--card);color:var(--text);font-size:.78rem;font-weight:600;padding:9px 8px;cursor:pointer;}
+.tx-filter-btn{position:relative;flex:0 0 auto;width:42px;height:42px;border-radius:14px;
+  border:1px solid var(--border);background:var(--card);color:var(--muted);
+  display:flex;align-items:center;justify-content:center;cursor:pointer;transition:.15s;}
+.tx-filter-btn .ic-svg{width:20px;height:20px;}
+.tx-filter-btn:active{transform:scale(.94);}
+.tx-filter-btn.has-filters{background:var(--primary);border-color:var(--primary);color:var(--on-primary);}
+.filter-badge{position:absolute;top:-5px;right:-5px;min-width:16px;height:16px;padding:0 4px;border-radius:9px;
+  background:var(--brand-red);color:#fff;font-size:.6rem;font-weight:800;
+  display:flex;align-items:center;justify-content:center;line-height:1;}
+
+/* Filter chips + badge tổng tiền */
+.tx-type-chips .chip{display:inline-flex;align-items:center;gap:6px;}
+.chip-amt{font-size:.62rem;font-weight:800;opacity:.72;}
+.chip-amt:empty{display:none;}
+.tx-type-chips .chip.active .chip-amt{opacity:.92;}
+
+/* Tóm tắt pill siêu mỏng */
+.tx-summary-pill{display:flex;align-items:center;justify-content:space-between;gap:6px;
+  flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;
+  background:var(--card);border:1px solid var(--border);border-radius:999px;
+  padding:8px 14px;margin-bottom:12px;font-size:.72rem;color:var(--muted);font-weight:600;box-shadow:var(--shadow);}
+.tx-summary-pill::-webkit-scrollbar{display:none;}
+.tx-summary-pill .tsp-item{display:inline-flex;align-items:center;gap:5px;white-space:nowrap;}
+.tx-summary-pill b{color:var(--text);font-weight:800;}
+.tx-summary-pill .tsp-sep{width:1px;height:14px;background:var(--border);flex:0 0 auto;}
+.tsp-dot{width:7px;height:7px;border-radius:50%;flex:0 0 auto;}
+.tsp-dot.in{background:var(--income);} .tsp-dot.out{background:var(--expense);}
+
+/* Bottom sheet bộ lọc — trượt từ dưới lên */
+.tx-filter-sheet{position:fixed;inset:0;z-index:110;display:flex;align-items:flex-end;justify-content:center;}
+.tx-filter-sheet.hidden{display:none;}
+.tx-sheet-scrim{position:absolute;inset:0;background:rgba(10,37,64,.38);-webkit-backdrop-filter:blur(1px);backdrop-filter:blur(1px);}
+.tx-sheet-panel{position:relative;width:100%;max-width:520px;background:var(--card);
+  border-radius:24px 24px 0 0;padding:8px 16px calc(18px + var(--safe-b));
+  box-shadow:0 -8px 30px rgba(10,37,64,.18);animation:sheetUp .22s ease;max-height:82vh;overflow-y:auto;}
+@keyframes sheetUp{from{transform:translateY(100%);}to{transform:translateY(0);}}
+@media (prefers-reduced-motion:reduce){.tx-sheet-panel{animation:none;}}
+.tx-sheet-grip{width:40px;height:4px;border-radius:2px;background:var(--border);margin:6px auto 10px;}
+.tx-sheet-title{font-weight:800;font-size:1rem;margin-bottom:12px;color:var(--text);}
+.tx-sheet-actions{display:flex;gap:10px;margin-top:6px;}
+.tx-sheet-actions .btn{flex:1;}
+
+/* ---------- TAB BÁO CÁO ---------- */
+.report-filter-bar{display:flex;align-items:center;gap:8px;margin-bottom:6px;}
+.rfb-arrow{flex:0 0 auto;width:38px;height:38px;border-radius:12px;border:1px solid var(--border);
+  background:var(--card);color:var(--primary);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:.15s;}
+.rfb-arrow .ic-svg{width:18px;height:18px;}
+.rfb-arrow:active{transform:scale(.92);background:var(--primary-light);}
+.rfb-range{flex:1;min-width:0;border:1px solid var(--border);border-radius:12px;background:var(--card);
+  color:var(--text);font-size:.82rem;font-weight:700;padding:9px 10px;text-align:center;text-align-last:center;cursor:pointer;}
+.rfb-toggle{flex:0 0 auto;display:inline-flex;align-items:center;gap:6px;position:relative;cursor:pointer;font-size:.68rem;font-weight:700;color:var(--muted);}
+.rfb-toggle input{position:absolute;opacity:0;width:0;height:0;}
+.switch-mini{width:34px;height:20px;border-radius:11px;background:var(--border);position:relative;transition:.18s;flex:0 0 auto;}
+.switch-mini::after{content:'';position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#fff;transition:.18s;box-shadow:0 1px 3px rgba(0,0,0,.25);}
+.rfb-toggle input:checked + .switch-mini{background:var(--income);}
+.rfb-toggle input:checked + .switch-mini::after{transform:translateX(14px);}
+.rfb-toggle-lbl{white-space:nowrap;}
+.report-period-label{text-align:center;font-size:.72rem;font-weight:800;color:var(--primary);margin-bottom:10px;letter-spacing:.2px;}
+
+/* Cashflow card + net badge */
+.cashflow-card{border-radius:20px;background:var(--card);box-shadow:0 6px 20px rgba(10,37,64,.06);}
+.net-badge{margin-left:8px;font-size:.58rem;font-weight:800;padding:2px 8px;border-radius:8px;vertical-align:middle;white-space:nowrap;}
+.net-badge.pos{background:var(--income-bg);color:var(--income);}
+.net-badge.neg{background:var(--expense-bg);color:var(--expense);}
+
+/* Donut legend: mỗi item là một khối bo góc có khoảng thở + hover, hai hàng —
+   hàng 1 [chấm][tên] … [%][số tiền], hàng 2 progress bar mỏng. */
+#donut-legend{display:flex;flex-direction:column;gap:0;margin-top:6px;}
+.legend-row{display:grid;grid-template-columns:14px 1fr auto auto;grid-template-rows:auto auto;
+  align-items:center;column-gap:8px;row-gap:6px;
+  padding:8px 12px;margin-bottom:12px;border-radius:12px;cursor:pointer;
+  transition:background .15s ease, opacity .15s ease;}
+.legend-row:last-child{margin-bottom:0;}
+@media (hover:hover){ .legend-row:hover{background:var(--primary-soft);} }
+.legend-row.is-active{background:var(--primary-soft);}
+.legend-row.is-dim{opacity:.45;}
+.legend-row .legend-dot{grid-row:1;grid-column:1;width:11px;height:11px;border-radius:50%;flex:0 0 auto;}
+.legend-row .legend-name{grid-row:1;grid-column:2;font-size:.85rem;font-weight:500;color:#1E293B;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.legend-row .legend-pct{grid-row:1;grid-column:3;font-size:12px;font-weight:700;color:#64748B;background:#F1F5F9;border-radius:6px;padding:1px 7px;}
+.legend-row .legend-amt{grid-row:1;grid-column:4;font-size:.82rem;font-weight:600;color:#0F172A;}
+.legend-bar{grid-row:2;grid-column:1 / -1;height:4px;border-radius:2px;background:#F1F5F9;overflow:hidden;}
+.legend-bar-fill{height:100%;border-radius:2px;transition:width .2s ease;}
+/* Dark mode: giữ chữ đọc được (spec hardcode màu sáng cho light theme) */
+html[data-theme="dark"] .legend-row .legend-name,
+html[data-theme="dark"] .legend-row .legend-amt{color:var(--text);}
+html[data-theme="dark"] .legend-row .legend-pct{color:var(--muted);background:var(--card-2);}
+html[data-theme="dark"] .legend-bar{background:var(--card-2);}
+
+/* Financial insight card */
+.insight-card{display:flex;gap:10px;align-items:flex-start;margin-top:14px;padding:14px;border-radius:16px;
+  background:var(--primary-soft);border:1px solid var(--primary-light);}
+.insight-card:empty{display:none;}
+.insight-card.good{background:var(--income-bg);border-color:transparent;}
+.insight-card.warn{background:var(--warn-bg);border-color:transparent;}
+.insight-card .insight-ic{font-size:1.2rem;line-height:1.2;flex:0 0 auto;}
+.insight-card .insight-text{font-size:.82rem;font-weight:600;color:var(--text);line-height:1.45;}
+
+/* ---------- TAB CÀI ĐẶT ---------- */
+.settings-card{border-radius:20px;}
+/* Icon tròn đơn sắc kiểu Settings iOS/Android */
+.setting-row .sr-ic{border-radius:50%;background:var(--primary-soft);color:var(--primary);}
+/* Accordion "Cài đặt nâng cao & Trợ giúp" — <details> nguyên bản, không cần JS */
+.settings-accordion{background:var(--card);border:1px solid var(--border);border-radius:20px;margin-top:14px;overflow:hidden;box-shadow:var(--shadow);}
+.settings-accordion-head{display:flex;align-items:center;gap:12px;padding:14px;cursor:pointer;list-style:none;font-weight:800;font-size:.9rem;color:var(--text);}
+.settings-accordion-head::-webkit-details-marker{display:none;}
+.settings-accordion summary::marker{content:'';}
+.settings-accordion-head .sr-ic{width:36px;height:36px;border-radius:50%;background:var(--primary-soft);color:var(--primary);display:flex;align-items:center;justify-content:center;flex:0 0 auto;}
+.settings-accordion-head .sr-ic .ic-svg{width:20px;height:20px;}
+.settings-accordion-head .acc-title{flex:1;}
+.settings-accordion-head .acc-chevron{color:var(--muted);transition:transform .2s;display:flex;}
+.settings-accordion-head .acc-chevron .ic-svg{width:20px;height:20px;}
+.settings-accordion[open] .acc-chevron{transform:rotate(180deg);}
+.settings-accordion-body{padding:0 14px 8px;}
+.settings-accordion-body .section-title{margin-top:8px;}
+.settings-accordion-body .settings-card{box-shadow:none;background:var(--card-2);}
+
+/* ---------- NÚT TẠO MỚI PILL (đồng nhất mọi màn con) ---------- */
+.btn-pill{border-radius:999px;font-weight:700;}
+
+/* ---------- VUỐT THẺ LỘ SỬA/XÓA ---------- */
+.swipe-wrap{position:relative;overflow:hidden;border-radius:16px;margin-bottom:12px;}
+.swipe-actions{position:absolute;top:0;right:0;bottom:0;display:flex;}
+.swipe-actions button{border:0;width:66px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;font-size:.7rem;font-weight:800;color:#fff;cursor:pointer;}
+.swipe-actions .sa-ic{font-size:1.05rem;}
+.swipe-edit{background:var(--primary);}
+.swipe-del{background:var(--expense);}
+.swipe-fore{position:relative;z-index:1;transition:transform .2s ease;touch-action:pan-y;}
+.swipe-wrap.open .swipe-fore{transform:translateX(-132px);}
+/* thẻ bên trong khung vuốt: khung lo bo góc & lề, thẻ phẳng lại */
+.swipe-fore.card,.swipe-fore.list-row,.swipe-fore.cc-visual{margin-bottom:0;border-radius:0;}
+.swipe-fore.list-row.is-ended{opacity:.6;}
+
+/* Nhãn "Từ"/"Đến" trong chip ghi nhanh chuyển ví */
+.qe-chip-lead{font-size:.58rem;font-weight:800;color:var(--muted);text-transform:uppercase;margin-right:3px;flex:0 0 auto;}
+.qe-chip-lead:empty{display:none;}
 
 /* Hyperlink trong thẻ kết quả truy vấn của trợ lý: một dòng bấm được, không
    phải một nút khối — nó là đường dẫn phụ bên dưới câu trả lời, không cạnh

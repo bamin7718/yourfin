@@ -163,6 +163,54 @@
 .auth-security-note .security-icon{ display: flex; color: var(--income); }
 .auth-security-note .ic-svg{ width: 15px; height: 15px; }
 
+/* ---------- Màn đăng nhập: nền navy sâu + card glassmorphism (Priority) ---------- */
+#view-login{
+  position: relative;
+  padding-left: 20px; padding-right: 20px;
+  background:
+    radial-gradient(120% 80% at 50% -10%, rgba(27,76,120,.55), transparent 60%),
+    radial-gradient(90% 60% at 100% 100%, rgba(201,162,75,.10), transparent 55%),
+    linear-gradient(160deg, #0A2540 0%, #071A30 55%, #051424 100%);
+}
+/* Họa tiết sóng chìm mờ nhẹ */
+#view-login::before{
+  content: ''; position: absolute; inset: 0; z-index: 0; pointer-events: none; opacity: .6;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='120' viewBox='0 0 400 120'%3E%3Cpath d='M0 70 Q100 30 200 70 T400 70' fill='none' stroke='%23ffffff' stroke-opacity='0.05' stroke-width='2'/%3E%3C/svg%3E");
+  background-size: 100% 120px; background-repeat: repeat;
+}
+#view-login > *{ position: relative; z-index: 1; }
+/* Logo squircle S-Neural Spark */
+#view-login .auth-logo-squircle{
+  width: 64px; height: 64px; border-radius: 22px;
+  background: linear-gradient(145deg, #123A5E, #0A2540);
+  border: 1.5px solid var(--gold);
+  box-shadow: 0 8px 22px rgba(0,0,0,.35), 0 0 0 4px rgba(201,162,75,.12);
+}
+#view-login .auth-logo-squircle svg{ width: 44px; height: 44px; }
+#view-login .auth-title{ color: #fff; }
+#view-login .auth-tagline{ color: rgba(255,255,255,.82); }
+/* Card kính mờ: nền gần trắng, chữ tối cố định để đọc được ở cả light lẫn dark */
+#view-login .auth-card{
+  background: rgba(255,255,255,.96);
+  border: 1px solid rgba(255,255,255,.7);
+  border-radius: 24px;
+  box-shadow: 0 20px 40px rgba(0,0,0,.2);
+  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+  color: #0E1C2B;
+}
+#view-login .auth-card label{ color: #334155; }
+#view-login .auth-card .input{ background: #fff; color: #0E1C2B; border-color: #E2E8F0; }
+#view-login .auth-card .input::placeholder{ color: #94A3B8; }
+#view-login .auth-security-note{ color: rgba(255,255,255,.72); }
+#view-login .auth-security-note .security-icon{ color: var(--gold); }
+#view-login .app-version-line .dv-name{ color: rgba(255,255,255,.6); }
+/* Ngăn cách "hoặc" + nút đăng nhập nhanh */
+.auth-or{ display: flex; align-items: center; gap: 10px; margin: 16px 0 12px; color: #94A3B8; font-size: .72rem; }
+.auth-or::before, .auth-or::after{ content: ''; flex: 1; height: 1px; background: #E2E8F0; }
+.auth-or.hidden{ display: none; }
+.auth-biometric{ width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; }
+.auth-biometric .ic-svg{ width: 18px; height: 18px; }
+
 /* ---------- config screen ---------- */
 #view-config code{
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;

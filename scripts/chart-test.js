@@ -266,7 +266,7 @@ function fakeSupabase(){
     /* vạch mờ áp theo từng CỘT, không theo tháng: một tháng có chi mà không có
        thu thì cột thu vẫn là vạch mờ */
     const nonZeroBars = b2.series.reduce((n,s)=> n + (s.inc>0?1:0) + (s.exp>0?1:0), 0);
-    const brand = barCtx.__fills.filter(c => c === '#00529C' || c === '#ED1C24').length;
+    const brand = barCtx.__fills.filter(c => c === '#0A2540' || c === '#E30613').length;
     check('chỉ cột có tiền mới dùng màu thương hiệu, còn lại là vạch mờ',
       brand === nonZeroBars, `${brand} màu thương hiệu / ${nonZeroBars} cột có tiền`);
     check('số vạch mờ khớp số cột bằng 0',
@@ -292,7 +292,7 @@ function fakeSupabase(){
   }
 
   console.log('\n--- đổi bộ lọc rồi chạm lại ---');
-  window.setReportRange('thisyear', d.querySelector('#report-range-seg .chip[data-val="thisyear"]'));
+  window.setReportRange('thisyear');
   await sleep(60);
   const after = hit().donut;
   check('hình học được dựng lại sau khi đổi mốc thời gian', !!after && after.slices.length === 3);

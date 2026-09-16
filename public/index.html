@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
-<meta name="theme-color" content="#00529C" id="meta-theme-color">
+<meta name="theme-color" content="#0A2540" id="meta-theme-color">
 <meta name="description" content="SoFin — Quản lý thu chi, đa ví, ngân sách, sổ nợ, giao dịch định kỳ và báo cáo tài chính cá nhân. Đồng bộ đa thiết bị qua Supabase.">
 <title>SoFin — Quản lý tài chính cá nhân</title>
 <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png">
@@ -65,6 +65,7 @@
 <!-- hd-flat is the only header layout there is; it is set here as well as by
      switchTab() so a screen shown some other way (onboarding) still gets it. -->
   <header id="main-header" class="hidden hd-flat">
+    <span class="hd-avatar" id="header-avatar" aria-hidden="true">U</span>
     <div class="hd-who">
       <span class="greet" id="header-greet">Xin chào</span>
       <span class="uname" id="user-display-name">User</span>
@@ -79,38 +80,54 @@
   <!-- ============ LOGIN (Supabase Auth) ============ -->
   <div id="view-login" class="view">
     <div class="auth-brand">
-      <div class="logo">💰</div>
+      <!-- Logo SoFin "S-Neural Spark" trong khối squircle (thay emoji túi vàng) -->
+      <div class="logo auth-logo-squircle">
+        <svg viewBox="0 0 48 48" aria-hidden="true">
+          <path d="M37 12 24 24 11 36" stroke="rgba(201,162,75,.5)" stroke-width="1.6" fill="none" stroke-linecap="round"/>
+          <text x="24" y="33" text-anchor="middle" font-size="27" font-weight="800" fill="#fff" font-family="system-ui,-apple-system,sans-serif">S</text>
+          <circle cx="37" cy="12" r="3" fill="#C9A24B"/>
+          <circle cx="11" cy="36" r="2.3" fill="#C9A24B" opacity=".85"/>
+          <circle cx="39.5" cy="24" r="1.5" fill="#fff" opacity=".8"/>
+        </svg>
+      </div>
       <h1 class="auth-title">SoFin Finance</h1>
-      <p class="auth-tagline">Quản lý tài chính cá nhân an toàn &amp; thông minh</p>
+      <p class="auth-tagline">Nền tảng Quản lý Tài chính Số Thông minh</p>
     </div>
     <div class="card auth-card">
       <div class="segment" id="auth-segment">
         <div class="seg active" onclick="setAuthMode('login',this)">Đăng nhập</div>
-        <div class="seg" onclick="setAuthMode('register',this)">Tạo tài khoản</div>
+        <div class="seg" onclick="setAuthMode('register',this)">Mở tài khoản</div>
       </div>
       <div class="form-group">
         <label>Email</label>
         <div class="auth-input-group">
           <span class="auth-input-icon"><svg class="ic-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="m3.5 7 8.5 6 8.5-6"/></svg></span>
-          <input type="email" id="login-email" class="input" placeholder="ban@email.com" autocomplete="email" inputmode="email">
+          <input type="email" id="login-email" class="input" placeholder="nhap.email@domain.com" autocomplete="email" inputmode="email">
         </div>
       </div>
       <div class="form-group">
         <label>Mật khẩu</label>
         <div class="auth-input-group has-toggle">
           <span class="auth-input-icon"><svg class="ic-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4.5" y="10.5" width="15" height="10" rx="2.5"/><path d="M8 10.5V7a4 4 0 0 1 8 0v3.5"/></svg></span>
-          <input type="password" id="login-password" class="input" placeholder="••••••••" autocomplete="current-password">
+          <input type="password" id="login-password" class="input" placeholder="Nhập mật khẩu của bạn" autocomplete="current-password">
           <button type="button" class="auth-pw-toggle" id="auth-pw-toggle" aria-label="Hiện mật khẩu" onclick="toggleAuthPassword()"><svg class="ic-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3"/></svg></button>
         </div>
       </div>
       <span class="link" id="auth-forgot" onclick="requestPasswordReset()">Quên mật khẩu?</span>
-      <button class="btn btn-primary" id="auth-submit" onclick="handleAuthSubmit()">Đăng nhập</button>
+      <button class="btn btn-primary" id="auth-submit" onclick="handleAuthSubmit()">ĐĂNG NHẬP AN TOÀN</button>
       <div id="auth-error" role="alert"></div>
-      <p class="help text-center" id="auth-hint">Dữ liệu được đồng bộ qua Supabase và lưu bản sao trên máy này để dùng offline.</p>
+      <p class="help text-center" id="auth-hint">Dữ liệu được bảo mật mã hóa &amp; đồng bộ đa thiết bị tức thì</p>
+
+      <!-- Đăng nhập nhanh bằng sinh trắc học / PIN cho các lần quay lại sau -->
+      <div class="auth-or"><span>hoặc</span></div>
+      <button type="button" class="btn btn-secondary auth-biometric" id="auth-biometric" onclick="quickBiometricLogin()">
+        <svg class="ic-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 11.5a2.5 2.5 0 0 1 2.5 2.5v.5a5 5 0 0 1-5 0"/><path d="M5 10a7 7 0 0 1 11.5-3.2"/><path d="M4.5 14a7 7 0 0 0 1.2 4"/><path d="M12 8a3.5 3.5 0 0 1 3.5 3.5V14a8 8 0 0 1-.5 3"/><path d="M9 20a10 10 0 0 1-1.2-5.5"/></svg>
+        Đăng nhập nhanh bằng Biometrics / PIN
+      </button>
     </div>
     <div class="auth-security-note">
       <span class="security-icon"><svg class="ic-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 4.5 6v6c0 4.5 3.2 7.9 7.5 9 4.3-1.1 7.5-4.5 7.5-9V6z"/><path d="m9 12 2 2 4-4"/></svg></span>
-      <span>Dữ liệu được mã hoá đám mây &amp; hỗ trợ ngoại tuyến (Offline)</span>
+      <span>Hệ thống bảo mật mã hóa dữ liệu &amp; Hỗ trợ vận hành Offline</span>
     </div>
     <!-- Phiên bản hiện ở đây và ở chân trang Cài đặt. Cùng một hàm vẽ, đọc cùng
          một hằng số, nên hai chỗ không thể nói hai số khác nhau. -->
@@ -202,7 +219,7 @@
       <div class="section-title"><h4>Giao dịch gần đây</h4>
         <span class="link" id="btn-view-all-recent" onclick="viewAllRecent()">Xem tất cả ›</span>
       </div>
-      <div class="card recent-tx-card" id="recent-transactions-list"></div>
+      <div class="card recent-tx-card grouped-transaction-card" id="recent-transactions-list"></div>
     </section>
 
     <div class="section-title"><h4>Tiện ích</h4></div>
@@ -260,63 +277,77 @@
   <!-- ============ TRANSACTIONS ============ -->
   <div id="view-transactions" class="view hidden">
     <div class="view-title"><svg class="ic-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13"/><circle cx="3.5" cy="6" r="1.2"/><circle cx="3.5" cy="12" r="1.2"/><circle cx="3.5" cy="18" r="1.2"/></svg> Giao dịch</div>
-    <div class="search-bar">
-      <span><svg class="ic-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg></span>
-      <input type="text" id="tx-search" placeholder="Tìm ghi chú, danh mục, số tiền..." oninput="renderTransactionsList()">
-      <span class="pointer" id="tx-filter-toggle" onclick="toggleTxFilters()"><svg class="ic-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h10M18 18h2"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="16" cy="18" r="2"/></svg></span>
-    </div>
-    <div class="chip-scroll" id="tx-filter-type">
-      <div class="chip active" data-val="all" onclick="setTxFilter('type','all',this)">Tất cả</div>
-      <div class="chip" data-val="expense" onclick="setTxFilter('type','expense',this)">Chi</div>
-      <div class="chip" data-val="income" onclick="setTxFilter('type','income',this)">Thu</div>
-      <div class="chip" data-val="transfer" onclick="setTxFilter('type','transfer',this)">Chuyển ví</div>
-    </div>
-    <!-- Ví và Trạng thái đứng ngoài panel gập vì cả hai đều lọc *mất* giao dịch
-         khỏi danh sách: "Dự kiến" nằm trong panel ẩn thì người dùng chỉ thấy
-         một danh sách ngắn đi mà không thấy lý do. -->
-    <div class="quick-filter-row">
-      <div class="quick-filter" id="tx-wallet-bar">
-        <label for="tx-filter-wallet">Ví</label>
-        <select id="tx-filter-wallet" class="input" onchange="renderTransactionsList()"></select>
+    <!-- Top bar gọn: Tìm kiếm + chọn khoảng thời gian + nút Bộ lọc (🎛️).
+         Ví/Trạng thái/Danh mục/Sự kiện đã chuyển vào bottom sheet #tx-advanced-filters.
+         Mitigation cho việc giấu bộ lọc: badge số bộ lọc đang bật trên nút 🎛️
+         (xem renderTransactionsList) — người dùng luôn thấy "đang lọc mất gì đó". -->
+    <div class="tx-topbar">
+      <div class="search-bar">
+        <span><svg class="ic-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg></span>
+        <input type="text" id="tx-search" placeholder="Tìm giao dịch..." oninput="renderTransactionsList()">
       </div>
-      <div class="quick-filter" id="tx-status-bar">
-        <label for="tx-filter-status">Trạng thái</label>
-        <select id="tx-filter-status" class="input" onchange="renderTransactionsList()">
-          <option value="all">Tất cả trạng thái</option>
-          <option value="completed">Đã ghi nhận</option>
-          <option value="pending">Dự kiến</option>
-        </select>
-      </div>
+      <select id="tx-range-select" class="tx-range-select" onchange="setTxFilter('range', this.value)" aria-label="Khoảng thời gian">
+        <option value="all">Toàn bộ</option>
+        <option value="thismonth">Tháng này</option>
+        <option value="lastmonth">Tháng trước</option>
+        <option value="7d">7 ngày</option>
+        <option value="30d">30 ngày</option>
+        <option value="thisyear">Năm nay</option>
+        <option value="custom">Tùy chọn…</option>
+      </select>
+      <button class="tx-filter-btn" id="tx-filter-toggle" onclick="toggleTxFilters()" aria-label="Bộ lọc nâng cao">
+        <svg class="ic-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h10M18 18h2"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="16" cy="18" r="2"/></svg>
+        <span id="tx-filter-badge" class="filter-badge hidden"></span>
+      </button>
     </div>
-    <div id="tx-advanced-filters" class="card hidden">
-      <div class="form-group">
-        <label>Khoảng thời gian</label>
-        <div class="chip-scroll" id="tx-filter-range">
-          <div class="chip" data-val="all" onclick="setTxFilter('range','all',this)">Toàn bộ</div>
-          <div class="chip" data-val="thismonth" onclick="setTxFilter('range','thismonth',this)">Tháng này</div>
-          <div class="chip" data-val="lastmonth" onclick="setTxFilter('range','lastmonth',this)">Tháng trước</div>
-          <div class="chip" data-val="7d" onclick="setTxFilter('range','7d',this)">7 ngày</div>
-          <div class="chip" data-val="30d" onclick="setTxFilter('range','30d',this)">30 ngày</div>
-          <div class="chip" data-val="thisyear" onclick="setTxFilter('range','thisyear',this)">Năm nay</div>
-          <div class="chip" data-val="custom" onclick="setTxFilter('range','custom',this)">Tùy chọn</div>
+    <div class="field-row hidden" id="tx-custom-range">
+      <div><label>Từ ngày</label><input type="date" id="tx-from" class="input" onchange="renderTransactionsList()"></div>
+      <div><label>Đến ngày</label><input type="date" id="tx-to" class="input" onchange="renderTransactionsList()"></div>
+    </div>
+    <!-- Filter chips cuộn ngang, mỗi chip mang badge tổng tiền của loại đó -->
+    <div class="chip-scroll tx-type-chips" id="tx-filter-type">
+      <div class="chip active" data-val="all" onclick="setTxFilter('type','all',this)">Tất cả<span class="chip-amt" id="tx-chip-amt-all"></span></div>
+      <div class="chip" data-val="expense" onclick="setTxFilter('type','expense',this)">Chi<span class="chip-amt" id="tx-chip-amt-expense"></span></div>
+      <div class="chip" data-val="income" onclick="setTxFilter('type','income',this)">Thu<span class="chip-amt" id="tx-chip-amt-income"></span></div>
+      <div class="chip" data-val="transfer" onclick="setTxFilter('type','transfer',this)">Chuyển ví<span class="chip-amt" id="tx-chip-amt-transfer"></span></div>
+    </div>
+    <!-- Tóm tắt dạng pill siêu mỏng -->
+    <div class="tx-summary-pill" id="tx-summary"></div>
+    <div id="tx-list-container"></div>
+
+    <!-- Bottom sheet Bộ lọc: Ví · Trạng thái · Danh mục · Sự kiện.
+         Đóng/mở qua toggleTxFilters() (vẫn dùng cơ chế .hidden + navPush cũ). -->
+    <div id="tx-advanced-filters" class="tx-filter-sheet hidden">
+      <div class="tx-sheet-scrim" onclick="toggleTxFilters()"></div>
+      <div class="tx-sheet-panel">
+        <div class="tx-sheet-grip"></div>
+        <div class="tx-sheet-title">Bộ lọc nâng cao</div>
+        <div class="quick-filter" id="tx-wallet-bar">
+          <label for="tx-filter-wallet">Ví</label>
+          <select id="tx-filter-wallet" class="input" onchange="renderTransactionsList()"></select>
+        </div>
+        <div class="quick-filter" id="tx-status-bar">
+          <label for="tx-filter-status">Trạng thái</label>
+          <select id="tx-filter-status" class="input" onchange="renderTransactionsList()">
+            <option value="all">Tất cả trạng thái</option>
+            <option value="completed">Đã ghi nhận</option>
+            <option value="pending">Dự kiến</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Danh mục</label>
+          <select id="tx-filter-cat" class="input" onchange="renderTransactionsList()"></select>
+        </div>
+        <div class="form-group">
+          <label>Sự kiện / Chuyến đi</label>
+          <select id="tx-filter-event" class="input" onchange="renderTransactionsList()"></select>
+        </div>
+        <div class="tx-sheet-actions">
+          <button class="btn btn-secondary btn-sm" onclick="resetTxFilters()">Xóa bộ lọc</button>
+          <button class="btn btn-primary btn-sm" onclick="toggleTxFilters()">Xong</button>
         </div>
       </div>
-      <div class="form-group field-row hidden" id="tx-custom-range">
-        <div><label>Từ ngày</label><input type="date" id="tx-from" class="input" onchange="renderTransactionsList()"></div>
-        <div><label>Đến ngày</label><input type="date" id="tx-to" class="input" onchange="renderTransactionsList()"></div>
-      </div>
-      <div class="form-group">
-        <label>Danh mục</label>
-        <select id="tx-filter-cat" class="input" onchange="renderTransactionsList()"></select>
-      </div>
-      <div class="form-group">
-        <label>Sự kiện / Chuyến đi</label>
-        <select id="tx-filter-event" class="input" onchange="renderTransactionsList()"></select>
-      </div>
-      <button class="btn btn-secondary btn-sm" style="width:100%;" onclick="resetTxFilters()">Xóa bộ lọc</button>
     </div>
-    <div class="card tight" id="tx-summary" style="display:flex;justify-content:space-around;text-align:center;"></div>
-    <div id="tx-list-container"></div>
   </div>
 
   <!-- ============ ADD / EDIT TRANSACTION ============ -->
@@ -399,23 +430,27 @@
   <div id="view-reports" class="view hidden">
     <div class="view-title"><svg class="ic-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 21h18"/><rect x="5" y="11" width="4" height="7" rx="1"/><rect x="11" y="6" width="4" height="12" rx="1"/><rect x="17" y="14" width="4" height="4" rx="1"/></svg> Báo cáo</div>
 
-    <!-- time range: presets, this month by default -->
-    <div class="chip-scroll" id="report-range-seg">
-      <div class="chip active" data-val="thismonth" onclick="setReportRange('thismonth',this)">Tháng này</div>
-      <div class="chip" data-val="lastmonth" onclick="setReportRange('lastmonth',this)">Tháng trước</div>
-      <div class="chip" data-val="3months"   onclick="setReportRange('3months',this)">3 tháng</div>
-      <div class="chip" data-val="thisyear"  onclick="setReportRange('thisyear',this)">Năm nay</div>
-      <div class="chip" data-val="custom"    onclick="setReportRange('custom',this)">Tùy chỉnh</div>
+    <!-- Bộ lọc gộp 1 hàng: chọn kỳ (dropdown + mũi tên chuyển tháng) + toggle "Gồm dự kiến" -->
+    <div class="report-filter-bar">
+      <button class="rfb-arrow" onclick="stepReportMonth(-1)" aria-label="Tháng trước"><svg class="ic-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 6-6 6 6 6"/></svg></button>
+      <select id="report-range-select" class="rfb-range" onchange="setReportRange(this.value)" aria-label="Khoảng thời gian">
+        <option value="thismonth">Tháng này</option>
+        <option value="lastmonth">Tháng trước</option>
+        <option value="3months">3 tháng</option>
+        <option value="thisyear">Năm nay</option>
+        <option value="custom">Tùy chỉnh</option>
+      </select>
+      <button class="rfb-arrow" onclick="stepReportMonth(1)" aria-label="Tháng sau"><svg class="ic-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button>
+      <label class="rfb-toggle" title="Gộp cả các khoản dự kiến chưa tới ngày">
+        <input type="checkbox" id="report-pending-toggle" onchange="toggleReportPending()">
+        <span class="switch-mini"></span>
+        <span class="rfb-toggle-lbl">Gồm dự kiến</span>
+      </label>
     </div>
-    <div class="form-group field-row hidden" id="report-custom-range">
+    <div class="report-period-label" id="report-period-label">Tháng này</div>
+    <div class="field-row hidden" id="report-custom-range">
       <div><label>Từ ngày</label><input type="date" id="rep-from" class="input" onchange="renderReportsView()"></div>
       <div><label>Đến ngày</label><input type="date" id="rep-to" class="input" onchange="renderReportsView()"></div>
-    </div>
-
-    <div class="rep-scope">
-      <span class="rep-period" id="report-period-label">Tháng này</span>
-      <span class="chip chip-sm" id="report-pending-chip" onclick="toggleReportPending()"
-            title="Gộp cả các khoản dự kiến chưa tới ngày"><svg class="ic-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a7 7 0 0 1 4.5 12.4V18h-9v-2.6A7 7 0 0 1 12 3z"/><path d="M9 21h6"/></svg>Gồm dự kiến</span>
     </div>
     <div class="chip-scroll" id="report-wallet-filter"></div>
 
@@ -424,7 +459,7 @@
          Một thẻ chứ không phải ba thẻ rời: bốn con số này chỉ có nghĩa khi
          đứng cạnh nhau — tách ra thì người đọc phải tự cộng trong đầu để biết
          cuối kỳ còn bao nhiêu, mà đó mới là câu hỏi họ mở Báo cáo để trả lời. -->
-    <div class="report-balance-card">
+    <div class="report-balance-card cashflow-card">
       <div class="report-balance-row border-bottom">
         <span class="report-balance-label"><svg class="ic-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><ellipse cx="9" cy="6.5" rx="6" ry="3"/><path d="M3 6.5v4c0 1.7 2.7 3 6 3s6-1.3 6-3"/><path d="M3 10.5v4c0 1.7 2.7 3 6 3"/><ellipse cx="16" cy="15" rx="5" ry="2.5"/><path d="M11 15v3c0 1.4 2.2 2.5 5 2.5s5-1.1 5-2.5v-3"/></svg>Số dư đầu kỳ</span>
         <span class="report-balance-value tabular" id="rep-opening">0 đ</span>
@@ -442,7 +477,7 @@
       </div>
 
       <div class="report-balance-row border-bottom" id="rep-net-card">
-        <span class="report-balance-label"><svg class="ic-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 4.5 3.5 8 7 11.5"/><path d="M3.5 8h13a4 4 0 0 1 0 8H14"/><path d="M17 19.5 20.5 16 17 12.5"/></svg>Dòng tiền ròng</span>
+        <span class="report-balance-label"><svg class="ic-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 4.5 3.5 8 7 11.5"/><path d="M3.5 8h13a4 4 0 0 1 0 8H14"/><path d="M17 19.5 20.5 16 17 12.5"/></svg>Dòng tiền ròng<span class="net-badge" id="rep-net-badge"></span></span>
         <span class="report-balance-value rb-net tabular" id="rep-net">0 đ</span>
       </div>
 
@@ -497,6 +532,9 @@
 
     <div class="section-title"><h4>Chi tiêu theo ví</h4></div>
     <div class="card" id="rep-wallet-list"></div>
+
+    <!-- Phân tích thông minh: tự nhận xét xu hướng chi tiêu tháng này so tháng trước -->
+    <div class="insight-card" id="rep-insight"></div>
   </div>
 
   <!-- ============ MORE MENU ============ -->
@@ -505,10 +543,7 @@
     <div class="sub-view-head">
       <button class="icon-btn" onclick="switchTab('dashboard')">‹</button>
       <h3>Ví & Tài khoản</h3>
-      <!-- Nút tròn viền mảnh: cùng ngôn ngữ với nút ‹ bên trái, không còn một
-           khối xanh đặc chiếm hết góc phải tiêu đề. -->
-      <button class="icon-btn btn-icon-head" id="btn-add-wallet" aria-label="Tạo ví mới"
-              title="Tạo ví mới" onclick="openWalletModal()">+</button>
+      <button class="btn btn-primary btn-sm btn-pill" id="btn-add-wallet" title="Tạo ví mới" onclick="openWalletModal()">+ Thêm ví</button>
     </div>
     <div class="card tight mb12" id="wallets-total"></div>
     <div id="wallets-list"></div>
@@ -519,7 +554,7 @@
     <div class="sub-view-head">
       <button class="icon-btn" onclick="switchTab('dashboard')">‹</button>
       <h3>Ngân sách</h3>
-      <button class="btn btn-primary btn-sm" onclick="openBudgetModal()">+ Thêm</button>
+      <button class="btn btn-primary btn-sm btn-pill" onclick="openBudgetModal()">+ Thêm ngân sách</button>
     </div>
     <div class="segment" id="budget-period-seg">
       <div class="seg" data-val="weekly" onclick="setBudgetPeriod('weekly',this)">Tuần</div>
@@ -536,7 +571,7 @@
     <div class="sub-view-head">
       <button class="icon-btn" onclick="switchTab('dashboard')">‹</button>
       <h3>Sổ nợ</h3>
-      <button class="btn btn-primary btn-sm" onclick="openDebtModal()">+ Thêm</button>
+      <button class="btn btn-primary btn-sm btn-pill" onclick="openDebtModal()">+ Thêm khoản nợ</button>
     </div>
     <div class="stat-grid mb12">
       <div class="stat-box"><div class="sb-lbl">🔻 Đang đi vay</div><div class="sb-val c-expense tabular" id="debt-borrow-total">0 đ</div></div>
@@ -556,7 +591,7 @@
     <div class="sub-view-head">
       <button class="icon-btn" onclick="switchTab('dashboard')">‹</button>
       <h3>Giao dịch định kỳ</h3>
-      <button class="btn btn-primary btn-sm" onclick="openRecurringModal()">+ Thêm</button>
+      <button class="btn btn-primary btn-sm btn-pill" onclick="openRecurringModal()">+ Thêm định kỳ</button>
     </div>
     <div class="alert alert-info"><span>💡</span><span>Bật "Tự động ghi nhận" để app tự cộng/trừ tiền khi đến hạn. Nếu tắt, bạn xác nhận thủ công bằng nút ✓.</span></div>
     <div id="recurring-list"></div>
@@ -590,28 +625,19 @@
   <div id="view-settings" class="view hidden">
     <div class="view-title"><svg class="ic-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.8-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.6 1.6 0 0 0-1-1.5 1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.8 1.6 1.6 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.6 1.6 0 0 0 1.5-1 1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3H9a1.6 1.6 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8V9a1.6 1.6 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z"/></svg> Cài đặt</div>
 
-    <div class="section-title"><h4>Giao diện</h4></div>
-    <div class="card">
-      <div class="segment" style="margin-bottom:0;" id="theme-seg">
-        <div class="seg" onclick="setTheme('light',this)">☀️ Sáng</div>
-        <div class="seg" onclick="setTheme('dark',this)">🌙 Tối</div>
-        <div class="seg" onclick="setTheme('auto',this)">🖥 Tự động</div>
-      </div>
-    </div>
+    <!-- Gọn còn 4 khối chính cho người dùng phổ thông:
+         Tài khoản → Bảo mật → Giao diện → Dữ liệu & Sao lưu.
+         Mọi mục ít dùng (Tổng quan tài khoản, Thông tin ứng dụng, Vùng nguy
+         hiểm) dồn vào accordion "Cài đặt nâng cao & Trợ giúp" ở dưới cùng.
+         Toàn bộ id/onclick giữ nguyên để không gãy logic save/sync/export. -->
 
-    <!-- Khối "Tiền tệ" (tiền tệ chính + bảng tỷ giá) đã gỡ khỏi Cài đặt.
-         Lớp quy đổi vẫn còn nguyên bên dưới: state.app.mainCurrency mặc định
-         'VND', state.app.rates lấy DEFAULT_RATES, ví vẫn chọn được tiền tệ
-         riêng ở màn hình Ví. Chỉ là không còn chỗ để sửa tay nữa. -->
+    <!-- 1. TÀI KHOẢN — nút Đăng xuất nằm gọn ngay đầu khối -->
+    <div class="section-title"><h4>Tài khoản</h4><span class="link" onclick="logout()">Đăng xuất</span></div>
+    <div class="card settings-card" id="cloud-status"></div>
 
-    <div class="section-title"><h4>Tài khoản & Đồng bộ</h4></div>
-    <div class="card" id="cloud-status"></div>
-
-    <div class="section-title"><h4>Tổng quan tài khoản</h4></div>
-    <div class="card" id="account-summary"></div>
-
+    <!-- 2. BẢO MẬT -->
     <div class="section-title"><h4>Bảo mật</h4></div>
-    <div class="card">
+    <div class="card settings-card">
       <div class="setting-row">
         <div class="sr-ic"><svg class="ic-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4.5" y="10.5" width="15" height="10" rx="2.5"/><path d="M8 10.5V7a4 4 0 0 1 8 0v3.5"/></svg></div>
         <div class="sr-mid"><div class="sr-title">Khóa bằng mã PIN</div><div class="sr-sub" id="pin-status">Chưa thiết lập</div></div>
@@ -629,56 +655,75 @@
       </div>
     </div>
 
-    <div class="section-title"><h4>Sao lưu & Khôi phục</h4></div>
-    <div class="card">
+    <!-- 3. GIAO DIỆN -->
+    <div class="section-title"><h4>Giao diện</h4></div>
+    <div class="card settings-card">
+      <div class="segment" style="margin-bottom:0;" id="theme-seg">
+        <div class="seg" onclick="setTheme('light',this)">☀️ Sáng</div>
+        <div class="seg" onclick="setTheme('dark',this)">🌙 Tối</div>
+        <div class="seg" onclick="setTheme('auto',this)">🖥 Tự động</div>
+      </div>
+    </div>
+    <!-- Khối "Tiền tệ" đã gỡ; lớp quy đổi vẫn nguyên (xem app.js). -->
+
+    <!-- 4. DỮ LIỆU & SAO LƯU — từ ngữ thân thiện cho người không rành kỹ thuật -->
+    <div class="section-title"><h4>Dữ liệu &amp; Sao lưu</h4></div>
+    <div class="card settings-card">
       <div class="setting-row pointer" onclick="exportJSON()">
         <div class="sr-ic"><svg class="ic-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V4"/><path d="m7.5 8.5 4.5-4.5 4.5 4.5"/><path d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg></div>
-        <div class="sr-mid"><div class="sr-title">Xuất dữ liệu JSON</div><div class="sr-sub">Sao lưu toàn bộ (ví, giao dịch, ngân sách...)</div></div>
+        <div class="sr-mid"><div class="sr-title">Sao lưu dữ liệu</div><div class="sr-sub">Lưu toàn bộ ví, giao dịch, ngân sách ra một file (.json)</div></div>
         <span class="muted">›</span>
       </div>
       <div class="setting-row pointer" onclick="exportCSV()">
         <div class="sr-ic"><svg class="ic-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 21h18"/><rect x="5" y="11" width="4" height="7" rx="1"/><rect x="11" y="6" width="4" height="12" rx="1"/><rect x="17" y="14" width="4" height="4" rx="1"/></svg></div>
-        <div class="sr-mid"><div class="sr-title">Xuất giao dịch CSV</div><div class="sr-sub">Mở được bằng Excel / Google Sheets</div></div>
+        <div class="sr-mid"><div class="sr-title">Tải file Excel (CSV)</div><div class="sr-sub">Danh sách giao dịch, mở bằng Excel / Google Sheets</div></div>
         <span class="muted">›</span>
       </div>
       <div class="setting-row pointer" onclick="document.getElementById('import-json-file').click()">
         <div class="sr-ic"><svg class="ic-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v12"/><path d="m7.5 11.5 4.5 4.5 4.5-4.5"/><path d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg></div>
-        <div class="sr-mid"><div class="sr-title">Nhập dữ liệu JSON</div><div class="sr-sub">Khôi phục từ file sao lưu</div></div>
+        <div class="sr-mid"><div class="sr-title">Khôi phục từ bản sao lưu</div><div class="sr-sub">Nạp lại dữ liệu từ file .json đã lưu</div></div>
         <span class="muted">›</span>
       </div>
       <div class="setting-row pointer" onclick="document.getElementById('import-csv-file').click()">
         <div class="sr-ic"><svg class="ic-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h4"/></svg></div>
-        <div class="sr-mid"><div class="sr-title">Nhập giao dịch CSV</div><div class="sr-sub">Thêm giao dịch từ file CSV</div></div>
+        <div class="sr-mid"><div class="sr-title">Nhập giao dịch từ Excel (CSV)</div><div class="sr-sub">Thêm giao dịch từ một file CSV</div></div>
         <span class="muted">›</span>
       </div>
       <input type="file" id="import-json-file" accept=".json,application/json" class="hidden" onchange="importJSON(event)">
       <input type="file" id="import-csv-file" accept=".csv,text/csv" class="hidden" onchange="importCSV(event)">
     </div>
 
-    <div class="section-title"><h4>Vùng nguy hiểm</h4></div>
-    <div class="card">
-      <div class="setting-row pointer" onclick="loadDemoData()">
-        <div class="sr-ic"><svg class="ic-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.5 12a8.5 8.5 0 1 1-2.5-6"/><path d="M20.5 4v5h-5"/></svg></div>
-        <div class="sr-mid"><div class="sr-title">Nạp dữ liệu mẫu</div><div class="sr-sub">Thay dữ liệu tài khoản bằng bộ mẫu để dùng thử</div></div>
-        <span class="muted">›</span>
-      </div>
-      <div class="setting-row pointer" onclick="wipeMyData()">
-        <div class="sr-ic"><svg class="ic-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16"/><path d="M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/><path d="M6.5 7 7.5 20a1 1 0 0 0 1 1h7a1 1 0 0 0 1-1L17.5 7"/></svg></div>
-        <div class="sr-mid"><div class="sr-title c-expense">Xóa toàn bộ dữ liệu của tôi</div><div class="sr-sub">Xóa cả trên máy này lẫn trên đám mây · không thể hoàn tác</div></div>
-        <span class="muted">›</span>
-      </div>
-    </div>
-    <div class="section-title"><h4>Thông tin ứng dụng</h4></div>
-    <div class="card" id="app-info"></div>
+    <!-- Cài đặt nâng cao & Trợ giúp — accordion gom mọi thứ ít dùng.
+         Dùng <details> nguyên bản: không cần JS, các id bên trong (#account-summary,
+         #app-info) vẫn ở trong DOM nên render vẫn điền được dù đang gập. -->
+    <details class="settings-accordion">
+      <summary class="settings-accordion-head">
+        <span class="sr-ic"><svg class="ic-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg></span>
+        <span class="acc-title">Cài đặt nâng cao &amp; Trợ giúp</span>
+        <span class="acc-chevron"><svg class="ic-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></span>
+      </summary>
+      <div class="settings-accordion-body">
+        <div class="section-title"><h4>Tổng quan tài khoản</h4></div>
+        <div class="card settings-card" id="account-summary"></div>
 
-    <div class="section-title"><h4>Phiên đăng nhập</h4></div>
-    <div class="card">
-      <div class="setting-row pointer" onclick="logout()">
-        <div class="sr-ic"><svg class="ic-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3"/><path d="m15.5 16 4.5-4-4.5-4"/><path d="M20 12H9.5"/></svg></div>
-        <div class="sr-mid"><div class="sr-title">Đăng xuất</div><div class="sr-sub">Bản sao dữ liệu trên máy này vẫn được giữ lại</div></div>
-        <span class="muted">›</span>
+        <div class="section-title"><h4>Thông tin ứng dụng</h4></div>
+        <div class="card settings-card" id="app-info"></div>
+
+        <div class="section-title"><h4>Vùng nguy hiểm</h4></div>
+        <div class="card settings-card">
+          <div class="setting-row pointer" onclick="loadDemoData()">
+            <div class="sr-ic"><svg class="ic-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.5 12a8.5 8.5 0 1 1-2.5-6"/><path d="M20.5 4v5h-5"/></svg></div>
+            <div class="sr-mid"><div class="sr-title">Nạp dữ liệu mẫu</div><div class="sr-sub">Thay dữ liệu tài khoản bằng bộ mẫu để dùng thử</div></div>
+            <span class="muted">›</span>
+          </div>
+          <div class="setting-row pointer" onclick="wipeMyData()">
+            <div class="sr-ic"><svg class="ic-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16"/><path d="M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/><path d="M6.5 7 7.5 20a1 1 0 0 0 1 1h7a1 1 0 0 0 1-1L17.5 7"/></svg></div>
+            <div class="sr-mid"><div class="sr-title c-expense">Xóa toàn bộ dữ liệu của tôi</div><div class="sr-sub">Xóa cả trên máy này lẫn trên đám mây · không thể hoàn tác</div></div>
+            <span class="muted">›</span>
+          </div>
+        </div>
       </div>
-    </div>
+    </details>
 
     <!-- Nội dung do renderAppFooter() vẽ: số phiên bản và trạng thái kết nối
          phải là thật, không phải chữ cứng trong HTML. -->
@@ -1078,6 +1123,7 @@
       <div class="qe-type hidden" id="qe-type">
         <button type="button" class="qe-t" data-val="expense" onclick="setQuickType('expense')">Chi</button>
         <button type="button" class="qe-t" data-val="income" onclick="setQuickType('income')">Thu</button>
+        <button type="button" class="qe-t" data-val="transfer" onclick="setQuickType('transfer')">Chuyển ví</button>
       </div>
     </div>
 
@@ -1095,13 +1141,13 @@
          onQuickNote() gọi matchWalletAndCategory(). Ẩn ở chế độ 'tx'/'tf'
          vì hai chế độ đó chốt số tiền về form, không phải lưu tại chỗ. -->
     <div class="quick-inputs-bar hidden" id="qe-inputs">
-      <input type="text" id="qe-note" class="quick-note-input" autocomplete="off"
-             placeholder="Ghi chú (VD: Cơm trưa, Xăng...)" oninput="onQuickNote(this.value)">
       <div class="quick-chips-row">
         <div class="quick-chip" id="qe-chip-wallet" onclick="quickPickWallet()"></div>
         <div class="quick-chip" id="qe-chip-cat" onclick="quickPickCategory()"></div>
       </div>
-      <button type="button" class="quick-more" onclick="quickToFullForm()">Thêm chi tiết: ngày, sự kiện, danh mục con ›</button>
+      <input type="text" id="qe-note" class="quick-note-input" autocomplete="off"
+             placeholder="Ghi chú (VD: Cơm trưa, Xăng...)" oninput="onQuickNote(this.value)">
+      <button type="button" class="quick-more" id="qe-more" onclick="quickToFullForm()">Thêm chi tiết: ngày, sự kiện, danh mục con ›</button>
     </div>
 
     <div class="amt-foot">

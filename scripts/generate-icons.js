@@ -18,11 +18,11 @@ const zlib = require('zlib');
 
 const OUT = path.resolve(__dirname, '..', 'public', 'icons');
 
-/* ---------- brand ---------- */
-const BRAND_DARK = [0, 59, 112];      // #003B70
-const BRAND      = [0, 115, 230];     // #0073E6
+/* ---------- brand (Techcombank Priority navy + gold/red) ---------- */
+const BRAND_DARK = [6, 25, 46];       // #06192E
+const BRAND      = [27, 76, 120];     // #1B4C78
 const WHITE      = [255, 255, 255];
-const CLASP      = [237, 28, 36];     // #ED1C24 — the VietinBank red accent
+const CLASP      = [227, 6, 19];      // #E30613 — the Priority red accent
 
 /* ---------- tiny PNG encoder ---------- */
 const CRC_TABLE = (() => {
