@@ -12,6 +12,84 @@ thứ khó tìm lại sau nửa năm.
 
 ---
 
+## [5.2.3] — 16/09/2026
+
+Đại tu giao diện sang ngôn ngữ thiết kế **Techcombank Priority**. Toàn bộ nằm
+trong `public/` (CSS + Vanilla JS) — không thêm dependency, không bundler, không
+đụng `vendor/supabase.js`. Đường ghi dữ liệu (`saveStorage` → localStorage +
+`Sync.queuePush`) và mọi id/handler giữ nguyên; các test bị ảnh hưởng bởi thay
+đổi thiết kế được cập nhật kèm lý do chứ không vô hiệu hoá.
+
+### Đổi
+
+- **Bảng màu thương hiệu**: VietinBank xanh → **Priority navy `#0A2540`**, đỏ
+  nhấn `#E30613`, nền `#F8F9FA`, thêm token gold cho điểm nhấn "Priority". Đổi
+  màu ở một chỗ (`:root`) là chưa đủ — đồng bộ luôn 4 nơi ngoài CSS mà nếu quên
+  sẽ lệch âm thầm: `manifest.json`, meta theme-color trong `applyTheme()`,
+  `capacitor.config.json` (StatusBar), `scripts/generate-icons.js` (chạy lại
+  `npm run icons`) và fallback màu trong `drawDonut`/`budgetIcon`.
+
+- **Trang chủ**: thẻ số dư thành **thẻ kim loại navy/gold glassmorphism** (bo
+  24px, đổ bóng mềm); thêm avatar viền gold + chuông có chấm đỏ trên app bar;
+  "Giao dịch gần đây" gom vào một thẻ trắng với đường kẻ hairline. Giữ nguyên
+  thứ tự khối (smoke vẫn khoá) — chỉ đổi lớp vỏ, không dời vị trí.
+
+- **Tab Giao dịch**: gộp Tìm kiếm + chọn kỳ + nút lọc vào một hàng; các bộ lọc
+  Ví/Trạng thái/Danh mục/Sự kiện dời vào **bottom sheet** trượt. Đây là ghi đè
+  invariant cũ "bộ lọc phải luôn hiển thị" — nên bù lại bằng **badge số bộ lọc
+  đang bật trên nút 🎛️**: người dùng vẫn thấy "đang lọc mất gì đó", đúng lo ngại
+  mà invariant cũ dựng lên để tránh. Chips loại mang badge tổng tiền; tóm tắt
+  thu/chi/còn lại thành pill mỏng; giao dịch gom theo ngày vào thẻ hairline.
+
+- **Tab Báo cáo**: ba hàng nút lọc gộp còn một (dropdown kỳ + mũi tên chuyển
+  tháng + toggle "Gồm dự kiến"). Thẻ dòng tiền bo 20px, làm nổi "Dòng tiền
+  ròng" bằng badge *Dòng tiền dương* / *Bội chi*. Donut vòng mỏng hơn + đổ bóng;
+  legend danh mục đầy đủ (chấm · tên · % · số tiền · progress bar).
+
+- **Tab Cài đặt**: gọn từ 8 khối rời còn **4 khối** (Tài khoản → Bảo mật → Giao
+  diện → Dữ liệu & Sao lưu), mọi mục ít dùng (Tổng quan tài khoản, Thông tin ứng
+  dụng, Vùng nguy hiểm) dồn vào accordion `<details>` "Cài đặt nâng cao & Trợ
+  giúp" — dùng `<details>` nguyên bản nên không cần JS và các id bên trong vẫn
+  render được dù đang gập. Từ ngữ thân thiện hơn cho người không rành kỹ thuật
+  ("Sao lưu dữ liệu", "Tải file Excel (CSV)"). Nút Đăng xuất lên đầu khối Tài
+  khoản; icon từng mục thành hình tròn đơn sắc kiểu Settings iOS/Android.
+
+- **Ví / Sổ nợ / Định kỳ / Thẻ tín dụng**: thống nhất nút tạo mới thành **pill
+  Primary `+ Thêm [đối tượng]`**; gỡ cụm icon Sửa/Xóa lộ thiên khỏi bề mặt thẻ;
+  chạm cả thẻ để mở sửa, **vuốt trái để lộ Sửa (navy) / Xóa (đỏ)**. Thẻ định kỳ
+  chỉ còn công tắc Tự động; nút ✓ chỉ hiện khi **đến hạn / quá hạn** (kỳ tương
+  lai chưa có gì để xác nhận).
+
+- **Màn Đăng nhập / Đăng ký**: nền gradient navy sâu + hoạ tiết sóng chìm, thẻ
+  form glassmorphism (bo 24px, đổ bóng sâu), logo SVG "S-Neural Spark" trong
+  khối squircle thay emoji túi vàng. Copywriting chuẩn ngân hàng (slogan mới,
+  "Mở tài khoản", nút "ĐĂNG NHẬP AN TOÀN", badge bảo mật). Card ép chữ tối cố
+  định để đọc được ở cả light lẫn dark trên nền navy.
+
+### Thêm
+
+- **Ghi nhanh có tab Chuyển ví**: công tắc trên bàn phím số thành
+  [Chi][Thu][Chuyển ví]. Ở tab Chuyển ví, ô thứ hai đổi từ Danh mục thành "Ví
+  đích", và lưu đi qua **`commitTransfer()`** — cùng đường ghi với form chuyển
+  ví, nên một `transferId`, cùng `status`, không đổi Tổng tài sản ròng. Nhân
+  tiện dọn ô chọn ví bị lặp hai lần (số dư đưa vào chip).
+
+- **Highlight Legend ↔ Donut**: rê chuột / chạm một dòng legend thì lát tương
+  ứng trên donut đậm lên, các lát khác mờ còn 28% (`globalAlpha`), tâm donut
+  hiện % của lát đó. Vẽ lại nhanh từ `lastDonutArgs`, **không** chạy lại cả
+  `renderReportsView`, và **không** đổi hình học hit-test (`chart-test` vẫn qua).
+
+- **Thẻ Phân tích thông minh** ở cuối Báo cáo: tự so tổng chi tháng này với
+  tháng trước rồi đưa một câu nhận xét (dương/âm/ngang), tính bằng chính
+  `getUserTransactions()` + `txMain()` mà báo cáo dùng.
+
+- **Nút "Đăng nhập nhanh bằng Biometrics / PIN"** ở màn đăng nhập — hiện là chỗ
+  đặt trước, nói thẳng "sẽ khả dụng sau khi đăng nhập lần đầu và bật PIN" thay vì
+  giả vờ bấm được: PIN là lớp khoá của một *phiên* đã đăng nhập, chưa thay được
+  cho lần đăng nhập đầu (chưa tích hợp WebAuthn thật).
+
+---
+
 ## [5.2.2] — 15/09/2026
 
 ### Sửa
