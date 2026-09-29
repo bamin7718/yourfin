@@ -2379,12 +2379,12 @@ function resetSessionFilters(){
   txFilters = {type:'all', walletId:'all', catId:'all', eventId:'all', range:'all', status:'all'};
   reportWalletId = 'all'; reportRangeKey = 'thismonth'; donutMode = 'expense';
   reportIncludePending = false;
-  upcomingFilter = 'thismonth';
+  upcomingFilter = defaultUpcomingFilter();
   debtFilter = 'all';
   resetChatAssistant();
   syncTxFilterChips();
   document.getElementById('tx-advanced-filters').classList.add('hidden');
-  document.querySelectorAll('#upcoming-filter .chip').forEach(c=>c.classList.toggle('active', c.dataset.val==='thismonth'));
+  document.querySelectorAll('#upcoming-filter .chip').forEach(c=>c.classList.toggle('active', c.dataset.val===upcomingFilter));
   document.querySelectorAll('#debt-seg .seg').forEach((s,i)=>s.classList.toggle('active', i===0));
   const rSel = document.getElementById('report-range-select');
   if(rSel) rSel.value = 'thismonth';
@@ -2997,6 +2997,12 @@ function amtKey(k){
 }
 /* Bàn phím vật lý trên desktop — màn này không có ô input nào để gõ vào. */
 function amtKeydown(e){
+  /* Bàn phím số nghe trên document vì màn này không còn ô input để gõ trên
+     desktop — NHƯNG màn ghi nhanh có ô ghi chú (#qe-note). Đang gõ trong một ô
+     nhập liệu thì Backspace phải xoá chữ trong ô đó, không được nuốt mất một chữ
+     số của số tiền (lỗi: "xoá ghi chú thì mất số tiền"). */
+  const t = e.target;
+  if(t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
   if(e.key >= '0' && e.key <= '9') amtKey(e.key);
   else if(e.key === ',' || e.key === '.') amtKey(',');
   else if(e.key === 'Backspace') amtKey('back');
@@ -4351,6 +4357,15 @@ function settlePendingTx(txId){
 }
 
 /* ---------- UPCOMING (dashboard) ---------- */
+/* Cuối tháng thì mặc định mở "Tháng tới". Khi chỉ còn ≤7 ngày là hết tháng,
+   cửa sổ "Trong tháng" gần như rỗng nên mọi hoá đơn đầu tháng sau biến mất khỏi
+   "Sắp đến hạn" — người dùng tưởng widget chưa load. Vẫn giữ nguyên các chip;
+   đây chỉ là lựa chọn chip MẶC ĐỊNH thông minh theo ngày trong tháng. */
+function defaultUpcomingFilter(){
+  const d = parseISO(todayISO());
+  const daysLeft = new Date(d.getFullYear(), d.getMonth()+1, 0).getDate() - d.getDate();
+  return daysLeft <= 7 ? 'nextmonth' : 'thismonth';
+}
 function setUpcomingFilter(val, el){
   upcomingFilter = val;
   el.parentNode.querySelectorAll('.chip').forEach(c=>c.classList.remove('active'));
@@ -7697,7 +7712,7 @@ const APK_URL = `https://github.com/${GH_REPO}/releases/latest/download/sofin.ap
 
 /* Stamped in at build time from package.json; the literal is only what runs
    when someone opens the folder without building. */
-const APP_VERSION = (window.__ENV__ && window.__ENV__.VERSION) || '5.2.3';
+const APP_VERSION = (window.__ENV__ && window.__ENV__.VERSION) || '5.2.4';
 /* Which version the user already said "để sau" to — device-local, so a
    dismissal does not sync to their other phone. */
 const UPDATE_SEEN_KEY = 'FINYOURTIN_UPDATE_DISMISSED';

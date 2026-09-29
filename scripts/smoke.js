@@ -333,6 +333,12 @@ async function boot(opts) {
       walletId: wid, date: today, dueDate: today, note: '', payments: [] });
     window.saveStorage();
     window.switchTab('dashboard'); await sleep(20);
+    // Chốt cửa sổ "Trong tháng" để đếm dòng không phụ thuộc ngày chạy: cuối
+    // tháng mặc định tự mở "Tháng tới", khi đó khoản định kỳ (sau khi tick ✓
+    // nhảy sang hạn tháng sau) lại lọt vào và dư một dòng. Block này kiểm luồng
+    // "tick xong dashboard cập nhật ngay", không kiểm cửa sổ mặc định.
+    window.setUpcomingFilter('thismonth', d.querySelector('#upcoming-filter .chip[data-val="thismonth"]'));
+    await sleep(20);
     const upRows = () => d.querySelectorAll('#upcoming-list .upcoming-row').length;
     check('cả 2 khoản đến hạn đều hiện ra', upRows() === 2, 'rows=' + upRows());
 
@@ -396,6 +402,11 @@ async function boot(opts) {
       S().transactions.filter(t => t.walletId && !window.getWallet(t.walletId)).length === 0);
     S().recurring = S().recurring.filter(r => r.id !== 'r_auto_orphan');
     window.saveStorage();
+    // Trả cửa sổ về mặc định thông minh cho các block sau (block "giao dịch
+    // tương lai" cần cửa sổ mặc định chứa được khoản hôm nay+5).
+    const defF = window.defaultUpcomingFilter();
+    window.setUpcomingFilter(defF, d.querySelector(`#upcoming-filter .chip[data-val="${defF}"]`));
+    await sleep(20);
   }
 
   console.log('\n· điều hướng ví → tab giao dịch');
@@ -771,8 +782,15 @@ async function boot(opts) {
     check('KHÔNG trừ vào số dư ví', window.getWalletBalance(w) === balBefore, window.getWalletBalance(w) - balBefore);
     check('KHÔNG trừ vào tổng tài sản ròng', window.getUserTotalAssets() === assetsBefore);
 
-    // báo cáo: mặc định bỏ qua, bật "gồm dự kiến" thì tính
+    // báo cáo: mặc định bỏ qua, bật "gồm dự kiến" thì tính.
+    // Phạm vi tùy chỉnh ôm trọn khoản dự kiến (hôm nay .. hôm nay+10) để test
+    // KHÔNG phụ thuộc ngày chạy: cuối tháng thì "Tháng này" kết thúc trước ngày
+    // hôm nay+5 nên phép cộng dưới đây đỏ oan (quy tắc "test không phụ thuộc
+    // ngày chạy"). Cửa sổ này luôn chứa khoản dự kiến dù chạy vào ngày nào.
     window.switchTab('reports'); await sleep(30);
+    $('rep-from').value = today;
+    $('rep-to').value = window.addDaysISO(today, 10);
+    window.setReportRange('custom'); await sleep(30);
     const repExpense = () => window.parseAmount(txt('rep-expense'));
     const withoutPending = repExpense();
     window.toggleReportPending(); await sleep(30);
@@ -781,6 +799,7 @@ async function boot(opts) {
     check('toggle "Gồm dự kiến" bật', $('report-pending-toggle').checked);
     window.toggleReportPending(); await sleep(30);
     check('tắt lại thì báo cáo trở về số thực tế', repExpense() === withoutPending);
+    window.setReportRange('thismonth'); await sleep(20);
 
     // ngân sách cũng chỉ tính tiền đã chi thật
     const bSpent = window.getBudgetSpent({

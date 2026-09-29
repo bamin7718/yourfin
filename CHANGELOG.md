@@ -12,6 +12,27 @@ thứ khó tìm lại sau nửa năm.
 
 ---
 
+## [5.2.4] — 29/09/2026
+
+Hai lỗi nhỏ nhưng gây khó chịu hàng ngày, đều lộ ra khi dùng thật.
+
+### Sửa
+
+- **Ghi nhanh: xoá chữ trong ghi chú không còn nuốt mất số tiền.** Bàn phím số
+  nghe `keydown` trên toàn `document` (vì trên desktop màn này không còn ô input
+  để gõ), nhưng màn ghi nhanh lại có ô ghi chú `#qe-note`. Bấm **Backspace** để
+  sửa ghi chú thì listener chung chạy `amtKey('back')` — xoá một chữ số của số
+  tiền, và `preventDefault()` còn chặn luôn việc xoá chữ trong ghi chú.
+  `amtKeydown()` giờ bỏ qua phím khi tiêu điểm đang ở một ô nhập liệu.
+
+- **"Sắp đến hạn": cuối tháng không còn trống trơn.** Chip mặc định là "Trong
+  tháng", nên vào cuối tháng (còn ≤7 ngày) cửa sổ gần như rỗng và mọi hoá đơn
+  đầu tháng sau biến mất khỏi widget "Dự kiến phải chi" — người dùng tưởng nó
+  chưa load. `defaultUpcomingFilter()` giờ tự chọn chip **"Tháng tới"** khi sắp
+  hết tháng; các chip và ngữ nghĩa "Trong tháng" giữ nguyên. Smoke test liên
+  quan được gỡ phụ thuộc ngày chạy (đặt cửa sổ tường minh) theo đúng quy tắc dự
+  án.
+
 ## [5.2.3] — 16/09/2026
 
 Đại tu giao diện sang ngôn ngữ thiết kế **Techcombank Priority**. Toàn bộ nằm
