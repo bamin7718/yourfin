@@ -1454,6 +1454,39 @@ async function boot(opts) {
     const src = fs.readFileSync(path.join(PUBLIC, 'js', 'app.js'), 'utf8');
     check('chỉ tự kiểm tra trên bản native, sau 3 giây',
       new RegExp('isNativeApp\\(\\)\\){[\\s\\S]{0,300}?setTimeout\\(\\(\\)=>checkAppUpdate\\(\\), 3000\\)').test(src));
+
+    /* --- Tích hợp cập nhật vào Trung tâm thông báo (quả chuông) --- */
+    S().notifications = (S().notifications || []).filter(n => n.type !== 'app_update');
+    window.saveStorage();
+    try { window.localStorage.removeItem('FINYOURTIN_UPDATE_DISMISSED'); } catch (e) {}
+    const unreadBase = window.eval('unreadNotifications().length');
+    reply({ tag_name: 'v12.3.4', body: '- Sửa lỗi nhỏ',
+      assets: [{ name: 'sofin.apk', size: 4400000, browser_download_url: 'https://x/sofin.apk' }] });
+    await window.checkAppUpdate(); await sleep(20);
+    if (visible('update-modal')) { window.closeModal('update-modal'); await sleep(10); }
+    const upN = () => (S().notifications || []).find(n => n.id === 'app-update-12.3.4' && n.userId === S().currentUser);
+    check('bản mới đẩy một thông báo vào chuông', !!upN());
+    check('thông báo cập nhật có nhãn "Hệ thống · Cập nhật"',
+      upN() && /Hệ thống.*Cập nhật/.test(upN().category), upN() && upN().category);
+    check('tiêu đề thông báo mang số phiên bản', upN() && upN().title.includes('v12.3.4'), upN() && upN().title);
+    check('chấm đỏ sáng lên (thêm 1 thông báo chưa đọc)',
+      window.eval('unreadNotifications().length') === unreadBase + 1);
+
+    const dupBefore = (S().notifications || []).filter(n => n.type === 'app_update').length;
+    await window.checkAppUpdate(); await sleep(20);
+    if (visible('update-modal')) { window.closeModal('update-modal'); await sleep(10); }
+    check('cùng phiên bản không sinh thông báo trùng (dedup theo id)',
+      (S().notifications || []).filter(n => n.type === 'app_update').length === dupBefore,
+      (S().notifications || []).filter(n => n.type === 'app_update').length + ' vs ' + dupBefore);
+
+    window.openNotification('app-update-12.3.4'); await sleep(30);
+    check('bấm thông báo → đánh dấu đã đọc', upN() && upN().read === true);
+    check('bấm thông báo (web) kích hoạt ngay hộp tải/refresh', visible('update-modal'));
+    check('… hộp có nút tải trỏ đúng bản mới nhất',
+      /sofin\.apk/.test($('update-download').getAttribute('href')),
+      $('update-download').getAttribute('href'));
+    if (visible('update-modal')) { window.closeModal('update-modal'); await sleep(10); }
+    window.fetch = realFetch;
   }
 
   console.log('\n· PWA');

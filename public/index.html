@@ -631,16 +631,19 @@
          hiểm) dồn vào accordion "Cài đặt nâng cao & Trợ giúp" ở dưới cùng.
          Toàn bộ id/onclick giữ nguyên để không gãy logic save/sync/export. -->
 
-    <!-- 1. TÀI KHOẢN — nút Đăng xuất nằm gọn ngay đầu khối -->
-    <div class="section-title"><h4>Tài khoản</h4><span class="link" onclick="logout()">Đăng xuất</span></div>
-    <div class="card settings-card" id="cloud-status"></div>
+    <!-- 1. HỒ SƠ TÀI KHOẢN — thẻ header nổi bật (gradient), chứa avatar, tên,
+         email, trạng thái đồng bộ và nút Đăng xuất gọn ngay trong thẻ. Nội dung
+         do renderCloudSection() vẽ (email/tên/giờ đồng bộ là dữ liệu thật).
+         KHÔNG bọc .card ở đây — thẻ profile tự mang nền gradient của riêng nó. -->
+    <div id="cloud-status" class="profile-wrap"></div>
 
     <!-- 2. BẢO MẬT -->
     <div class="section-title"><h4>Bảo mật</h4></div>
     <div class="card settings-card">
       <div class="setting-row">
         <div class="sr-ic"><svg class="ic-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4.5" y="10.5" width="15" height="10" rx="2.5"/><path d="M8 10.5V7a4 4 0 0 1 8 0v3.5"/></svg></div>
-        <div class="sr-mid"><div class="sr-title">Khóa bằng mã PIN</div><div class="sr-sub" id="pin-status">Chưa thiết lập</div></div>
+        <div class="sr-mid"><div class="sr-title">Khóa bằng mã PIN</div><div class="sr-sub" id="pin-status">Yêu cầu mã PIN mỗi khi mở ứng dụng</div></div>
+        <span class="sr-badge" id="pin-badge">Chưa thiết lập</span>
         <label class="switch"><input type="checkbox" id="pin-toggle" onchange="onPinToggle(this.checked)"><span class="slider"></span></label>
       </div>
       <div class="setting-row pointer" onclick="openCredentialModal('pin')" id="pin-change-row">
@@ -674,14 +677,14 @@
         <div class="sr-mid"><div class="sr-title">Sao lưu dữ liệu</div><div class="sr-sub">Lưu toàn bộ ví, giao dịch, ngân sách ra một file (.json)</div></div>
         <span class="muted">›</span>
       </div>
-      <div class="setting-row pointer" onclick="exportCSV()">
-        <div class="sr-ic"><svg class="ic-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 21h18"/><rect x="5" y="11" width="4" height="7" rx="1"/><rect x="11" y="6" width="4" height="12" rx="1"/><rect x="17" y="14" width="4" height="4" rx="1"/></svg></div>
-        <div class="sr-mid"><div class="sr-title">Tải file Excel (CSV)</div><div class="sr-sub">Danh sách giao dịch, mở bằng Excel / Google Sheets</div></div>
-        <span class="muted">›</span>
-      </div>
       <div class="setting-row pointer" onclick="document.getElementById('import-json-file').click()">
         <div class="sr-ic"><svg class="ic-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v12"/><path d="m7.5 11.5 4.5 4.5 4.5-4.5"/><path d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg></div>
         <div class="sr-mid"><div class="sr-title">Khôi phục từ bản sao lưu</div><div class="sr-sub">Nạp lại dữ liệu từ file .json đã lưu</div></div>
+        <span class="muted">›</span>
+      </div>
+      <div class="setting-row pointer" onclick="exportCSV()">
+        <div class="sr-ic"><svg class="ic-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 21h18"/><rect x="5" y="11" width="4" height="7" rx="1"/><rect x="11" y="6" width="4" height="12" rx="1"/><rect x="17" y="14" width="4" height="4" rx="1"/></svg></div>
+        <div class="sr-mid"><div class="sr-title">Tải file Excel (CSV)</div><div class="sr-sub">Danh sách giao dịch, mở bằng Excel / Google Sheets</div></div>
         <span class="muted">›</span>
       </div>
       <div class="setting-row pointer" onclick="document.getElementById('import-csv-file').click()">
@@ -709,8 +712,8 @@
         <div class="section-title"><h4>Thông tin ứng dụng</h4></div>
         <div class="card settings-card" id="app-info"></div>
 
-        <div class="section-title"><h4>Vùng nguy hiểm</h4></div>
-        <div class="card settings-card">
+        <div class="section-title danger-title"><h4>Vùng nguy hiểm</h4></div>
+        <div class="card settings-card danger-zone">
           <div class="setting-row pointer" onclick="loadDemoData()">
             <div class="sr-ic"><svg class="ic-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.5 12a8.5 8.5 0 1 1-2.5-6"/><path d="M20.5 4v5h-5"/></svg></div>
             <div class="sr-mid"><div class="sr-title">Nạp dữ liệu mẫu</div><div class="sr-sub">Thay dữ liệu tài khoản bằng bộ mẫu để dùng thử</div></div>

@@ -2070,6 +2070,7 @@ function openNotifications(){
         `<div class="notif-item ${n.read ? '' : 'is-unread'}" onclick="openNotification('${n.id}')">
            <div class="notif-ic notif-${esc(n.type)}">${icon(NOTIF_ICON[n.type] || 'bell')}</div>
            <div class="flex1">
+             ${n.category ? `<div class="notif-cat">${esc(n.category)}</div>` : ''}
              <div class="notif-title">${esc(n.title)}</div>
              <div class="notif-msg">${esc(n.message)}</div>
              <div class="notif-time">${esc(notifTimeLabel(n.createdAt))}</div>
@@ -2082,7 +2083,7 @@ function openNotifications(){
          <div class="es-sub">Cảnh báo ngân sách, nợ đến hạn và thẻ tới ngày trả sẽ hiện ở đây.</div></div>`;
   uiSheet('Thông báo' + (unread ? ` (${unread})` : ''), body);
 }
-const NOTIF_ICON = {budget_warning:'target', debt_due:'handshake', card_due:'card'};
+const NOTIF_ICON = {budget_warning:'target', debt_due:'handshake', card_due:'card', app_update:'refresh'};
 /* Nhãn thời gian tương đối, tự dựng: một thông báo "2 giờ trước" đọc nhanh
    hơn "14/09/2026 10:58", còn cũ hơn một ngày thì ngày tháng lại rõ hơn. */
 function notifTimeLabel(iso){
@@ -2105,6 +2106,8 @@ function openNotification(id){
   syncAlertDot();
   closeSheet();
   const a = n.action || {};
+  /* Cập nhật ứng dụng: chạy thẳng luồng tải/refresh, không đi qua chatNavigate. */
+  if(a.view === 'app_update'){ triggerAppUpdateFlow(); return; }
   if(a.view === 'debts' || a.view === 'wallets' || a.view === 'budget'){ switchTab(a.view); return; }
   chatNavigate(a);
 }
@@ -7693,7 +7696,13 @@ document.addEventListener('paste', e=>{
 function renderSettingsView(){
   applyTheme();
   document.getElementById('pin-toggle').checked = !!state.app.pinEnabled;
-  document.getElementById('pin-status').textContent = state.app.pinEnabled ? 'Đang bật — yêu cầu PIN khi mở app' : 'Chưa thiết lập';
+  /* Badge trạng thái: "Đã bật" (xanh) / "Chưa thiết lập" (trung tính) — nhãn
+     ngắn cạnh công tắc, còn dòng mô tả bên dưới giữ nguyên. */
+  const pinBadge = document.getElementById('pin-badge');
+  if(pinBadge){
+    pinBadge.textContent = state.app.pinEnabled ? 'Đã bật' : 'Chưa thiết lập';
+    pinBadge.classList.toggle('badge-on', !!state.app.pinEnabled);
+  }
   document.getElementById('pin-change-row').classList.toggle('hidden', !state.app.pinEnabled);
   renderCloudSection();
   renderAccountSummary();
@@ -7749,6 +7758,12 @@ async function checkAppUpdate(opts){
     if(manual) toast('Bạn đang dùng bản mới nhất','ok');
     return null;
   }
+  /* Có bản mới hơn: giữ lại release để nút trong Trung tâm thông báo dựng lại
+     hộp tải mà không phải hỏi GitHub lần nữa, và đẩy một mục vào quả chuông
+     NGAY — kể cả khi người dùng đã bấm "để sau" cho hộp modal. Chuông là danh
+     sách bền: dismiss modal không được xoá nó, dedup theo tag lo việc trùng. */
+  pendingUpdateRelease = rel;
+  pushUpdateNotification(tag);
   /* Auto-checks respect an earlier "để sau"; a manual check always answers. */
   if(!manual){
     let seen = null;
@@ -7757,6 +7772,36 @@ async function checkAppUpdate(opts){
   }
   showUpdateModal(rel);
   return tag;
+}
+
+/* Đẩy một mục "có bản mới" vào Trung tâm thông báo (quả chuông). id gắn theo
+   tag và KHÔNG chứa Date.now() nên cùng một phiên bản chỉ vào chuông đúng một
+   lần; bản kế tiếp là id khác nên lại được nhắc. Bấm vào chạy thẳng luồng cập
+   nhật (xem triggerAppUpdateFlow / openNotification). */
+function pushUpdateNotification(tag){
+  if(!state.currentUser) return;      /* chưa đăng nhập thì chưa có quả chuông */
+  const v = String(tag).replace(/^v/i,'');
+  const added = pushNotification({
+    id: 'app-update-' + v,
+    type: 'app_update',
+    category: 'Hệ thống · Cập nhật',
+    title: '🚀 Đã có bản cập nhật mới v' + v,
+    message: isNativeApp()
+      ? 'Bấm để tải bản Android (.apk) mới nhất.'
+      : 'Bấm để tải lại và dùng phiên bản mới nhất.',
+    action: {view:'app_update'}
+  });
+  if(added){ saveStorage(); syncAlertDot(); }
+}
+
+/* Bấm mục cập nhật trên quả chuông → cập nhật ngay, không phải vào Cài đặt tìm:
+   · Web/PWA đã có Service Worker bản mới chờ sẵn → áp luôn (skipWaiting + reload).
+   · Còn lại (kể cả bản Android APK) → mở hộp cập nhật kèm nút tải .apk / tải lại;
+     dựng từ release đã lưu, hoặc hỏi lại GitHub nếu vì lý do gì đó chưa có. */
+function triggerAppUpdateFlow(){
+  if(!isNativeApp() && swUpdateReady){ applyAppUpdate(); return; }
+  if(pendingUpdateRelease){ showUpdateModal(pendingUpdateRelease); return; }
+  checkAppUpdate({manual:true});
 }
 
 /* Ghi chú phát hành đến từ GitHub — người khác gõ, Markdown thô, dài tuỳ ý.
@@ -7808,6 +7853,7 @@ function dismissUpdate(tag){
 
 let deferredInstall = null;      /* the beforeinstallprompt event, if offered */
 let swUpdateReady = false;
+let pendingUpdateRelease = null; /* release GitHub mới nhất đã phát hiện — cho nút cập nhật nhanh trên quả chuông */
 
 /* Running inside the Capacitor shell rather than a browser tab. */
 function isNativeApp(){
@@ -7956,25 +8002,45 @@ function renderCloudSection(){
   const el = document.getElementById('cloud-status');
   if(!el) return;
   const s = Sync.status();
-  const dotClass = 'dot dot-' + (['synced','pending','offline','error'].indexOf(s.phase) >= 0 ? s.phase : 'offline');
+  const phase = ['synced','pending','offline','error'].indexOf(s.phase) >= 0 ? s.phase : 'offline';
+  const dotClass = 'dot dot-' + phase;
   const label = {
     synced:  s.lastSyncAt ? 'Đã đồng bộ lúc ' + new Date(s.lastSyncAt).toLocaleTimeString('vi-VN') : 'Đã đồng bộ',
     pending: 'Đang gửi thay đổi…',
     offline: 'Ngoại tuyến — sẽ gửi khi có mạng',
     error:   s.message || 'Đồng bộ lỗi'
-  }[s.phase] || '—';
+  }[phase] || '—';
+  const name = displayName();
+  const initial = ((name && name[0]) || '?').toUpperCase();
+  /* Thẻ hồ sơ nổi bật (nền gradient navy "Priority"): avatar + tên + email +
+     trạng thái đồng bộ, và nút Đăng xuất gọn ngay trong thẻ thay vì một chữ ở
+     góc. Bên dưới là thẻ trắng thường cho lối "nhập dữ liệu cũ". */
   el.innerHTML = `
-    <div class="setting-row">
-      <div class="sr-ic"><span class="${dotClass}"></span></div>
-      <div class="sr-mid"><div class="sr-title">${esc(sessionEmail || 'Tài khoản đám mây')}</div>
-        <div class="sr-sub">${esc(label)}</div></div>
-      <span class="link" onclick="forceSync()">Đồng bộ</span>
+    <div class="profile-card">
+      <div class="profile-decor" aria-hidden="true"></div>
+      <div class="profile-top">
+        <div class="profile-avatar">${esc(initial)}</div>
+        <div class="profile-id">
+          <div class="profile-name">${esc(name)}</div>
+          <div class="profile-email">${esc(sessionEmail || 'Tài khoản đám mây')}</div>
+        </div>
+        <button class="profile-logout" onclick="logout()" aria-label="Đăng xuất">
+          <span class="pl-ic">${icon('logout')}</span><span>Đăng xuất</span>
+        </button>
+      </div>
+      <div class="profile-sync profile-sync-${phase}">
+        <span class="${dotClass}"></span>
+        <span class="profile-sync-label">${esc(label)}</span>
+        <button class="profile-sync-btn" onclick="forceSync()">Đồng bộ</button>
+      </div>
     </div>
-    <div class="setting-row pointer" onclick="showArchivePicker()">
-      <div class="sr-ic">${icon('box')}</div>
-      <div class="sr-mid"><div class="sr-title">Nhập dữ liệu cũ trên máy này</div>
-        <div class="sr-sub">Từ bản offline trước khi dùng đám mây</div></div>
-      <span class="muted">›</span>
+    <div class="card settings-card">
+      <div class="setting-row pointer" onclick="showArchivePicker()">
+        <div class="sr-ic">${icon('box')}</div>
+        <div class="sr-mid"><div class="sr-title">Nhập dữ liệu cũ trên máy này</div>
+          <div class="sr-sub">Từ bản offline trước khi dùng đám mây</div></div>
+        <span class="muted">›</span>
+      </div>
     </div>`;
 }
 async function forceSync(){
