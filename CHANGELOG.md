@@ -12,6 +12,35 @@ thứ khó tìm lại sau nửa năm.
 
 ---
 
+## [5.3.0] — 29/09/2026
+
+Đại tu trang Cài đặt theo ngôn ngữ Neo-Banking, và biến Trung tâm thông báo
+thành một đường cập nhật nhanh — bấm quả chuông là tải/refresh được ngay.
+
+### Thêm
+
+- **Cập nhật nhanh qua Trung tâm thông báo.** `checkAppUpdate()` phát hiện bản
+  mới hơn `APP_VERSION` → đẩy một mục vào quả chuông 🔔: *"🚀 Đã có bản cập nhật
+  mới v[X]"* kèm nhãn *"Hệ thống · Cập nhật"*. id là `app-update-<ver>` (không
+  chứa `Date.now()`) nên cùng một phiên bản chỉ vào chuông đúng một lần — dedup
+  lo việc trùng, và thông báo vẫn còn đó kể cả khi đã bấm "để sau" cho hộp modal.
+  Chấm đỏ sáng ngay khi có bản mới.
+- Bấm mục cập nhật trên chuông → đánh dấu đã đọc **và** chạy thẳng
+  `triggerAppUpdateFlow()`: Web/PWA đã có Service Worker bản mới chờ sẵn thì áp
+  luôn (`skipWaiting` + reload); còn lại (kể cả bản Android APK) mở hộp tải
+  `.apk` / tải lại — không phải vào Cài đặt tìm.
+
+### Đổi
+
+- **Trang Cài đặt — Neo-Banking.** Thẻ hồ sơ nổi bật nền gradient navy
+  "Priority": avatar viền gold, tên + email, thanh trạng thái đồng bộ kính mờ,
+  và nút **Đăng xuất** dạng pill gọn ngay trong thẻ (thay cho chữ ở góc). Công
+  tắc PIN kèm badge trạng thái *Đã bật* / *Chưa thiết lập*. Nhóm "Dữ liệu & Sao
+  lưu" sắp lại theo tần suất dùng: Sao lưu (.json) → Khôi phục → Tải CSV → Nhập
+  CSV. "Vùng nguy hiểm" viền + nền đỏ nhạt (`--brand-red*`) tách rõ khỏi cài đặt
+  thường. Mọi hàng cao tối thiểu 44px (chạm mobile-first), màu qua token nên đạt
+  tương phản ở cả Sáng/Tối.
+
 ## [5.2.4] — 29/09/2026
 
 Hai lỗi nhỏ nhưng gây khó chịu hàng ngày, đều lộ ra khi dùng thật.
