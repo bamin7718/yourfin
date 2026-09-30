@@ -12,6 +12,19 @@ thứ khó tìm lại sau nửa năm.
 
 ---
 
+## [5.4.2] — 30/09/2026
+
+### Đổi
+
+- **Màn "Thêm giao dịch" thu gọn thành hộp thoại nổi căn giữa (Compact Center
+  Card).** Thay cho bottom-sheet trải rộng: card `max-width 420px` căn giữa hai
+  trục (giống khung Trợ lý), bo góc đều 24px, shadow nổi, animation `cardPop`;
+  vẫn giữ nền tối mờ + `backdrop-filter: blur(4px)` phía sau. Thu gọn khoảng cách
+  nội bộ (segment/form-group/sub-view-head 14→10px, amount-box 16→12px, số tiền
+  2.45→2rem) — chỉ trong card này, không ảnh hưởng form khác. Card có cuộn riêng
+  và neo giữa app bar/nav nên nút "Lưu" luôn trong khung. `add` **vẫn là tab**
+  (`.view`), giữ nguyên invariant điều hướng và mọi id/handler.
+
 ## [5.4.1] — 30/09/2026
 
 ### Sửa

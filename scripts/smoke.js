@@ -1200,14 +1200,16 @@ async function boot(opts) {
       /\.fab\{[^}]*border-radius:50%/.test(css) && /top:-27px/.test(css)
       && /background:var\(--gradient-fab\)/.test(css) && /@keyframes fabGlow/.test(css));
 
-    /* Màn Thêm giao dịch trình bày kiểu MoMo bottom sheet (vẫn là tab .view). */
-    check('màn Thêm giao dịch là bottom sheet bo góc trên lớn',
-      /#view-add \.add-sheet\{[^}]*border-radius:28px 28px 0 0/.test(css));
-    check('… có lớp nền tối mờ + blur phía sau sheet',
+    /* Màn Thêm giao dịch: card nổi gọn căn giữa (vẫn là tab .view). */
+    check('màn Thêm giao dịch là card nổi gọn, căn giữa (max-width 420px)',
+      /#view-add \.add-sheet\{[^}]*max-width:420px/.test(css)
+      && /#view-add \.add-sheet\{[^}]*border-radius:24px/.test(css));
+    check('… có lớp nền tối mờ + blur phía sau',
       /#view-add\{[^}]*background:rgba\(0,0,0,\.4\)/.test(css)
       && /#view-add\{[^}]*backdrop-filter:blur\(4px\)/.test(css));
-    check('… sheet neo từ đáy (justify-content:flex-end)',
-      /#view-add\{[^}]*justify-content:flex-end/.test(css));
+    check('… card căn giữa hai trục (justify-content + align-items center)',
+      /#view-add\{[^}]*justify-content:center/.test(css)
+      && /#view-add\{[^}]*align-items:center/.test(css));
 
     // thanh nav dùng SVG, không còn emoji
     const nav = $('main-nav');
