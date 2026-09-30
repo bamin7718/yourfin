@@ -964,7 +964,7 @@ function applyTheme(){
   try{ localStorage.setItem(THEME_KEY, t); }catch(e){}
   const dark = t==='dark' || (t==='auto' && window.matchMedia('(prefers-color-scheme: dark)').matches);
   document.documentElement.setAttribute('data-theme', dark?'dark':'light');
-  document.getElementById('meta-theme-color').setAttribute('content', dark?'#08101C':'#0A2540');
+  document.getElementById('meta-theme-color').setAttribute('content', dark?'#0F172A':'#0052CC');
   const btn = document.getElementById('btn-theme');
   if(btn) btn.innerHTML = icon(dark ? 'sun' : 'moon');
   document.querySelectorAll('#theme-seg .seg').forEach((s,i)=>s.classList.toggle('active', ['light','dark','auto'][i]===t));
@@ -3704,7 +3704,7 @@ function budgetName(b){
   return c ? c.name : 'Danh mục đã xóa';
 }
 function budgetIcon(b){
-  if(b.categoryId==='__all__') return {icon:'🎯', color:'#0A2540'};
+  if(b.categoryId==='__all__') return {icon:'🎯', color:'#0052CC'};
   const c = findCategory('expense', b.categoryId);
   return c ? {icon:c.icon, color:c.color} : {icon:'📦', color:'#94A3B8'};
 }
@@ -5347,7 +5347,7 @@ function drawBars(id, series){
     ctx.fillText(shortMoney(maxVal*i/3), padL-5, y+3);
   }
   /* brand blue for money in, brand red for money out */
-  const cIn = cssVar('--primary') || '#0A2540', cOut = cssVar('--brand-red') || '#E30613';
+  const cIn = cssVar('--primary') || '#0052CC', cOut = cssVar('--brand-red') || '#ED1C24';
   const groupW = chartW/series.length;
   const STUB = 3;   /* a month with no money still gets a mark on the baseline */
   const faint = cssVar('--border') || '#E5E9F0';   /* same fallback habit as cIn/cOut */
@@ -5389,7 +5389,7 @@ function drawLine(id, points){
     ctx.beginPath(); ctx.moveTo(padL,yy); ctx.lineTo(w-padR,yy); ctx.stroke();
     ctx.fillText(shortMoney(minV + span*i/3), padL-5, yy+3);
   }
-  const primary = cssVar('--primary') || '#0A2540';
+  const primary = cssVar('--primary') || '#0052CC';
   const grad = ctx.createLinearGradient(0,padT,0,padT+chartH);
   grad.addColorStop(0, primary+'55'); grad.addColorStop(1, primary+'00');
   ctx.beginPath();
@@ -7721,7 +7721,7 @@ const APK_URL = `https://github.com/${GH_REPO}/releases/latest/download/sofin.ap
 
 /* Stamped in at build time from package.json; the literal is only what runs
    when someone opens the folder without building. */
-const APP_VERSION = (window.__ENV__ && window.__ENV__.VERSION) || '5.3.0';
+const APP_VERSION = (window.__ENV__ && window.__ENV__.VERSION) || '5.4.0';
 /* Which version the user already said "để sau" to — device-local, so a
    dismissal does not sync to their other phone. */
 const UPDATE_SEEN_KEY = 'FINYOURTIN_UPDATE_DISMISSED';

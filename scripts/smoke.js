@@ -1110,7 +1110,7 @@ async function boot(opts) {
   console.log('\n· giao diện: màu, nav, icon SVG');
   {
     const css = fs.readFileSync(path.join(PUBLIC, 'css', 'styles.css'), 'utf8');
-    check('primary là navy Priority #0A2540', /--primary:#0A2540/.test(css));
+    check('primary là xanh iPay #0052CC', /--primary:#0052CC/.test(css));
     /* ĐÃ ĐẢO NGƯỢC quyết định cũ (lưới 2 cột): từ khi Giao dịch gần đây và
        Tiện ích lên đầu trang chủ, chiều dọc đắt hơn chiều ngang. Thứ phải
        khoá lại là mảnh hở của thẻ thứ ba — không có nó thì không ai biết là
@@ -1131,12 +1131,12 @@ async function boot(opts) {
       /\.category-item\{[^}]*cursor:pointer/.test(css) && /\.category-item:active\{[^}]*transform:scale\(\.98\)/.test(css));
     check('hàng chip chọn loại ví đủ chỗ cho 5 loại',
       /\.type-select-row\{display:grid;grid-template-columns:repeat\(3,1fr\)/.test(css));
-    check('có đỏ Priority #E30613 làm màu nhấn', /--brand-red:#E30613/.test(css));
-    check('nền light là #F8F9FA', /--bg:#F8F9FA/.test(css));
+    check('có đỏ iPay #ED1C24 làm màu nhấn', /--brand-red:#ED1C24/.test(css));
+    check('nền light là #F4F7FA', /--bg:#F4F7FA/.test(css));
     check('gradient header đúng công thức',
-      /--gradient:linear-gradient\(135deg,#06192E 0%,#0A2540 55%,#123A5E 100%\)/.test(css));
+      /--gradient:linear-gradient\(135deg,#003366 0%,#0052CC 100%\)/.test(css));
     check('gradient thẻ ví đúng công thức',
-      /--gradient-card:linear-gradient\(135deg,#0A2540 0%,#123A5E 55%,#1B4C78 100%\)/.test(css));
+      /--gradient-card:linear-gradient\(135deg,#0052CC 0%,#003366 100%\)/.test(css));
     check('card có shadow nổi 0 8px 24px rgba(10,37,64,.12)',
       /--shadow-lift:0 8px 24px rgba\(10,37,64,\.12\)/.test(css));
     check('header là app bar gradient', /header\{[^}]*background:var\(--gradient\)/.test(css));
@@ -1269,7 +1269,7 @@ async function boot(opts) {
     check('webDir trỏ vào public — một nguồn duy nhất cho web lẫn mobile',
       cap.webDir === 'public', cap.webDir);
     check('StatusBar dùng xanh VietinBank',
-      cap.plugins.StatusBar.backgroundColor === '#0A2540' && cap.plugins.StatusBar.style === 'LIGHT');
+      cap.plugins.StatusBar.backgroundColor === '#0052CC' && cap.plugins.StatusBar.style === 'LIGHT');
     check('Keyboard resize body', cap.plugins.Keyboard.resize === 'body');
 
     const ignore = fs.readFileSync(path.join(ROOT, '.gitignore'), 'utf8');
@@ -1496,7 +1496,7 @@ async function boot(opts) {
     check('có apple-touch-icon', /rel="apple-touch-icon"/.test(head));
     check('có meta apple-mobile-web-app-capable', /apple-mobile-web-app-capable/.test(head));
     check('có meta theme-color đúng màu SoFin',
-      d.querySelector('meta[name="theme-color"]').content === '#0A2540');
+      d.querySelector('meta[name="theme-color"]').content === '#0052CC');
     check('favicon trỏ vào icon thương hiệu, không phải emoji',
       /rel="icon"[^>]*icons\/icon-192\.png/.test(head) && !/font-size='90'/.test(head));
     check('có thẻ OpenGraph + Twitter card',

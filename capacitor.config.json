@@ -11,7 +11,7 @@
   "plugins": {
     "StatusBar": {
       "style": "LIGHT",
-      "backgroundColor": "#0A2540",
+      "backgroundColor": "#0052CC",
       "overlaysWebView": false
     },
     "Keyboard": {

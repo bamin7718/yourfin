@@ -2,29 +2,32 @@
    SoFin — Design tokens
    ============================================================ */
 :root{
-  /* Techcombank Priority palette — Navy #0A2540 + Gold accent, Red #E30613 */
-  --primary:#0A2540; --primary-dark:#06192E; --primary-light:#E3E9F1; --primary-soft:#F1F4F8;
-  --brand-red:#E30613; --brand-red-soft:#FDE7E8;
-  /* Gold — chỉ dùng cho viền avatar và điểm nhấn "Priority" trên thẻ số dư.
+  /* VietinBank iPay palette — Blue #0052CC + Gold accent, Red #ED1C24.
+     (Tái khớp với design language iPay ghi trong CLAUDE.md.) */
+  --primary:#0052CC; --primary-dark:#003366; --primary-light:#D6E4FF; --primary-soft:#EFF4FF;
+  --brand-red:#ED1C24; --brand-red-soft:#FDE7E8;
+  /* Gold — chỉ dùng cho viền avatar và điểm nhấn cao cấp trên thẻ số dư.
      Là một điểm nhấn kim loại, không phải màu thương hiệu chính. */
   --gold:#C9A24B; --gold-soft:#EAD9A6; --gold-line:rgba(201,162,75,.55);
   /* Đường kẻ hairline giữa các dòng trong grouped card */
-  --hairline:#F1F5F9;
+  --hairline:#EEF3F9;
   --on-primary:#FFFFFF;
-  --gradient:linear-gradient(135deg,#06192E 0%,#0A2540 55%,#123A5E 100%);   /* header */
-  --gradient-card:linear-gradient(135deg,#0A2540 0%,#123A5E 55%,#1B4C78 100%); /* balance & wallet cards */
-  --gradient-fab:linear-gradient(135deg,#0A2540 0%,#123A5E 55%,#E30613 165%);
-  --primary-glow:rgba(10,37,64,.34);
+  --gradient:linear-gradient(135deg,#003366 0%,#0052CC 100%);   /* header */
+  --gradient-card:linear-gradient(135deg,#0052CC 0%,#003366 100%); /* balance & wallet cards */
+  --gradient-fab:linear-gradient(135deg,#0052CC 0%,#ED1C24 100%);
+  --primary-glow:rgba(0,82,204,.30);
+  /* Vệt màu nền fintech dịu (radial) — sáng/tối khác nhau, xem body,.app */
+  --fin-tint-a:rgba(0,82,204,.05); --fin-tint-b:rgba(237,28,36,.03);
   --income:#10B981; --income-bg:#E4F8F1;
   --expense:#EF4444; --expense-bg:#FDECEC;
-  /* the brand owns navy too — transfers read as "priority navy" */
-  --transfer:#0A2540; --transfer-bg:#E9EDF3;
+  /* transfers mang màu xanh thương hiệu */
+  --transfer:#0052CC; --transfer-bg:#E7EFFB;
   --warn:#F59E0B; --warn-bg:#FEF3C7;
-  --bg:#F8F9FA; --bg-soft:#FFFFFF; --card:#FFFFFF; --card-2:#F5F7FA;
-  --text:#0E1C2B; --muted:#65788F; --border:#E8ECF2;
-  --shadow:0 2px 8px rgba(10,37,64,.07);
+  --bg:#F4F7FA; --bg-soft:#FFFFFF; --card:#FFFFFF; --card-2:#F1F5F9;
+  --text:#1E293B; --muted:#64748B; --border:#E2E8F0;
+  --shadow:0 4px 16px rgba(0,82,204,.07);
   --shadow-lift:0 8px 24px rgba(10,37,64,.12);
-  --radius:18px; --radius-sm:12px; --radius-xs:10px; --radius-xl:24px;
+  --radius:20px; --radius-sm:12px; --radius-xs:10px; --radius-xl:24px;
   --safe-b:env(safe-area-inset-bottom,0px);
   --nav-h:64px;
   /* Màn nhập số tiền mượn bảng màu bàn phím của Techcombank — cố ý KHÔNG dùng
@@ -37,21 +40,22 @@
   --tcb-quick-bg:#E2E8F0; --tcb-quick-line:#CBD5E1;
 }
 html[data-theme="dark"]{
-  --primary:#5E8CBF; --primary-dark:#8FB3D6; --primary-light:#12304A; --primary-soft:#0C2033;
+  --primary:#5B9DFF; --primary-dark:#8FBFFF; --primary-light:#12325C; --primary-soft:#0C223D;
   --brand-red:#FF5A61; --brand-red-soft:#3A1417;
   --gold:#D4B15E; --gold-soft:#5A4A20; --gold-line:rgba(212,177,94,.5);
   --hairline:#1B2A3D;
   --on-primary:#04182C;
-  --gradient:linear-gradient(135deg,#04101E 0%,#0A2540 55%,#123A5E 100%);
-  --gradient-card:linear-gradient(135deg,#0A2540 0%,#123A5E 55%,#1B4C78 100%);
-  --gradient-fab:linear-gradient(135deg,#0A2540 0%,#123A5E 55%,#D8323A 165%);
-  --primary-glow:rgba(94,140,191,.38);
+  --gradient:linear-gradient(135deg,#0B132B 0%,#1C2541 100%);
+  --gradient-card:linear-gradient(135deg,#123A6B 0%,#0B1B3A 100%);
+  --gradient-fab:linear-gradient(135deg,#0052CC 0%,#ED1C24 100%);
+  --primary-glow:rgba(59,130,246,.38);
+  --fin-tint-a:rgba(59,130,246,.08); --fin-tint-b:rgba(239,68,68,.05);
   --income:#3DD98B; --income-bg:#0C2B1E;
   --expense:#FF6B6B; --expense-bg:#3A1417;
-  --transfer:#5E8CBF; --transfer-bg:#0C2A47;
+  --transfer:#5B9DFF; --transfer-bg:#0C2A47;
   --warn:#FBBF24; --warn-bg:#3B2C08;
-  --bg:#08101C; --bg-soft:#0D1826; --card:#132132; --card-2:#18293D;
-  --text:#E7EEF6; --muted:#8FA3BA; --border:#22364F;
+  --bg:#0F172A; --bg-soft:#111C2E; --card:#1E293B; --card-2:#243244;
+  --text:#E7EEF6; --muted:#8FA3BA; --border:#334155;
   --shadow:0 2px 8px rgba(0,0,0,.35);
   --shadow-lift:0 8px 24px rgba(0,0,0,.45);
   /* Bàn phím trắng trên nền tối là một tấm đèn pha giữa đêm — hạ toàn bộ bề
@@ -76,6 +80,15 @@ input,select,textarea,button{font-family:inherit;}
    has min-height and no height) simply never sticks. `clip` trims the same
    overflow without creating a scrollport. */
 .app{width:100%;max-width:520px;background:var(--bg);min-height:100vh;display:flex;flex-direction:column;position:relative;box-shadow:0 0 40px rgba(15,23,42,.08);overflow-x:clip;}
+/* Nền fintech: hai vệt radial rất dịu (xanh + đỏ nhấn) trên nền phẳng — chiều
+   sâu tinh tế kiểu ngân hàng số, không họa tiết rườm rà. Chỉ đặt background-image
+   (giữ nguyên background-color của body/.app), sáng/tối qua --fin-tint-*. */
+body,.app{
+  background-image:
+    radial-gradient(circle at 10% 10%,var(--fin-tint-a) 0%,transparent 40%),
+    radial-gradient(circle at 90% 20%,var(--fin-tint-b) 0%,transparent 35%);
+  background-attachment:fixed;
+}
 .hidden{display:none!important;}
 .tabular{font-variant-numeric:tabular-nums;}
 .text-center{text-align:center;} .text-right{text-align:right;}
@@ -112,15 +125,16 @@ header{position:fixed;top:0;left:50%;transform:translateX(-50%);
   width:100%;max-width:520px;z-index:40;
   display:flex;justify-content:space-between;align-items:center;
   gap:10px;padding:calc(9px + env(safe-area-inset-top,0px)) 14px 26px;background:var(--gradient);
-  color:#fff;border-bottom-left-radius:20px;border-bottom-right-radius:20px;
+  color:#fff;border-bottom-left-radius:24px;border-bottom-right-radius:24px;
+  box-shadow:0 4px 20px -2px var(--primary-glow);
   transition:padding-bottom .2s ease;}
-header::after{content:'';position:absolute;right:-30px;top:-60px;width:180px;height:180px;
-  border-radius:50%;background:rgba(255,255,255,.07);pointer-events:none;}
+/* Fintech sạch: bỏ khối tròn trang trí nổi ở góc — App Bar dùng gradient phẳng
+   sắc nét, không họa tiết rườm rà. */
 /* Avatar tròn viền gold ("Priority"): chữ cái đầu của tên hiển thị. Nằm ngoài
    cùng bên trái app bar, đứng trước lời chào. */
 header .hd-avatar{flex:0 0 auto;width:36px;height:36px;border-radius:50%;
   display:flex;align-items:center;justify-content:center;font-weight:800;font-size:.92rem;
-  color:#fff;background:linear-gradient(135deg,#123A5E,#0A2540);
+  color:#fff;background:linear-gradient(135deg,#0052CC,#003366);
   border:2px solid var(--gold);box-shadow:0 0 0 1px rgba(201,162,75,.35),0 2px 6px rgba(0,0,0,.25);
   text-transform:uppercase;user-select:none;}
 /* Greeting and name share the line; the name gives up space first. */
@@ -199,14 +213,13 @@ select.input{appearance:none;background-image:linear-gradient(45deg,transparent 
    padding:16px;margin-top:0 giữ nguyên (smoke khoá: thẻ nằm dưới header, không
    margin âm). Nền kim loại navy + một vệt gold chéo mờ và hairline gold ở mép
    trên; chữ trắng vì nền đã tối. box-shadow theo chuẩn thiết kế Priority. */
-.hero{background:var(--gradient-card);border:1px solid var(--gold-line);border-radius:24px;
+.hero{background:var(--gradient-card);border:1px solid rgba(255,255,255,.08);border-radius:26px;
   padding:16px;margin-top:0;margin-bottom:14px;position:relative;overflow:hidden;
-  box-shadow:0 10px 30px rgba(0,0,0,.05);color:#fff;-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);}
-/* Vệt kim loại gold quét chéo + đốm sáng góc, tạo cảm giác thẻ ánh kim */
+  box-shadow:0 14px 34px var(--primary-glow),0 2px 6px rgba(10,37,64,.10);color:#fff;}
+/* Fintech sạch: một vệt sáng dịu ở góc trên cho chiều sâu, KHÔNG họa tiết ánh
+   kim rườm rà (đã bỏ vệt gold quét chéo + hairline gold của bản Priority cũ). */
 .hero::before{content:'';position:absolute;inset:0;pointer-events:none;
-  background:linear-gradient(120deg,transparent 0%,rgba(201,162,75,.16) 42%,rgba(255,255,255,.10) 50%,transparent 66%);}
-.hero::after{content:'';position:absolute;top:0;left:0;right:0;height:2px;pointer-events:none;
-  background:linear-gradient(90deg,transparent,var(--gold),transparent);opacity:.85;}
+  background:radial-gradient(125% 85% at 86% -14%,rgba(255,255,255,.14),transparent 58%);}
 .hero > *{position:relative;z-index:1;}
 .hero .lbl{font-size:.72rem;color:rgba(255,255,255,.78);font-weight:700;letter-spacing:.2px;}
 .hero .amt-row{display:flex;align-items:center;gap:10px;margin:4px 0 12px;}
@@ -250,11 +263,12 @@ select.input{appearance:none;background-image:linear-gradient(45deg,transparent 
    either a wallet name or an amount. */
 .wallet-card{width:100%;min-width:0;min-height:72px;box-sizing:border-box;
   display:flex;align-items:center;gap:9px;background:var(--gradient-card);
-  border:none;border-radius:12px;padding:10px 12px;cursor:pointer;color:#fff;
-  box-shadow:0 4px 12px rgba(0,82,156,.18);transition:transform .15s ease,box-shadow .15s ease;
+  border:none;border-radius:16px;padding:11px 13px;cursor:pointer;color:#fff;
+  box-shadow:0 8px 20px var(--primary-glow),0 1px 3px rgba(10,37,64,.12);transition:transform .15s ease,box-shadow .15s ease;
   position:relative;overflow:hidden;}
-.wallet-card::after{content:'';position:absolute;right:-26px;top:-34px;width:82px;height:82px;
-  border-radius:50%;background:rgba(255,255,255,.10);}
+.wallet-card:hover{box-shadow:0 12px 26px var(--primary-glow),0 2px 6px rgba(10,37,64,.16);}
+.wallet-card::after{content:'';position:absolute;inset:0;pointer-events:none;
+  background:radial-gradient(120% 90% at 92% -18%,rgba(255,255,255,.12),transparent 60%);}
 .wallet-card .w-body{min-width:0;flex:1;position:relative;z-index:1;}
 .wallet-card:active{transform:scale(.97);}
 .wallet-card .wicon{width:32px;height:32px;flex:0 0 auto;border-radius:10px;display:flex;
@@ -1299,7 +1313,7 @@ html[data-theme="dark"] .legend-bar{background:var(--card-2);}
 .profile-top{position:relative;display:flex;align-items:center;gap:12px;}
 .profile-avatar{flex:0 0 auto;width:52px;height:52px;border-radius:50%;
   display:flex;align-items:center;justify-content:center;font-weight:800;font-size:1.35rem;
-  color:#fff;background:linear-gradient(135deg,#1B4C78,#0A2540);
+  color:#fff;background:linear-gradient(135deg,#0052CC,#003366);
   border:2px solid var(--gold);box-shadow:0 0 0 1px rgba(201,162,75,.35),0 3px 10px rgba(0,0,0,.30);
   text-transform:uppercase;user-select:none;}
 .profile-id{flex:1;min-width:0;}

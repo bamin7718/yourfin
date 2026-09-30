@@ -12,6 +12,39 @@ thứ khó tìm lại sau nửa năm.
 
 ---
 
+## [5.4.0] — 30/09/2026
+
+Chuyển ngôn ngữ thiết kế về **VietinBank iPay** — xanh `#0052CC` + đỏ nhấn
+`#ED1C24`, tái khớp với mục "Icon và màu" trong CLAUDE.md (token từng trôi sang
+navy Priority ở 5.2.3). Kèm tinh chỉnh App Bar / Tổng quan và một lớp nền
+fintech sạch.
+
+### Đổi
+
+- **Bảng màu thương hiệu → xanh iPay.** `--primary #0052CC`, `--primary-dark
+  #003366`, `--brand-red #ED1C24`; gradient header `#003366→#0052CC`, thẻ ví
+  `#0052CC→#003366`, nút + (fab) `#0052CC→#ED1C24`; nền `#F4F7FA`. Đổi đồng bộ
+  đúng mọi nơi neo màu để không lệch: `applyTheme()` (meta theme-color),
+  `manifest.json`, `capacitor.config.json` (StatusBar), `scripts/generate-icons.js`
+  (chạy lại `npm run icons`), và fallback màu trong `drawDonut`/`budgetIcon`.
+  Đủ biến dark mode; điểm nhấn gold ở avatar giữ lại làm dấu nhận diện.
+
+- **App Bar (iPay).** Thêm nút Cài đặt ⚙️ cạnh chuông 🔔 (giữ nút đổi theme);
+  header bo mềm 24px + shadow ngân hàng số. Giữ nguyên lời chào + tên người dùng.
+
+- **Tổng quan.** Thẻ tổng tài sản bo mềm hơn (26px) + shadow theo `--primary-glow`;
+  thẻ ví bo 16px, shadow mượt, hover. Giữ nguyên thanh ví cuộn ngang `flex:0 0 46%`,
+  lưới Tiện ích 5 ô, và thứ tự khối (smoke khoá).
+
+- **Nền fintech sạch.** Hai vệt radial rất dịu (xanh + đỏ nhấn) cho `body,.app`,
+  sáng/tối qua `--fin-tint-*`. Bỏ họa tiết rườm rà của bản Priority cũ: vệt gold
+  quét chéo + hairline gold trên hero, khối tròn nổi trên header, đổi khối tròn
+  thẻ ví thành highlight radial dịu.
+
+- **Nav & nút + (giữ nguyên).** Bottom nav glassmorphism `blur(14px)`, vạch chỉ
+  báo đỏ, nút + gradient tròn nổi khối + hiệu ứng `fabGlow` — đã có sẵn, khoá bởi
+  smoke, không đổi.
+
 ## [5.3.0] — 29/09/2026
 
 Đại tu trang Cài đặt theo ngôn ngữ Neo-Banking, và biến Trung tâm thông báo

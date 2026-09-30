@@ -168,9 +168,9 @@
   position: relative;
   padding-left: 20px; padding-right: 20px;
   background:
-    radial-gradient(120% 80% at 50% -10%, rgba(27,76,120,.55), transparent 60%),
+    radial-gradient(120% 80% at 50% -10%, rgba(0,82,204,.45), transparent 60%),
     radial-gradient(90% 60% at 100% 100%, rgba(201,162,75,.10), transparent 55%),
-    linear-gradient(160deg, #0A2540 0%, #071A30 55%, #051424 100%);
+    linear-gradient(160deg, #0052CC 0%, #003366 55%, #002244 100%);
 }
 /* Họa tiết sóng chìm mờ nhẹ */
 #view-login::before{
@@ -182,7 +182,7 @@
 /* Logo squircle S-Neural Spark */
 #view-login .auth-logo-squircle{
   width: 64px; height: 64px; border-radius: 22px;
-  background: linear-gradient(145deg, #123A5E, #0A2540);
+  background: linear-gradient(145deg, #0052CC, #003366);
   border: 1.5px solid var(--gold);
   box-shadow: 0 8px 22px rgba(0,0,0,.35), 0 0 0 4px rgba(201,162,75,.12);
 }
