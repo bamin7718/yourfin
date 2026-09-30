@@ -74,7 +74,6 @@
     <div class="hd-tools">
       <button class="icon-btn" onclick="toggleTheme()" id="btn-theme" title="Đổi giao diện"><svg class="ic-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4 8.5 8.5 0 1 0 20 14.5z"/></svg></button>
       <button class="icon-btn" style="position:relative;" id="notification-bell" onclick="openNotifications()" title="Thông báo" aria-label="Thông báo"><svg class="ic-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 9a6 6 0 1 0-12 0c0 5-2 6.5-2 6.5h16S18 14 18 9"/><path d="M13.7 19a2 2 0 0 1-3.4 0"/></svg><span id="alert-dot" class="badge-dot hidden"></span></button>
-      <button class="icon-btn" id="btn-settings" onclick="switchTab('settings')" title="Cài đặt" aria-label="Cài đặt"><svg class="ic-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.8-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.6 1.6 0 0 0-1-1.5 1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.8 1.6 1.6 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.6 1.6 0 0 0 1.5-1 1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3H9a1.6 1.6 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8V9a1.6 1.6 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z"/></svg></button>
     </div>
   </header>
 
@@ -352,7 +351,13 @@
   </div>
 
   <!-- ============ ADD / EDIT TRANSACTION ============ -->
+  <!-- Bottom sheet kiểu MoMo: `add` VẪN là tab (.view) — không đổi sang modal
+       (giữ invariant điều hướng trong CLAUDE.md). Chỉ dựng lại bằng CSS: nội dung
+       nằm trong .add-sheet nổi từ đáy, bo góc trên lớn, có drag handle; phần .view
+       phía trên .add-sheet là lớp nền tối mờ. -->
   <div id="view-add" class="view hidden">
+    <div class="add-sheet">
+    <div class="handle" aria-hidden="true"></div>
     <div class="sub-view-head">
       <button class="icon-btn" onclick="cancelAddTx()">‹</button>
       <h3 id="add-title">Thêm giao dịch</h3>
@@ -425,6 +430,7 @@
       </div>
       <button class="btn btn-primary" onclick="saveTransfer()">Xác nhận chuyển</button>
     </div>
+    </div><!-- /.add-sheet -->
   </div>
 
   <!-- ============ REPORTS ============ -->

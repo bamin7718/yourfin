@@ -1200,6 +1200,15 @@ async function boot(opts) {
       /\.fab\{[^}]*border-radius:50%/.test(css) && /top:-27px/.test(css)
       && /background:var\(--gradient-fab\)/.test(css) && /@keyframes fabGlow/.test(css));
 
+    /* Màn Thêm giao dịch trình bày kiểu MoMo bottom sheet (vẫn là tab .view). */
+    check('màn Thêm giao dịch là bottom sheet bo góc trên lớn',
+      /#view-add \.add-sheet\{[^}]*border-radius:28px 28px 0 0/.test(css));
+    check('… có lớp nền tối mờ + blur phía sau sheet',
+      /#view-add\{[^}]*background:rgba\(0,0,0,\.4\)/.test(css)
+      && /#view-add\{[^}]*backdrop-filter:blur\(4px\)/.test(css));
+    check('… sheet neo từ đáy (justify-content:flex-end)',
+      /#view-add\{[^}]*justify-content:flex-end/.test(css));
+
     // thanh nav dùng SVG, không còn emoji
     const nav = $('main-nav');
     check('mỗi mục nav là một SVG', nav.querySelectorAll('.nav-item .ic svg.ic-svg').length === 4,

@@ -12,6 +12,23 @@ thứ khó tìm lại sau nửa năm.
 
 ---
 
+## [5.4.1] — 30/09/2026
+
+### Sửa
+
+- **Gỡ nút Cài đặt ⚙️ trên App Bar.** Nút này (thêm ở 5.4.0) trùng chức năng với
+  tab Cài đặt ở thanh nav dưới và không đáng để giữ; App Bar trở lại hai nút gọn:
+  đổi giao diện 🌙 và chuông thông báo 🔔.
+
+### Đổi
+
+- **Màn "Thêm giao dịch" theo phong cách MoMo bottom sheet.** Nội dung form bọc
+  trong tấm sheet nổi từ đáy: drag handle nhỏ trên cùng, bo góc trên lớn
+  (`28px`), nền tối mờ `rgba(0,0,0,.4)` + `backdrop-filter: blur(4px)` phía sau,
+  neo trên nav / dưới app bar, trượt lên bằng `sheetUp` (tôn trọng
+  `prefers-reduced-motion`). `add` **vẫn là tab** (`.view`) — chỉ trình bày lại
+  bằng CSS, giữ nguyên invariant điều hướng trong CLAUDE.md và mọi id/handler.
+
 ## [5.4.0] — 30/09/2026
 
 Chuyển ngôn ngữ thiết kế về **VietinBank iPay** — xanh `#0052CC` + đỏ nhấn

@@ -724,6 +724,33 @@ html[data-theme="dark"] .progress-track{background:#0B1120;}
 .sheet{background:var(--card);width:100%;max-width:520px;border-top-left-radius:22px;border-top-right-radius:22px;padding:18px 18px calc(18px + var(--safe-b));max-height:90vh;overflow-y:auto;animation:slideUp .22s ease;}
 .sheet .handle{width:38px;height:4px;background:var(--border);border-radius:4px;margin:0 auto 14px;}
 .sheet h3{font-size:1.08rem;font-weight:800;}
+
+/* ---------- MÀN THÊM GIAO DỊCH: BOTTOM SHEET KIỂU MoMo ----------
+   `add` VẪN là tab (.view), không đổi sang modal (giữ invariant điều hướng
+   trong CLAUDE.md). Chỉ trình bày lại bằng CSS:
+   · phần .view phía trên .add-sheet đóng vai LỚP NỀN TỐI MỜ (dim + blur);
+   · .add-sheet là tấm sheet nổi từ đáy, bo góc trên lớn, có drag handle.
+   padding-top (chừa app bar) và padding-bottom (chừa nav) vẫn thừa kế từ .view,
+   nên sheet neo phía trên nav và dưới app bar. */
+#view-add{
+  padding-left:0;padding-right:0;                 /* sheet tràn ngang; top/bottom giữ từ .view */
+  display:flex;flex-direction:column;justify-content:flex-end;
+  background:rgba(0,0,0,.4);
+  -webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px);
+}
+#view-add .add-sheet{
+  background:var(--card);
+  border-radius:28px 28px 0 0;
+  padding:8px 16px calc(16px + var(--safe-b));
+  max-height:100%;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;
+  box-shadow:0 -12px 34px rgba(0,0,0,.22);
+  animation:sheetUp .28s cubic-bezier(.22,1,.36,1);
+}
+#view-add .add-sheet .handle{
+  width:40px;height:4px;background:var(--border);border-radius:4px;margin:2px auto 10px;flex:0 0 auto;
+}
+#view-add .add-sheet .sub-view-head{margin-top:2px;}
+@media (prefers-reduced-motion:reduce){ #view-add .add-sheet{animation:none;} }
 .empty-state{text-align:center;padding:36px 16px;color:var(--muted);}
 .empty-state .ic{font-size:2.3rem;margin-bottom:8px;}
 .empty-state .es-sub{font-size:.74rem;margin-top:4px;opacity:.85;}
