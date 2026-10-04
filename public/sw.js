@@ -21,7 +21,12 @@
 'use strict';
 
 const BUILD = new URL(self.location.href).searchParams.get('v') || 'dev';
-const CACHE = 'sofin-' + BUILD;
+/* Revision thủ công: tăng số này mỗi lần muốn ÉP mọi client bỏ cache cũ, kể cả
+   khi ?v= KHÔNG đổi (bản dev, hoặc mở thẳng từ đĩa — lúc đó BUILD luôn là 'dev').
+   Trình duyệt so BYTE của sw.js nên chỉ cần nội dung file này đổi là SW mới được
+   cài; gộp REV vào tên cache để activate() dọn sạch bundle cũ ngay sau đó. */
+const SW_REV = '1.0.1';
+const CACHE = 'sofin-' + BUILD + '-' + SW_REV;
 
 /* Web Share Target: ảnh biên lai được một app khác (Techcombank, thư viện ảnh…)
    chia sẻ sang sẽ POST vào /share-target. App này không có server để nhận file,
