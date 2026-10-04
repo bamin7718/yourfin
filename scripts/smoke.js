@@ -2651,6 +2651,71 @@ async function boot(opts) {
     window.switchTab('dashboard'); await sleep(20);
   }
 
+  console.log('\n· trợ lý chat: thẻ báo cáo tài chính (FINANCIAL_SUMMARY)');
+  {
+    const pi = window.parseQueryIntent;
+    /* Nhận diện ý định báo cáo với nhiều cách nói. */
+    check('“báo cáo tháng này” → FINANCIAL_SUMMARY', pi('báo cáo tháng này').kind === 'FINANCIAL_SUMMARY',
+      JSON.stringify(pi('báo cáo tháng này')));
+    check('“tình hình tài chính thế nào” → FINANCIAL_SUMMARY',
+      pi('tình hình tài chính thế nào?').kind === 'FINANCIAL_SUMMARY');
+    check('“tổng chi tiêu ra sao” → FINANCIAL_SUMMARY',
+      pi('tổng chi tiêu ra sao').kind === 'FINANCIAL_SUMMARY');
+    check('“báo cáo thu chi tuần qua” → FINANCIAL_SUMMARY + last_week',
+      pi('báo cáo thu chi tuần qua').kind === 'FINANCIAL_SUMMARY'
+      && pi('báo cáo thu chi tuần qua').period === 'last_week',
+      JSON.stringify(pi('báo cáo thu chi tuần qua')));
+    check('“tóm tắt tài chính tuần này” → this_week',
+      pi('tóm tắt tài chính tuần này').period === 'this_week');
+    check('“báo cáo năm nay” → this_year', pi('báo cáo năm nay').period === 'this_year');
+
+    /* Các câu đã khoá KHÔNG bị hiểu nhầm thành báo cáo. */
+    check('“chi nhiều nhất” vẫn là HIGHEST_EXPENSE', pi('tháng này chi nhiều nhất vào đâu?').kind === 'HIGHEST_EXPENSE');
+    check('“ăn uống bao nhiêu” vẫn là CATEGORY_TOTAL', pi('ăn uống tháng này bao nhiêu?').kind === 'CATEGORY_TOTAL');
+
+    /* Số liệu phải bằng ĐÚNG phép tính của báo cáo trên cùng phạm vi. */
+    const res = window.executeQuery(pi('báo cáo tháng này'));
+    const mine = window.eval(`(function(){
+      const k = monthKey(todayISO());
+      const txs = getUserTransactions().filter(t=>monthKey(t.date)===k && (t.type==='expense'||t.type==='income'));
+      const tin = txs.filter(t=>t.type==='income').reduce((a,t)=>a+txMain(t),0);
+      const tout = txs.filter(t=>t.type==='expense').reduce((a,t)=>a+txMain(t),0);
+      return JSON.stringify({tin, tout, net: tin-tout});
+    })()`);
+    check('tổng thu/chi/ròng khớp phép tính của báo cáo',
+      JSON.stringify({tin:res.summary.totalIn, tout:res.summary.totalOut, net:res.summary.net}) === mine,
+      JSON.stringify({got:{tin:res.summary.totalIn, tout:res.summary.totalOut, net:res.summary.net}, want:JSON.parse(mine)}));
+    check('top danh mục tối đa 3', res.summary.top.length <= 3, String(res.summary.top.length));
+    check('tỷ trọng top cộng lại không vượt 100%',
+      res.summary.top.reduce((a,t)=>a+t.pct,0) <= 100,
+      String(res.summary.top.reduce((a,t)=>a+t.pct,0)));
+    if(res.summary.top.length){
+      const sumTop = res.summary.top.reduce((a,t)=>a+t.amt,0);
+      check('số tiền top danh mục không vượt tổng chi', sumTop <= res.summary.totalOut + 0.01);
+    }
+
+    /* Thẻ trực quan render ra ĐÚNG khối báo cáo + nút sang tab Báo cáo, và KHÔNG
+       ghi giao dịch nào. */
+    window.openChatDrawer(); await sleep(20);
+    const txBefore = S().transactions.length;
+    $('chat-input').value = 'báo cáo tháng này';
+    window.chatSend(); await sleep(60);
+    const card = [...$('chat-body').querySelectorAll('.bot-card-action')].pop();
+    check('render thẻ báo cáo trực quan', !!card && card.classList.contains('chat-report'));
+    check('… có đủ ba dòng thu/chi/ròng', !!card && card.querySelectorAll('.cr-flow').length === 3);
+    check('… có thanh tiến trình cho top danh mục',
+      !!card && (res.summary.top.length === 0 || card.querySelectorAll('.cr-bar').length === res.summary.top.length));
+    check('… có nút sang tab Báo cáo', !!card && /tab Báo cáo/.test(card.textContent));
+    check('… không ghi giao dịch nào vào sổ', S().transactions.length === txBefore);
+
+    /* Bấm nút: sang tab Báo cáo. */
+    card.querySelector('.chat-link').click(); await sleep(60);
+    check('bấm nút thẻ báo cáo → sang tab Báo cáo', visible('view-reports'));
+
+    window.closeChatDrawer(true);
+    window.switchTab('dashboard'); await sleep(20);
+  }
+
   console.log('\n· trợ lý chat: đọc hoá đơn');
   {
     /* Phần bóc tách văn bản chạy được mà không cần engine OCR — đó cũng chính

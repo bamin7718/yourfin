@@ -1136,6 +1136,26 @@ html[data-theme="dark"] .chat-drawer{box-shadow:0 -4px 20px rgba(0,0,0,.55);}
 .bca-amt{font-size:.95rem;font-weight:800;letter-spacing:-.2px;}
 /* Dòng "chưa nhận diện được": nhắc mà không hét — người dùng vẫn lưu được. */
 .bca-note{margin:4px 2px 0;font-size:.68rem;line-height:1.4;color:var(--warn);}
+
+/* ---------- THẺ BÁO CÁO TRONG CHAT (FINANCIAL_SUMMARY) ---------- */
+.chat-report .cr-flows{display:flex;flex-direction:column;gap:2px;margin-bottom:4px;}
+.cr-flow{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:5px 2px;font-size:.82rem;}
+.cr-flow-lbl{color:var(--muted);font-weight:600;}
+.cr-flow-val{font-weight:800;letter-spacing:-.2px;}
+/* Dòng "Số dư ròng" tách bằng viền trên — nó là kết luận của hai dòng trên. */
+.cr-net{border-top:1px solid var(--border);margin-top:3px;padding-top:9px;}
+.cr-net .cr-flow-lbl{color:var(--text);font-weight:700;}
+.cr-net .cr-flow-val{font-size:1rem;}
+.cr-top-lbl{font-size:.7rem;font-weight:800;letter-spacing:.04em;text-transform:uppercase;
+  color:var(--muted);margin:10px 2px 7px;}
+.cr-cat{margin-bottom:9px;}
+.cr-cat:last-child{margin-bottom:2px;}
+.cr-cat-top{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:5px;font-size:.78rem;}
+.cr-cat-name{font-weight:700;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.cr-cat-amt{color:var(--muted);font-weight:700;flex:0 0 auto;}
+/* Thanh tiến trình: nền mảnh, phần tô bo tròn, màu lấy theo danh mục. */
+.cr-bar{height:7px;border-radius:5px;background:var(--bg);overflow:hidden;}
+.cr-bar>span{display:block;height:100%;border-radius:5px;min-width:3%;transition:width .3s ease;}
 .bca-btns{display:flex;gap:8px;margin-top:10px;}
 .bca-btns .btn{margin:0;min-height:40px;font-size:.8rem;}
 .bca-saved{display:flex;align-items:center;gap:6px;font-size:.8rem;font-weight:700;

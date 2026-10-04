@@ -6301,25 +6301,53 @@ async function chatOcrImage(file){
    "tôi không hiểu nhưng cứ đoán": không nhận ra ý định thì tin nhắn quay về
    luồng tạo giao dịch như trước. */
 const QUERY_PERIODS = {
-  /* tên trong intent  →  mốc của tab Báo cáo / mốc của tab Giao dịch */
+  /* tên trong intent  →  mốc của tab Báo cáo / mốc của tab Giao dịch.
+     Tuần (this_week/last_week) không có preset ở hai tab nên đi qua 'custom':
+     chatNavigate() ghi hai ô ngày từ periodBounds() TRƯỚC khi chuyển tab. */
   this_month:   {report:'thismonth', tx:'thismonth', label:'tháng này'},
   last_month:   {report:'lastmonth', tx:'lastmonth', label:'tháng trước'},
   this_year:    {report:'thisyear',  tx:'thisyear',  label:'năm nay'},
+  this_week:    {report:'custom',    tx:'custom',    label:'tuần này'},
+  last_week:    {report:'custom',    tx:'custom',    label:'tuần trước'},
   last_7_days:  {report:'custom',    tx:'7d',        label:'7 ngày qua'}
 };
+/* Mốc ngày của một kỳ — MỘT nguồn sự thật dùng cho cả queryScope() (tính số) và
+   chatNavigate() (đặt ô ngày của tab đích). Hai nơi lệch nhau thì con số trên
+   thẻ chat và con số trên tab Báo cáo sẽ khác nhau. */
+function startOfWeekISO(iso){
+  /* Tuần bắt đầu Thứ Hai (vi-VN): getDay() trả 0=CN..6=T7, nên lùi (day+6)%7. */
+  const off = (parseISO(iso).getDay() + 6) % 7;
+  return addDaysISO(iso, -off);
+}
+function periodBounds(period){
+  const today = todayISO();
+  const d = parseISO(today), y = d.getFullYear(), mo = d.getMonth();
+  if(period === 'last_month') return {start:isoOf(new Date(y, mo-1, 1)), end:isoOf(new Date(y, mo, 0))};
+  if(period === 'this_year')  return {start:y + '-01-01', end:y + '-12-31'};
+  if(period === 'last_7_days') return {start:addDaysISO(today, -6), end:today};
+  if(period === 'this_week')  return {start:startOfWeekISO(today), end:today};
+  if(period === 'last_week'){ const s = startOfWeekISO(addDaysISO(today, -7)); return {start:s, end:addDaysISO(s, 6)}; }
+  return {start:isoOf(new Date(y, mo, 1)), end:isoOf(new Date(y, mo+1, 0))};   /* this_month */
+}
 const QUERY_RE = {
   HIGHEST_EXPENSE: /(chi nhieu nhat|nhieu nhat|to nhat|lon nhat|cao nhat|ton nhat|dat nhat)/,
   LOWEST_EXPENSE:  /(chi it nhat|it nhat|nho nhat|thap nhat|re nhat)/,
   BALANCE_CHECK:   /(con bao nhieu|so du|tong tai san|con lai bao nhieu|tien con)/,
   CATEGORY_TOTAL:  /(bao nhieu|tong chi|tong cong|het bao nhieu|chi bao nhieu|tong tien|da chi)/
 };
+/* Yêu cầu XEM BÁO CÁO: trả về một bức tranh thu/chi/ròng + top danh mục, khác
+   với bốn loại trên (mỗi loại chỉ một con số). Phải nhận diện TRƯỚC chúng:
+   "tổng chi tiêu ra sao" chứa "tong chi" (CATEGORY_TOTAL) nhưng đây là câu xin
+   báo cáo. Các cụm ở đây đều rõ nghĩa "tổng quan", không đụng chuỗi test đã khoá
+   ("chi nhiều nhất", "ăn uống bao nhiêu"…). */
+const SUMMARY_RE = /(bao cao|tom tat|tong ket|tinh hinh|thu chi|chi tieu ra sao|chi tieu the nao|tong chi tieu|tong quan)/;
 
 /* Bỏ đi chính những chữ tạo nên câu hỏi (từ khoá ý định, mốc thời gian, từ
    nghi vấn) để phần còn lại chỉ là "chủ đề" — đúng thứ đem đi khớp danh mục. */
 /* Cụm dài trước cụm ngắn, và BẮT BUỘC có ranh giới từ hai đầu: thiếu \b thì
    "con" ăn vào giữa "cong" của "tổng cộng" và câu hỏi bị băm nhỏ. Mấy từ
    một-hai âm khác đã nằm trong CHAT_STOPWORDS, không cần lặp lại ở đây. */
-const QUERY_FILLER_RE = new RegExp('\\b(thang nay|thang truoc|thang qua|thang roi|nam nay|ca nam|trong nam|7 ngay|bay ngay|tuan nay|tuan qua|hom nay|vao dau|o dau|bao nhieu|the nao|bao gio|nhat|khoan|gi|nao)\\b', 'g');
+const QUERY_FILLER_RE = new RegExp('\\b(thang nay|thang truoc|thang qua|thang roi|nam nay|ca nam|trong nam|7 ngay|bay ngay|tuan nay|tuan qua|tuan truoc|tuan roi|hom nay|vao dau|o dau|bao nhieu|the nao|bao gio|nhat|khoan|gi|nao)\\b', 'g');
 function queryCleanText(userInput){
   let s = normText(userInput);
   Object.keys(QUERY_RE).forEach(k=>{ s = s.replace(QUERY_RE[k], ' '); });
@@ -6339,20 +6367,26 @@ function chatHasExplicitAmount(text){
 function parseQueryIntent(userInput){
   const s = normText(userInput);
   if(!s) return null;
-  /* Thứ tự có ý: "còn bao nhiêu" phải thắng "bao nhiêu", và "chi nhiều nhất"
-     phải thắng "bao nhiêu" trong câu "tháng này chi nhiều nhất bao nhiêu". */
+  /* Thứ tự có ý: báo cáo tổng quan thắng tất cả (nó chứa những chữ mà loại khác
+     cũng có); rồi "còn bao nhiêu" thắng "bao nhiêu", và "chi nhiều nhất" thắng
+     "bao nhiêu" trong câu "tháng này chi nhiều nhất bao nhiêu". */
   let kind = null;
-  if(QUERY_RE.BALANCE_CHECK.test(s)) kind = 'BALANCE_CHECK';
+  if(SUMMARY_RE.test(s)) kind = 'FINANCIAL_SUMMARY';
+  else if(QUERY_RE.BALANCE_CHECK.test(s)) kind = 'BALANCE_CHECK';
   else if(QUERY_RE.HIGHEST_EXPENSE.test(s)) kind = 'HIGHEST_EXPENSE';
   else if(QUERY_RE.LOWEST_EXPENSE.test(s)) kind = 'LOWEST_EXPENSE';
   else if(QUERY_RE.CATEGORY_TOTAL.test(s)) kind = 'CATEGORY_TOTAL';
   if(!kind) return null;
 
-  /* Mốc thời gian: mặc định tháng này, đúng như mọi màn hình khác của app. */
+  /* Mốc thời gian: mặc định tháng này, đúng như mọi màn hình khác của app.
+     "tuần qua/tuần trước" là tuần lịch TRƯỚC (last_week), "tuần này" là từ Thứ
+     Hai tới hôm nay (this_week), còn "7 ngày" vẫn là cửa sổ trượt 7 ngày. */
   let period = 'this_month';
   if(/thang truoc|thang qua|thang roi/.test(s)) period = 'last_month';
   else if(/nam nay|ca nam|trong nam/.test(s)) period = 'this_year';
-  else if(/7 ngay|bay ngay|tuan nay|tuan qua/.test(s)) period = 'last_7_days';
+  else if(/tuan truoc|tuan qua|tuan roi/.test(s)) period = 'last_week';
+  else if(/tuan nay/.test(s)) period = 'this_week';
+  else if(/7 ngay|bay ngay/.test(s)) period = 'last_7_days';
 
   /* Ví: khớp theo TÊN ví, không suy từ lịch sử. Một câu hỏi thì "ví" là điều
      kiện lọc người dùng nói ra, chứ không phải thứ để bot đoán. */
@@ -6369,7 +6403,10 @@ function parseQueryIntent(userInput){
      Phải bóc TỪ NGỮ CỦA CÂU HỎI ra trước: "tháng trước chi bao nhiêu" mà để
      nguyên thì "bao" trở thành một từ khoá và khớp bừa vào một danh mục nào
      đó — câu hỏi về tổng chi cả kỳ bỗng thành câu hỏi về một danh mục. */
-  const cleaned = queryCleanText(userInput);
+  /* Báo cáo tổng quan cố ý KHÔNG gắn danh mục: nó nói về cả kỳ, không phải một
+     danh mục. Khớp danh mục ở đây thì "báo cáo thu chi" lỡ dính "thu/chi" vào
+     một danh mục rồi thu hẹp phạm vi, ra con số sai. Ví thì vẫn tôn trọng. */
+  const cleaned = kind === 'FINANCIAL_SUMMARY' ? '' : queryCleanText(userInput);
   const m = cleaned ? matchWalletAndCategory(cleaned, 'expense') : {matched:false};
   const categoryId = m.matched ? m.catId : null;
 
@@ -6381,19 +6418,7 @@ function parseQueryIntent(userInput){
    khoản chưa tiêu là sai. */
 function queryScope(intent){
   const p = QUERY_PERIODS[intent.period] || QUERY_PERIODS.this_month;
-  const today = todayISO();
-  let start, end = today;
-  const d = parseISO(today);
-  const y = d.getFullYear(), mo = d.getMonth();
-  if(intent.period === 'last_month'){
-    start = isoOf(new Date(y, mo-1, 1)); end = isoOf(new Date(y, mo, 0));
-  } else if(intent.period === 'this_year'){
-    start = y + '-01-01'; end = y + '-12-31';
-  } else if(intent.period === 'last_7_days'){
-    start = addDaysISO(today, -6);
-  } else {
-    start = isoOf(new Date(y, mo, 1)); end = isoOf(new Date(y, mo+1, 0));
-  }
+  const {start, end} = periodBounds(intent.period || 'this_month');
   const txs = getUserTransactions().filter(t=>
     t.date >= start && t.date <= end &&
     (t.type === 'expense' || t.type === 'income') &&
@@ -6417,6 +6442,34 @@ function executeQuery(intent){
     walletId: intent.walletId || 'all',
     highlightTxId: null
   };
+
+  if(intent.kind === 'FINANCIAL_SUMMARY'){
+    /* Bức tranh thu/chi/ròng + top danh mục của cả kỳ. Tính bằng CHÍNH
+       txMain() + getUserTransactions() mà báo cáo dùng (qua queryScope), nên
+       con số trên thẻ chat bằng đúng con số ở tab Báo cáo. Trả về một shape
+       RIÊNG (có `summary`) để chatReplyReport() dựng thẻ trực quan. */
+    const incomes = sc.txs.filter(t=>t.type === 'income');
+    const exps = sc.txs.filter(t=>t.type === 'expense');
+    const totalIn = incomes.reduce((a, t)=>a + txMain(t), 0);
+    const totalOut = exps.reduce((a, t)=>a + txMain(t), 0);
+    /* Gộp chi theo danh mục rồi lấy top 3; tỷ trọng tính trên TỔNG CHI để ba
+       thanh cộng lại không vượt 100%. */
+    const byCat = new Map();
+    exps.forEach(t=>{ byCat.set(t.categoryId, (byCat.get(t.categoryId) || 0) + txMain(t)); });
+    const top = [...byCat.entries()]
+      .map(([id, amt])=>{ const c = findCategory('expense', id) || catOf({type:'expense', categoryId:id});
+        return {id, amt, name:c.name, icon:c.icon, color:c.color,
+                pct: totalOut > 0 ? Math.round(amt / totalOut * 100) : 0}; })
+      .sort((a, b)=>b.amt - a.amt).slice(0, 3);
+    return {
+      summary: {
+        label: sc.label, where,
+        totalIn, totalOut, net: totalIn - totalOut,
+        count: sc.txs.length, top, empty: !sc.txs.length
+      },
+      nav
+    };
+  }
 
   if(intent.kind === 'BALANCE_CHECK'){
     /* Số dư là con số HIỆN TẠI, không theo kỳ — getUserTotalAssets() là cùng
@@ -6470,9 +6523,17 @@ function executeQuery(intent){
 function chatNavigate(filter){
   const f = filter || {};
   const p = QUERY_PERIODS[f.period] || QUERY_PERIODS.this_month;
+  const b = periodBounds(f.period || 'this_month');     /* MỘT nguồn mốc ngày */
   closeChatDrawer(false);
   if(f.view === 'wallets'){ switchTab('wallets'); return; }
   if(f.view === 'transactions'){
+    /* Kỳ không có preset (tuần này/tuần trước) → range 'custom', ghi hai ô ngày
+       TRƯỚC khi jumpToTransactions vì rangeBounds() đọc chính chúng. */
+    if(p.tx === 'custom'){
+      const from = document.getElementById('tx-from'), to = document.getElementById('tx-to');
+      if(from) from.value = b.start;
+      if(to) to.value = b.end;
+    }
     jumpToTransactions({
       type: 'expense',
       range: p.tx,
@@ -6485,17 +6546,61 @@ function chatNavigate(filter){
     if(f.highlightTxId && state.transactions.some(t=>t.id === f.highlightTxId)) openTxDetail(f.highlightTxId);
     return;
   }
-  /* Báo cáo: mốc 7 ngày không có preset, phải đi qua "Tùy chỉnh" — và hai ô
-     ngày phải được ghi TRƯỚC setReportRange() vì reportRange() đọc chính
-     chúng để dựng phạm vi. */
+  /* Báo cáo: các mốc không có preset (7 ngày, tuần) phải đi qua "Tùy chỉnh" — và
+     hai ô ngày phải được ghi TRƯỚC setReportRange() vì reportRange() đọc chính
+     chúng để dựng phạm vi. periodBounds() cho đúng cửa sổ của từng kỳ. */
   reportWalletId = f.walletId && f.walletId !== 'all' ? f.walletId : 'all';
   if(p.report === 'custom'){
     const from = document.getElementById('rep-from'), to = document.getElementById('rep-to');
-    if(from) from.value = addDaysISO(todayISO(), -6);
-    if(to) to.value = todayISO();
+    if(from) from.value = b.start;
+    if(to) to.value = b.end;
   }
   switchTab('reports');
   setReportRange(p.report);
+}
+
+/* Thẻ BÁO CÁO trực quan: thu/chi/ròng có màu + top 3 danh mục với % và thanh
+   tiến trình + nút sang tab Báo cáo. Con số đã tính sẵn trong executeQuery bằng
+   đúng hàm mà tab Báo cáo dùng, nên thẻ này chỉ việc vẽ. */
+function chatReplyReport(res){
+  if(!res || !res.summary){ return chatReplyQuery(res); }
+  const s = res.summary;
+  const id = uid('q');
+  chatQueryNavs.set(id, res.nav);
+  const head = `Báo cáo ${esc(s.label)}${esc(s.where)}`;
+  if(s.empty){
+    chatAppend('bot', `<b>${head}</b>`
+      + `<div class="bot-card-action"><div class="chat-hint">Chưa có giao dịch nào trong kỳ này để tổng hợp.</div>`
+      + `<button type="button" class="chat-link" onclick="chatGoQuery('${id}')">Mở tab Báo cáo ›</button></div>`,
+      'has-card');
+    return;
+  }
+  const row = (lbl, val, cls)=>
+    `<div class="cr-flow"><span class="cr-flow-lbl">${lbl}</span>`
+    + `<span class="cr-flow-val ${cls}">${esc(val)}</span></div>`;
+  const netCls = s.net >= 0 ? 'c-income' : 'c-expense';
+  const top = s.top.map(t=>{
+    const color = t.color || 'var(--primary)';
+    return `<div class="cr-cat">
+        <div class="cr-cat-top">
+          <span class="cr-cat-name">${esc(t.icon)} ${esc(t.name)}</span>
+          <span class="cr-cat-amt">${esc(fmt(t.amt))} · ${t.pct}%</span>
+        </div>
+        <div class="cr-bar"><span style="width:${Math.max(3, t.pct)}%;background:${esc(color)};"></span></div>
+      </div>`;
+  }).join('');
+  chatAppend('bot',
+    `<b>${head}</b>`
+    + `<div class="bot-card-action chat-report">`
+    + `<div class="cr-flows">`
+    +   row('Tổng thu', '+' + fmt(s.totalIn), 'c-income')
+    +   row('Tổng chi', '-' + fmt(s.totalOut), 'c-expense')
+    +   `<div class="cr-flow cr-net"><span class="cr-flow-lbl">Số dư ròng</span>`
+    +     `<span class="cr-flow-val ${netCls}">${s.net >= 0 ? '+' : '-'}${esc(fmt(Math.abs(s.net)))}</span></div>`
+    + `</div>`
+    + (top ? `<div class="cr-top-lbl">Chi nhiều nhất</div>${top}` : '')
+    + `<button type="button" class="chat-link" onclick="chatGoQuery('${id}')">Xem chi tiết tại tab Báo cáo ›</button>`
+    + `</div>`, 'has-card');
 }
 
 /* Thẻ kết quả truy vấn: con số + các dòng chi tiết + một hyperlink sang đúng
@@ -7369,7 +7474,13 @@ async function chatHandle(text, file){
      ra ý định, và khi đó tin nhắn đi tiếp như cũ. */
   if(!file && !chatHasExplicitAmount(text)){
     const intent = parseQueryIntent(text);
-    if(intent){ chatReplyQuery(executeQuery(intent)); return; }
+    if(intent){
+      const res = executeQuery(intent);
+      /* Báo cáo tổng quan → thẻ trực quan; các câu hỏi một-con-số → thẻ dòng. */
+      if(intent.kind === 'FINANCIAL_SUMMARY') chatReplyReport(res);
+      else chatReplyQuery(res);
+      return;
+    }
   }
   chatBusy = true;
   const send = document.getElementById('chat-send');
@@ -7730,7 +7841,7 @@ const APK_URL = `https://github.com/${GH_REPO}/releases/latest/download/sofin.ap
 
 /* Stamped in at build time from package.json; the literal is only what runs
    when someone opens the folder without building. */
-const APP_VERSION = (window.__ENV__ && window.__ENV__.VERSION) || '1.0.1';
+const APP_VERSION = (window.__ENV__ && window.__ENV__.VERSION) || '1.0.2';
 /* Which version the user already said "để sau" to — device-local, so a
    dismissal does not sync to their other phone. */
 const UPDATE_SEEN_KEY = 'FINYOURTIN_UPDATE_DISMISSED';
