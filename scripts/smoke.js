@@ -1400,7 +1400,7 @@ async function boot(opts) {
     check('hiện modal cập nhật riêng, không chiếm sheet chung',
       visible('update-modal') && !visible('modal-sheet'));
     check('tiêu đề mang số phiên bản mới', txt('update-title').includes('v9.9.9'), txt('update-title'));
-    check('có đối chiếu bản đang dùng', txt('update-meta').includes('v' + window.eval('APP_VERSION')),
+    check('có đối chiếu bản đang dùng', txt('update-meta').includes('V' + window.eval('APP_VERSION')),
       txt('update-meta'));
     check('có hiển thị dung lượng', txt('update-meta').includes('4.2 MB'), txt('update-meta'));
 
@@ -2062,14 +2062,14 @@ async function boot(opts) {
        với release — footer nói một đằng, app tự nghĩ một nẻo. */
     const PKG2 = require('../package.json').version;
     check('badge phiên bản lấy từ bản build, không phải chữ cứng',
-      f.querySelector('.footer-version-badge').textContent === 'v' + PKG2,
+      f.querySelector('.footer-version-badge').textContent === 'V' + PKG2,
       f.querySelector('.footer-version-badge').textContent);
 
     /* Phiên bản hiện ở hai nơi: màn đăng nhập và chân trang Cài đặt. Hai nơi
        nói hai số khác nhau thì người dùng không biết tin chỗ nào — mà lúc cần
        biết chính là ngay sau khi cập nhật. */
     const lv = $('login-version');
-    check('màn đăng nhập cũng hiện phiên bản', !!lv && lv.textContent.includes('v' + PKG2),
+    check('màn đăng nhập cũng hiện phiên bản', !!lv && lv.textContent.includes('V' + PKG2),
       lv && lv.textContent.trim());
     check('hai nơi nói cùng một số',
       lv.querySelector('.footer-version-badge').textContent
@@ -2670,6 +2670,49 @@ async function boot(opts) {
     /* Boot không được kéo theo engine OCR nào — offline-first là ràng buộc
        cứng của app, Tesseract chỉ được nạp khi người dùng gửi ảnh và đồng ý. */
     check('boot không nạp engine OCR', !window.Tesseract);
+  }
+
+  console.log('\n· chia sẻ ảnh biên lai từ app ngoài (Web Share Target)');
+  {
+    /* Dùng một File ảnh giả — đúng hình dạng thứ service worker đẩy vào. OCR bị
+       từ chối trước để chatHandle không treo ở hộp xin phép tải engine; luồng
+       UI (xem trước → OK → đẩy vào chat) vẫn chạy đủ. */
+    window.eval('ocrDeclined = true');
+    const mkFile = name => new window.File(
+      [new window.Blob(['x'], {type:'image/png'})], name, {type:'image/png'});
+
+    window.showSharePreview(mkFile('techcom.jpg')); await sleep(20);
+    check('nhận ảnh chia sẻ → hiện thẻ xem trước', visible('modal-share-preview'));
+    check('… giữ lại file đang chờ', window.eval('!!pendingSharedImage'));
+    check('… tên file hiện trên thẻ', txt('share-preview-name') === 'techcom.jpg',
+      txt('share-preview-name'));
+
+    /* "Chọn ảnh khác" thay file nhưng KHÔNG đẩy thêm bước lịch sử (modal vẫn mở). */
+    const before = window.history.length;
+    window.setSharePreview(mkFile('anh-khac.png')); await sleep(10);
+    check('chọn ảnh khác → thay file tại chỗ', txt('share-preview-name') === 'anh-khac.png');
+    check('… không mở lại modal (không đẩy bước lịch sử)', window.history.length === before,
+      before + ' → ' + window.history.length);
+
+    /* "Để sau" đóng thẻ và buông file đang chờ. */
+    window.cancelSharePreview(); await sleep(20);
+    check('bấm "Để sau" → đóng thẻ', !visible('modal-share-preview'));
+    check('… buông file đang chờ', window.eval('pendingSharedImage === null'));
+
+    /* OK → đóng thẻ, mở trợ lý, đẩy ảnh vào đúng cửa OCR (chatHandle). */
+    const txBefore = S().transactions.length;
+    window.showSharePreview(mkFile('bill-momo.jpg')); await sleep(20);
+    window.confirmShareToAssistant(); await sleep(80);
+    check('bấm OK → đóng thẻ xem trước', !visible('modal-share-preview'));
+    check('… mở ngăn trợ lý', visible('chat-drawer'));
+    check('… đẩy một tin nhắn ảnh vào hội thoại',
+      !!$('chat-body').querySelector('.chat-bubble.user'));
+    check('… và KHÔNG tự ghi giao dịch nào (chờ người dùng xác nhận)',
+      S().transactions.length === txBefore);
+
+    window.eval('ocrDeclined = false');
+    window.closeChatDrawer(true);
+    window.switchTab('dashboard'); await sleep(20);
   }
 
   console.log('\n· trợ lý chat: chuyển ví & định kỳ bằng lời');

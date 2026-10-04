@@ -23,6 +23,15 @@
 const BUILD = new URL(self.location.href).searchParams.get('v') || 'dev';
 const CACHE = 'sofin-' + BUILD;
 
+/* Web Share Target: ảnh biên lai được một app khác (Techcombank, thư viện ảnh…)
+   chia sẻ sang sẽ POST vào /share-target. App này không có server để nhận file,
+   nên worker giữ file trong một cache RIÊNG rồi điều hướng người dùng vào app —
+   trang sẽ đọc lại file đó lúc boot (maybeHandleSharedImage). Cache này CỐ Ý
+   đứng ngoài CACHE đánh số theo build: nó phải sống sót qua cú redirect sang
+   trang mới, và không được activate() của một bản deploy nào xoá mất. */
+const SHARE_CACHE = 'sofin-share';
+const SHARE_KEY = '/__shared-image__';
+
 /* The shell needed to boot with no network at all. env.js is deliberately
    absent — it is fetched network-first and cached opportunistically. */
 const PRECACHE = [
@@ -65,8 +74,9 @@ self.addEventListener('activate', event => {
     const names = await caches.keys();
     /* Every cache on this origin belongs to this app, so drop anything that
        is not the current one — that also clears the pre-rename finyourtin-*
-       buckets instead of leaving them behind for good. */
-    await Promise.all(names.filter(n => n !== CACHE).map(n => caches.delete(n)));
+       buckets instead of leaving them behind for good. SHARE_CACHE is spared:
+       nó giữ ảnh chia sẻ đang chờ trang đọc, một bản deploy không được nuốt. */
+    await Promise.all(names.filter(n => n !== CACHE && n !== SHARE_CACHE).map(n => caches.delete(n)));
     await self.clients.claim();
   })());
 });
@@ -78,9 +88,17 @@ self.addEventListener('message', event => {
 
 self.addEventListener('fetch', event => {
   const req = event.request;
+  const url = new URL(req.url);
+
+  /* Web Share Target đi vào bằng POST — phải chặn TRƯỚC cú return non-GET bên
+     dưới. Lưu file rồi redirect vào app; không đụng gì khác của POST. */
+  if (req.method === 'POST' && url.origin === self.location.origin && url.pathname === '/share-target') {
+    event.respondWith(handleShareTarget(req));
+    return;
+  }
+
   if (req.method !== 'GET') return;
 
-  const url = new URL(req.url);
   if (isSupabase(url)) return;                       // rule 1
   if (url.protocol !== 'http:' && url.protocol !== 'https:') return;
   /* Chỉ phục vụ tài nguyên cùng origin. Vỏ app vốn không nạp gì từ bên thứ
@@ -104,6 +122,39 @@ self.addEventListener('fetch', event => {
 
   event.respondWith(cacheFirst(req));                // rule 3
 });
+
+/* Nhận file ảnh từ multipart form, cất vào SHARE_CACHE, rồi điều hướng vào app
+   kèm cờ ?share-target=1. Dùng redirect 303 để lần tải trang sau là một GET
+   navigate bình thường (đi qua đúng nhánh navigate ở trên). Mọi lỗi đều nuốt
+   gọn: thà mở app trống còn hơn để người dùng mắc ở một trang lỗi. */
+async function handleShareTarget(req) {
+  try {
+    const form = await req.formData();
+    let file = form.get('image');
+    /* Một số nền tảng đặt file dưới tên khác hoặc gửi kèm nhiều phần — lấy phần
+       đầu tiên trông giống ảnh. */
+    if (!(file && file.type && file.type.indexOf('image/') === 0)) {
+      file = null;
+      for (const v of form.values()) {
+        if (v && typeof v !== 'string' && v.type && v.type.indexOf('image/') === 0) { file = v; break; }
+      }
+    }
+    if (file) {
+      const cache = await caches.open(SHARE_CACHE);
+      /* Tên file có thể chứa dấu tiếng Việt — header chỉ nhận ASCII, nên encode
+         rồi trang sẽ decode lại. */
+      await cache.put(SHARE_KEY, new Response(file, {
+        headers: {
+          'Content-Type': file.type || 'image/jpeg',
+          'X-Share-Name': encodeURIComponent(file.name || 'bill.jpg')
+        }
+      }));
+    }
+  } catch (err) {
+    console.warn('[sw] share-target lỗi', err);
+  }
+  return Response.redirect(self.location.origin + '/?share-target=1', 303);
+}
 
 async function cacheFirst(req) {
   const cache = await caches.open(CACHE);

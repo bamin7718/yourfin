@@ -1093,6 +1093,24 @@ html[data-theme="dark"] .chat-drawer{box-shadow:0 -4px 20px rgba(0,0,0,.55);}
 .chat-hint{display:inline-block;margin-top:4px;font-size:.72rem;color:var(--muted);line-height:1.45;}
 .chat-bubble.user .chat-hint{color:rgba(255,255,255,.8);}
 .chat-img{display:block;max-width:100%;max-height:180px;border-radius:12px;margin:-2px 0 0;}
+
+/* ---------- XEM TRƯỚC ẢNH CHIA SẺ (Web Share Target) ---------- */
+/* Center card: khác bottom-sheet thường, hộp này nổi giữa màn hình như một hộp
+   thoại xác nhận gọn — ảnh là nội dung chính nên phải nằm trong tầm mắt. */
+.modal-center{align-items:center;}
+.share-preview-card{
+  max-width:360px;border-radius:22px;margin:0 18px;
+  padding:16px 16px calc(16px + var(--safe-b));text-align:center;
+}
+.share-preview-card .handle{margin-bottom:10px;}
+.share-preview-card h3,.share-preview-card p{text-align:center;}
+.share-preview-thumb{
+  background:var(--bg);border:1px solid var(--border);border-radius:16px;
+  padding:10px;display:flex;align-items:center;justify-content:center;
+  min-height:140px;max-height:320px;overflow:hidden;
+}
+.share-preview-thumb img{max-width:100%;max-height:300px;border-radius:10px;object-fit:contain;}
+.share-preview-name{font-size:.78rem;color:var(--muted);margin-top:8px;word-break:break-all;}
 .chat-cap{margin-top:6px;font-size:.78rem;}
 
 /* Ba dấu chấm trong lúc chờ OCR. Ảnh bill mất vài giây, và một ngăn chat đứng
@@ -1246,19 +1264,50 @@ html[data-theme="dark"] .chat-drawer{box-shadow:0 -4px 20px rgba(0,0,0,.55);}
 .tsp-dot{width:7px;height:7px;border-radius:50%;flex:0 0 auto;}
 .tsp-dot.in{background:var(--income);} .tsp-dot.out{background:var(--expense);}
 
-/* Bottom sheet bộ lọc — trượt từ dưới lên */
+/* Bottom sheet bộ lọc — trượt từ dưới lên.
+   z-index 110: trên nav bar (30) nên scrim che kín cả thanh dưới — không có
+   mép nav nào ló ra lộn xộn — nhưng vẫn DƯỚI #amount-sheet (120) và .modal
+   (130), đúng thang lớp của app. Panel là CỘT FLEX: grip + head ở trên, body
+   cuộn ở giữa, actions dính đáy. */
 .tx-filter-sheet{position:fixed;inset:0;z-index:110;display:flex;align-items:flex-end;justify-content:center;}
 .tx-filter-sheet.hidden{display:none;}
-.tx-sheet-scrim{position:absolute;inset:0;background:rgba(10,37,64,.38);-webkit-backdrop-filter:blur(1px);backdrop-filter:blur(1px);}
+.tx-sheet-scrim{position:absolute;inset:0;background:rgba(10,37,64,.42);-webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px);}
 .tx-sheet-panel{position:relative;width:100%;max-width:520px;background:var(--card);
-  border-radius:24px 24px 0 0;padding:8px 16px calc(18px + var(--safe-b));
-  box-shadow:0 -8px 30px rgba(10,37,64,.18);animation:sheetUp .22s ease;max-height:82vh;overflow-y:auto;}
+  border-radius:26px 26px 0 0;
+  box-shadow:0 -8px 30px rgba(10,37,64,.18);animation:sheetUp .22s ease;
+  max-height:85vh;display:flex;flex-direction:column;overflow:hidden;}
 @keyframes sheetUp{from{transform:translateY(100%);}to{transform:translateY(0);}}
 @media (prefers-reduced-motion:reduce){.tx-sheet-panel{animation:none;}}
-.tx-sheet-grip{width:40px;height:4px;border-radius:2px;background:var(--border);margin:6px auto 10px;}
-.tx-sheet-title{font-weight:800;font-size:1rem;margin-bottom:12px;color:var(--text);}
-.tx-sheet-actions{display:flex;gap:10px;margin-top:6px;}
+/* Grip dịch hẳn xuống khỏi vành bo + head có padding riêng: tiêu đề không còn
+   dính lên đường viền trên của thẻ. */
+.tx-sheet-grip{width:44px;height:5px;border-radius:3px;background:var(--border);margin:12px auto 2px;flex:0 0 auto;}
+.tx-sheet-head{display:flex;align-items:center;justify-content:space-between;padding:8px 20px 12px;flex:0 0 auto;}
+.tx-sheet-title{font-weight:800;font-size:1.08rem;color:var(--text);}
+.tx-sheet-close{width:32px;height:32px;border-radius:50%;border:none;background:var(--bg);
+  color:var(--muted);font-size:.95rem;cursor:pointer;flex:0 0 auto;
+  display:flex;align-items:center;justify-content:center;transition:.15s;}
+.tx-sheet-close:active{transform:scale(.9);}
+/* Body cuộn giữa head và footer; padding-bottom nhỏ vì footer đã tách riêng,
+   nội dung không còn bị nút Áp dụng che. */
+.tx-sheet-body{flex:1 1 auto;overflow-y:auto;padding:4px 20px 8px;-webkit-overflow-scrolling:touch;}
+/* Footer dính đáy, không cuộn theo. Viền trên + nền để tách khỏi danh sách phía
+   trên khi body còn cuộn được. Safe-area để nút không tụt vào vạch home. */
+.tx-sheet-actions{display:flex;gap:12px;flex:0 0 auto;
+  padding:12px 20px calc(14px + var(--safe-b));
+  border-top:1px solid var(--border);background:var(--card);}
 .tx-sheet-actions .btn{flex:1;}
+
+/* Trường lọc trong sheet — bo tròn, label có icon, sáng lên khi đang lọc */
+.filter-field{margin-bottom:15px;}
+.filter-field:last-child{margin-bottom:2px;}
+.filter-field>label{display:flex;align-items:center;gap:8px;font-size:.78rem;font-weight:700;
+  color:var(--muted);margin-bottom:8px;letter-spacing:.02em;}
+.filter-field .ff-ic{font-size:1rem;line-height:1;}
+.filter-field>select.input{border-radius:14px;padding:13px 38px 13px 14px;font-weight:600;cursor:pointer;}
+.filter-field.on>label{color:var(--primary);}
+.filter-field.on>label .ff-ic{filter:none;}
+.filter-field.on>select.input{border-color:var(--primary);font-weight:700;
+  box-shadow:0 0 0 3px color-mix(in srgb,var(--primary) 14%,transparent);}
 
 /* ---------- TAB BÁO CÁO ---------- */
 .report-filter-bar{display:flex;align-items:center;gap:8px;margin-bottom:6px;}

@@ -316,35 +316,43 @@
     <div id="tx-list-container"></div>
 
     <!-- Bottom sheet Bộ lọc: Ví · Trạng thái · Danh mục · Sự kiện.
-         Đóng/mở qua toggleTxFilters() (vẫn dùng cơ chế .hidden + navPush cũ). -->
+         Đóng/mở qua toggleTxFilters() (vẫn dùng cơ chế .hidden + navPush cũ).
+         Khung = cột flex: grip + head cố định trên, .tx-sheet-body cuộn ở giữa,
+         .tx-sheet-actions dính đáy — nút Áp dụng/Đặt lại không bao giờ bị cuộn
+         mất hay đè lên nội dung. -->
     <div id="tx-advanced-filters" class="tx-filter-sheet hidden">
       <div class="tx-sheet-scrim" onclick="toggleTxFilters()"></div>
       <div class="tx-sheet-panel">
         <div class="tx-sheet-grip"></div>
-        <div class="tx-sheet-title">Bộ lọc nâng cao</div>
-        <div class="quick-filter" id="tx-wallet-bar">
-          <label for="tx-filter-wallet">Ví</label>
-          <select id="tx-filter-wallet" class="input" onchange="renderTransactionsList()"></select>
+        <div class="tx-sheet-head">
+          <div class="tx-sheet-title">Bộ lọc nâng cao</div>
+          <button type="button" class="tx-sheet-close" onclick="toggleTxFilters()" aria-label="Đóng bộ lọc">✕</button>
         </div>
-        <div class="quick-filter" id="tx-status-bar">
-          <label for="tx-filter-status">Trạng thái</label>
-          <select id="tx-filter-status" class="input" onchange="renderTransactionsList()">
-            <option value="all">Tất cả trạng thái</option>
-            <option value="completed">Đã ghi nhận</option>
-            <option value="pending">Dự kiến</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label>Danh mục</label>
-          <select id="tx-filter-cat" class="input" onchange="renderTransactionsList()"></select>
-        </div>
-        <div class="form-group">
-          <label>Sự kiện / Chuyến đi</label>
-          <select id="tx-filter-event" class="input" onchange="renderTransactionsList()"></select>
+        <div class="tx-sheet-body">
+          <div class="filter-field" id="tx-wallet-bar">
+            <label for="tx-filter-wallet"><span class="ff-ic">👛</span> Ví</label>
+            <select id="tx-filter-wallet" class="input" onchange="renderTransactionsList()"></select>
+          </div>
+          <div class="filter-field" id="tx-status-bar">
+            <label for="tx-filter-status"><span class="ff-ic">⏳</span> Trạng thái</label>
+            <select id="tx-filter-status" class="input" onchange="renderTransactionsList()">
+              <option value="all">Tất cả trạng thái</option>
+              <option value="completed">Đã ghi nhận</option>
+              <option value="pending">Dự kiến</option>
+            </select>
+          </div>
+          <div class="filter-field" id="tx-cat-bar">
+            <label for="tx-filter-cat"><span class="ff-ic">🏷️</span> Danh mục</label>
+            <select id="tx-filter-cat" class="input" onchange="renderTransactionsList()"></select>
+          </div>
+          <div class="filter-field" id="tx-event-bar">
+            <label for="tx-filter-event"><span class="ff-ic">🧳</span> Sự kiện / Chuyến đi</label>
+            <select id="tx-filter-event" class="input" onchange="renderTransactionsList()"></select>
+          </div>
         </div>
         <div class="tx-sheet-actions">
-          <button class="btn btn-secondary btn-sm" onclick="resetTxFilters()">Xóa bộ lọc</button>
-          <button class="btn btn-primary btn-sm" onclick="toggleTxFilters()">Xong</button>
+          <button class="btn btn-secondary" onclick="resetTxFilters()">Đặt lại</button>
+          <button class="btn btn-primary" onclick="toggleTxFilters()">Áp dụng bộ lọc</button>
         </div>
       </div>
     </div>
@@ -1221,6 +1229,27 @@
     <input type="text" id="chat-input" class="chat-input" placeholder="VD: cà phê 35k"
            autocomplete="off" enterkeyhint="send" onkeydown="chatKeydown(event)">
     <button type="button" class="btn-chat-send" id="chat-send" onclick="chatSend()">Gửi</button>
+  </div>
+</div>
+
+<!-- XEM TRƯỚC ẢNH CHIA SẺ TỪ APP NGOÀI (Web Share Target) -->
+<!-- Compact center card: ảnh biên lai một app khác gửi sang dừng ở đây để người
+     dùng xem trước và xác nhận, trước khi đẩy vào Trợ lý để OCR. -->
+<div id="modal-share-preview" class="modal modal-center hidden">
+  <div class="sheet share-preview-card">
+    <div class="handle"></div>
+    <h3 class="mb8">Ảnh biên lai được chia sẻ</h3>
+    <p class="text-sm muted mb12" style="line-height:1.5;">Kiểm tra ảnh rồi gửi cho Trợ lý SoFin bóc tách số tiền, nội dung và ngân hàng.</p>
+    <div class="share-preview-thumb">
+      <img id="share-preview-img" alt="Ảnh biên lai được chia sẻ">
+    </div>
+    <div class="share-preview-name" id="share-preview-name"></div>
+    <input type="file" id="share-replace-file" class="hidden" accept="image/*" onchange="shareReplaceFileChange(this)">
+    <div class="btn-row mt12">
+      <button type="button" class="btn btn-secondary" onclick="shareReplaceImage()">Chọn ảnh khác</button>
+      <button type="button" class="btn btn-primary" onclick="confirmShareToAssistant()">Gửi vào Trợ lý</button>
+    </div>
+    <button type="button" class="btn btn-ghost mt8" onclick="cancelSharePreview()">Để sau</button>
   </div>
 </div>
 

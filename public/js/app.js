@@ -1444,6 +1444,9 @@ function initUserSession(){
     if(!pendingPasswordRecovery) offerLocalArchiveImport();
   }
   else { document.getElementById('main-nav').classList.remove('hidden'); switchTab('dashboard'); }
+  /* Ảnh vừa được chia sẻ từ app ngoài? Hiện thẻ xem trước. Idempotent: lần gọi
+     sau (đổi auth, mở lại tab) thấy query đã dọn nên không làm gì. */
+  maybeHandleSharedImage();
 }
 
 /* ============================================================
@@ -2271,7 +2274,7 @@ function renderVersionLine(elId){
   const el = document.getElementById(elId);
   if(!el) return;
   el.innerHTML = `<span class="dv-name">SoFin Finance</span>
-    <span class="footer-version-badge">v${esc(APP_VERSION)}</span>`;
+    <span class="footer-version-badge">V${esc(APP_VERSION)}</span>`;
 }
 function sortTxDesc(a,b){
   if(a.date !== b.date) return a.date < b.date ? 1 : -1;
@@ -2552,6 +2555,12 @@ function renderTransactionsList(rebuild){
   /* highlight the promoted filters while they are narrowing the list */
   document.getElementById('tx-wallet-bar').classList.toggle('on', txFilters.walletId!=='all');
   document.getElementById('tx-status-bar').classList.toggle('on', txFilters.status!=='all');
+  /* Danh mục và Sự kiện cũng sáng label + viền khi đang lọc, đồng bộ với Ví và
+     Trạng thái — một ô đang thu hẹp danh sách thì phải trông như đang bật. */
+  const catBar = document.getElementById('tx-cat-bar');
+  if(catBar) catBar.classList.toggle('on', txFilters.catId!=='all');
+  const evBar = document.getElementById('tx-event-bar');
+  if(evBar) evBar.classList.toggle('on', txFilters.eventId!=='all');
 
   /* Đồng bộ ô chọn khoảng thời gian ở top bar + hiện/ẩn ô ngày tùy chọn */
   const rSel = document.getElementById('tx-range-select');
@@ -7721,7 +7730,7 @@ const APK_URL = `https://github.com/${GH_REPO}/releases/latest/download/sofin.ap
 
 /* Stamped in at build time from package.json; the literal is only what runs
    when someone opens the folder without building. */
-const APP_VERSION = (window.__ENV__ && window.__ENV__.VERSION) || '5.4.2';
+const APP_VERSION = (window.__ENV__ && window.__ENV__.VERSION) || '1.0.1';
 /* Which version the user already said "để sau" to — device-local, so a
    dismissal does not sync to their other phone. */
 const UPDATE_SEEN_KEY = 'FINYOURTIN_UPDATE_DISMISSED';
@@ -7830,7 +7839,7 @@ function showUpdateModal(rel){
   document.getElementById('update-title').textContent = `Đã có phiên bản mới v${tag}`;
   document.getElementById('update-meta').innerHTML =
     `<span class="um-new">v${esc(tag)}${esc(size)}</span>
-     <span class="um-old">đang dùng v${esc(APP_VERSION)}</span>`;
+     <span class="um-old">đang dùng V${esc(APP_VERSION)}</span>`;
 
   const notes = formatReleaseNotes(rel.body);
   document.getElementById('update-notes').innerHTML = notes.length
@@ -7896,6 +7905,87 @@ function registerServiceWorker(){
       });
     })
     .catch(err=>console.warn('Service worker không đăng ký được', err));
+}
+
+/* ---------- ẢNH CHIA SẺ TỪ APP NGOÀI (Web Share Target) ----------
+   Một app khác (Techcombank, thư viện ảnh) chia sẻ ảnh biên lai sang SoFin →
+   service worker POST vào /share-target, cất file vào cache rồi điều hướng vào
+   app kèm cờ ?share-target=1. Ở đây trang đọc lại file, hiện thẻ xem trước, và
+   khi người dùng đồng ý thì đẩy thẳng vào đúng cửa OCR mà nút 📎 của trợ lý
+   đang dùng — không có đường xử lý ảnh thứ hai để lệch. */
+let pendingSharedImage = null;
+let shareObjUrl = null;
+function shareRevokeUrl(){
+  if(shareObjUrl){ try{ URL.revokeObjectURL(shareObjUrl); }catch(e){} shareObjUrl = null; }
+}
+async function maybeHandleSharedImage(){
+  let flag = null;
+  try{ flag = new URLSearchParams(location.search).get('share-target'); }catch(e){ return; }
+  if(!flag) return;
+  /* Dọn query NGAY, trước mọi await: initUserSession() còn được gọi lại khi đổi
+     auth hay mở lại tab, không dọn thì luồng này kích hoạt lần nữa. Giữ nguyên
+     path VÀ hash — hash là nơi Supabase Auth trả token về. */
+  try{ history.replaceState(history.state, '', location.pathname + location.hash); }catch(e){}
+  if(!('caches' in window)) return;
+  try{
+    const cache = await caches.open('sofin-share');
+    const res = await cache.match('/__shared-image__');
+    if(!res){ toast('Không nhận được ảnh chia sẻ','err'); return; }
+    const blob = await res.blob();
+    await cache.delete('/__shared-image__');       /* dùng một lần, tránh hiện lại lần mở sau */
+    const type = res.headers.get('Content-Type') || 'image/jpeg';
+    let name = 'bill.jpg';
+    try{ name = decodeURIComponent(res.headers.get('X-Share-Name') || '') || name; }catch(e){}
+    const file = new File([blob], name, {type});
+    showSharePreview(file);
+  }catch(err){
+    console.warn('Không đọc được ảnh chia sẻ', err);
+  }
+}
+/* Gán ảnh vào thẻ xem trước — KHÔNG mở lại modal (dùng cho "Chọn ảnh khác"):
+   openModal khi đang mở sẽ đẩy thêm một bước lịch sử trùng. */
+function setSharePreview(file){
+  if(!file) return;
+  pendingSharedImage = file;
+  const img = document.getElementById('share-preview-img');
+  if(img){
+    shareRevokeUrl();
+    try{ shareObjUrl = URL.createObjectURL(file); img.src = shareObjUrl; }
+    catch(e){ img.removeAttribute('src'); }
+  }
+  const nameEl = document.getElementById('share-preview-name');
+  if(nameEl) nameEl.textContent = file.name || 'Ảnh biên lai';
+}
+function showSharePreview(file){
+  if(!file) return;
+  setSharePreview(file);
+  openModal('modal-share-preview');
+}
+function shareReplaceImage(){
+  const f = document.getElementById('share-replace-file');
+  if(f) f.click();
+}
+function shareReplaceFileChange(el){
+  const file = el && el.files && el.files[0];
+  /* Dọn value để chọn lại đúng tấm đó lần nữa vẫn kích hoạt onchange. */
+  if(el) el.value = '';
+  if(file) setSharePreview(file);
+}
+function cancelSharePreview(){
+  closeModal('modal-share-preview');
+  shareRevokeUrl();
+  pendingSharedImage = null;
+}
+function confirmShareToAssistant(){
+  const file = pendingSharedImage;
+  closeModal('modal-share-preview');
+  shareRevokeUrl();
+  pendingSharedImage = null;
+  if(!file){ toast('Không có ảnh để gửi','err'); return; }
+  /* Mở trợ lý rồi đẩy ảnh vào đúng cửa OCR hiện có: chatHandle() tự hiện ảnh,
+     chạy chatOcrImage() và dựng thẻ xác nhận giao dịch. */
+  openChatDrawer();
+  chatHandle('', file);
 }
 
 function applyAppUpdate(){
@@ -8071,7 +8161,7 @@ function renderAppFooter(){
   el.innerHTML = `
     <div class="footer-brand">
       <span class="footer-logo-title">SoFin Finance</span>
-      <span class="footer-version-badge">v${esc(APP_VERSION)}</span>
+      <span class="footer-version-badge">V${esc(APP_VERSION)}</span>
     </div>
     <div class="footer-status">
       <span class="status-dot-active dot-${st.dot}"></span>
