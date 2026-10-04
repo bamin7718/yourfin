@@ -92,6 +92,12 @@ jobs:
           npx cap add android
           npx cap sync android
 
+      # android/ sinh mới mỗi lần nên mọi tuỳ biến native phải áp SAU cap sync.
+      # Bước này chèn Share Target (nhận ảnh biên lai chia sẻ từ app khác) vào
+      # AndroidManifest — idempotent, chạy lại không nhân đôi activity.
+      - name: Thêm Share Target cho Android
+        run: node scripts/patch-android-share.js
+
       # KHOÁ KÝ CỐ ĐỊNH — bước này quyết định app có cài đè được không.
       # Runner là máy sạch: Gradle không tìm thấy khoá debug nào nên tự sinh một
       # khoá NGẪU NHIÊN cho mỗi lần build. Chữ ký đổi thì Android từ chối cài đè

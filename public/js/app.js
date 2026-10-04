@@ -1445,8 +1445,12 @@ function initUserSession(){
   }
   else { document.getElementById('main-nav').classList.remove('hidden'); switchTab('dashboard'); }
   /* Ảnh vừa được chia sẻ từ app ngoài? Hiện thẻ xem trước. Idempotent: lần gọi
-     sau (đổi auth, mở lại tab) thấy query đã dọn nên không làm gì. */
+     sau (đổi auth, mở lại tab) thấy query đã dọn nên không làm gì.
+       · web/PWA  → maybeHandleSharedImage() đọc cờ ?share-target (qua SW)
+       · APK      → nativeCheckSharedImage() đọc intent qua plugin send-intent
+     Mỗi hàm tự no-op ở môi trường còn lại. */
   maybeHandleSharedImage();
+  nativeCheckSharedImage();
 }
 
 /* ============================================================
@@ -7841,7 +7845,7 @@ const APK_URL = `https://github.com/${GH_REPO}/releases/latest/download/sofin.ap
 
 /* Stamped in at build time from package.json; the literal is only what runs
    when someone opens the folder without building. */
-const APP_VERSION = (window.__ENV__ && window.__ENV__.VERSION) || '1.0.2';
+const APP_VERSION = (window.__ENV__ && window.__ENV__.VERSION) || '1.0.3';
 /* Which version the user already said "để sau" to — device-local, so a
    dismissal does not sync to their other phone. */
 const UPDATE_SEEN_KEY = 'FINYOURTIN_UPDATE_DISMISSED';
@@ -8097,6 +8101,48 @@ function confirmShareToAssistant(){
      chạy chatOcrImage() và dựng thẻ xác nhận giao dịch. */
   openChatDrawer();
   chatHandle('', file);
+}
+
+/* ---------- ẢNH CHIA SẺ TRÊN BẢN APK (Android, qua send-intent) ----------
+   Bản gói Capacitor KHÔNG đọc share_target của web manifest — Android chọn app
+   hiện trong bảng "Chia sẻ" qua <intent-filter> native. Plugin
+   @mindlib-capacitor/send-intent khai một activity nhận ACTION_SEND (được chèn
+   vào AndroidManifest bởi scripts/patch-android-share.js lúc build) rồi trả nội
+   dung qua checkSendIntentReceived(). Đọc được ảnh thì đưa vào ĐÚNG luồng xem
+   trước → OCR của bản web — không có đường xử lý ảnh thứ hai để lệch. */
+function base64ToFile(b64, name, type){
+  const bin = atob(String(b64 || ''));
+  const bytes = new Uint8Array(bin.length);
+  for(let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return new File([bytes], name || 'bill.jpg', {type: type || 'image/jpeg'});
+}
+let nativeShareChecking = false;
+async function nativeCheckSharedImage(){
+  if(!isNativeApp() || nativeShareChecking) return;
+  const P = (window.Capacitor && window.Capacitor.Plugins) || {};
+  const SI = P.SendIntent, FS = P.Filesystem;
+  if(!SI || typeof SI.checkSendIntentReceived !== 'function') return;   /* chưa có plugin → thôi */
+  nativeShareChecking = true;
+  try{
+    const result = await SI.checkSendIntentReceived();
+    if(!result || !result.url) return;
+    /* url có thể là content:// hoặc file:// và bị URL-encode — giải mã rồi đọc
+       bytes qua Filesystem (WebView không fetch được content://). */
+    const path = decodeURIComponent(result.url);
+    let file = null;
+    if(FS && typeof FS.readFile === 'function'){
+      const content = await FS.readFile({path});
+      if(content && content.data) file = base64ToFile(content.data, result.title, result.type);
+    }
+    if(file) showSharePreview(file);
+    else toast('Không đọc được ảnh chia sẻ','err');
+  }catch(err){
+    console.warn('Không nhận được ảnh chia sẻ (native)', err);
+  }finally{
+    /* Đóng activity nhận share, nếu không lần kiểm tra sau trả lại đúng ảnh cũ. */
+    try{ if(typeof SI.finish === 'function') SI.finish(); }catch(e){}
+    nativeShareChecking = false;
+  }
 }
 
 function applyAppUpdate(){
@@ -8574,6 +8620,13 @@ registerServiceWorker();
 if(isNativeApp()){
   navBindNativeBack();       /* nút Back cứng đi qua chính history ở trên */
   setTimeout(()=>checkAppUpdate(), 3000);
+  /* Chia sẻ ảnh khi app ĐANG chạy: Android đưa app ra trước và bắn 'resume' —
+     lúc đó mới đọc được intent mới. Cold start đã có nativeCheckSharedImage()
+     trong initUserSession(). */
+  const capApp = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App;
+  if(capApp && typeof capApp.addListener === 'function'){
+    capApp.addListener('resume', ()=>{ if(state.currentUser) nativeCheckSharedImage(); });
+  }
 }
 
 /* Crawlers need an absolute og:image, and the app is served from production,
