@@ -1,6 +1,6 @@
 {
   "name": "sofin",
-  "version": "1.0.3",
+  "version": "1.0.2",
   "private": true,
   "description": "Ứng dụng quản lý tài chính cá nhân mobile-first, đồng bộ đa thiết bị qua Supabase.",
   "scripts": {
@@ -27,12 +27,10 @@
     "@capacitor/app": "^8.1.1",
     "@capacitor/cli": "^8.5.0",
     "@capacitor/core": "^8.5.0",
-    "@capacitor/filesystem": "^8.1.4",
     "@capacitor/haptics": "^8.0.2",
     "@capacitor/ios": "^8.5.0",
     "@capacitor/keyboard": "^8.0.5",
     "@capacitor/status-bar": "^8.0.3",
-    "@mindlib-capacitor/send-intent": "^8.0.6",
     "jsdom": "^29.1.1"
   }
 }

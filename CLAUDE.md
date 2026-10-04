@@ -324,13 +324,6 @@ Ba chỗ bản native khác web, đã xử lý — đừng gỡ:
 - `resetPassword()` dùng `__ENV__.SITE_URL` khi chạy native: origin của app là `https://localhost`, Supabase từ chối redirect đó và không mail client nào mở được.
 - Nút tải APK trong Cài đặt tự ẩn khi đang chạy trong chính APK.
 
-### Nhận ảnh chia sẻ — HAI đường, tùy nền tảng
-
-Chia sẻ ảnh biên lai từ app khác (Techcombank…) vào SoFin đi qua hai cơ chế hoàn toàn khác nhau, **đừng gộp**:
-- **Web/PWA**: `share_target` trong `manifest.json` (POST + `multipart/form-data` — GET KHÔNG nhận được file), service worker bắt `POST /share-target`, cất ảnh vào cache `sofin-share` rồi redirect `/?share-target=1`; `maybeHandleSharedImage()` đọc lại. Chỉ chạy khi cài như PWA qua Chrome, **không** chạy trong APK hay iOS Safari.
-- **APK (Capacitor)**: Android chọn app trong bảng Chia sẻ qua `<intent-filter>` native, **không** đọc web manifest. Dùng plugin `@mindlib-capacitor/send-intent` (+ `@capacitor/filesystem` để đọc bytes từ `content://`). Vì `android/` không commit, `scripts/patch-android-share.js` chèn `SendIntentActivity` vào `AndroidManifest.xml` **sau** `npx cap sync` trong `build-apk.yml` — script idempotent, gỡ bước đó là share sheet mất SoFin mà không có gì báo. `nativeCheckSharedImage()` đọc intent (cold start trong `initUserSession`, warm start qua listener `resume`) rồi gọi `SI.finish()`.
-- Cả hai đường đổ về **một** cửa: `showSharePreview(file)` → thẻ xem trước → `chatHandle('', file)` (OCR có sẵn). Không có đường xử lý ảnh thứ hai.
-
 Nút tải trỏ vào `/releases/**latest**/download/**sofin.apk**` — bí danh GitHub cho bản phát hành mới nhất, nên link không đổi theo phiên bản; nhưng *tên file* vẫn phải khớp `build-apk.yml`, lệch là nút 404 mà không có gì báo, nên có assertion khoá cặp đó. CI phải dùng **JDK 21**: Capacitor 8 đặt `sourceCompatibility = 21`, JDK 17 fail ở bước Gradle.
 
 ### Phát hành và kiểm tra cập nhật

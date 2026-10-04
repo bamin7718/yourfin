@@ -25,7 +25,7 @@ const BUILD = new URL(self.location.href).searchParams.get('v') || 'dev';
    khi ?v= KHÔNG đổi (bản dev, hoặc mở thẳng từ đĩa — lúc đó BUILD luôn là 'dev').
    Trình duyệt so BYTE của sw.js nên chỉ cần nội dung file này đổi là SW mới được
    cài; gộp REV vào tên cache để activate() dọn sạch bundle cũ ngay sau đó. */
-const SW_REV = '1.0.3';
+const SW_REV = '1.0.2';
 const CACHE = 'sofin-' + BUILD + '-' + SW_REV;
 
 /* Web Share Target: ảnh biên lai được một app khác (Techcombank, thư viện ảnh…)
